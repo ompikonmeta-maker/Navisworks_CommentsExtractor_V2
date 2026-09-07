@@ -116,7 +116,8 @@ export default function App() {
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col md:gap-3">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur md:top-3 md:rounded-card md:border md:border-outline-variant/50 md:bg-surface-container/85 md:shadow-md-1">
+        {/* Floating title over the canvas — no border, no fill on desktop */}
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur md:top-3 md:border-0 md:bg-transparent md:px-2 md:py-1 md:backdrop-blur-0">
           <h1 className="truncate text-xl font-semibold">{NAV.find((n) => n.id === route)?.label}</h1>
           <button
             ref={themeBtnRef}
