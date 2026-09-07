@@ -42,7 +42,7 @@ export async function ingestFiles(files) {
       }
       // unsupported formats are silently ignored per spec
     } catch (e) {
-      errors.push(`Gagal membaca ${file.name}: ${e.message}`);
+      errors.push(`Couldn’t read ${file.name}: ${e.message}`);
     }
   }
 
@@ -50,7 +50,7 @@ export async function ingestFiles(files) {
     return {
       records: [],
       stats: { html: 0, comments: 0, images: Object.keys(imagesByName).length, linked: 0 },
-      errors: [...errors, 'Tidak ada berkas HTML laporan yang dipilih.'],
+      errors: [...errors, 'No HTML report file selected.'],
     };
   }
 
@@ -61,7 +61,7 @@ export async function ingestFiles(files) {
       const { records: recs } = parseReportHtml(d.text, d.name);
       records = records.concat(recs);
     } catch (e) {
-      errors.push(`Gagal parse ${d.name}: ${e.message}`);
+      errors.push(`Couldn’t parse ${d.name}: ${e.message}`);
     }
   }
 
@@ -84,7 +84,7 @@ async function ingestZip(file, htmlDocs, imagesByName, errors) {
   try {
     zip = await JSZip.loadAsync(file);
   } catch (e) {
-    errors.push(`Paket ${file.name} tidak dapat dibaca (ZIP rusak).`);
+    errors.push(`${file.name} could not be read (corrupt ZIP).`);
     return;
   }
   const entries = Object.values(zip.files).filter((f) => !f.dir);
@@ -98,7 +98,7 @@ async function ingestZip(file, htmlDocs, imagesByName, errors) {
         imagesByName[base.toLowerCase()] = await readAsDataURL(blob);
       }
     } catch (e) {
-      errors.push(`Gagal membaca ${base} dari ${file.name}: ${e.message}`);
+      errors.push(`Couldn’t read ${base} from ${file.name}: ${e.message}`);
     }
   }
 }

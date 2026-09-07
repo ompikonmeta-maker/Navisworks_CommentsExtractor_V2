@@ -66,7 +66,7 @@ export const Button = forwardRef(function Button(
   return (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center gap-2 rounded-full px-5 h-10 text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-control px-5 h-10 text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${VARIANTS[variant]} ${className}`}
       {...props}
     >
       {icon && <Icon name={icon} className="text-[20px]" />}
@@ -102,7 +102,7 @@ export function DisciplineBadge({ discipline }) {
 
 export function Card({ children, className = '' }) {
   return (
-    <div className={`rounded-lg bg-surface-low border border-outline-variant/60 ${className}`}>
+    <div className={`rounded-card bg-surface-low border border-outline-variant/60 ${className}`}>
       {children}
     </div>
   );
@@ -114,7 +114,7 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`h-10 rounded-md border border-outline bg-surface-container px-3 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
+      className={`h-10 rounded-control border border-outline bg-surface-container px-3 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
     >
       {options.map((o) => (
         <option key={o.value ?? o} value={o.value ?? o}>
@@ -127,7 +127,7 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
 
 export function EmptyState({ icon = 'inbox', title, children, action }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-outline-variant bg-surface-low p-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-card border border-dashed border-outline-variant bg-surface-low p-10 text-center">
       <Icon name={icon} className="text-[48px] text-on-surface-variant" />
       <h3 className="text-lg font-medium">{title}</h3>
       <p className="max-w-md text-sm text-on-surface-variant">{children}</p>

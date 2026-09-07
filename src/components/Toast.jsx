@@ -25,10 +25,10 @@ export default function Toast() {
       role="status"
       className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 px-4"
     >
-      <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-md-3 max-w-md ${k.cls}`}>
+      <div className={`flex items-start gap-3 rounded-control border px-4 py-3 shadow-md-3 max-w-md ${k.cls}`}>
         <Icon name={k.icon} className="text-[20px] mt-0.5" />
         <p className="text-sm whitespace-pre-line">{toast.message}</p>
-        <button onClick={clearToast} aria-label="Tutup" className="ml-1 opacity-70 hover:opacity-100">
+        <button onClick={clearToast} aria-label="Dismiss" className="ml-1 opacity-70 hover:opacity-100">
           <Icon name="close" className="text-[18px]" />
         </button>
       </div>

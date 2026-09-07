@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useStore } from './store/store.jsx';
 import { loadSampleData } from './lib/sample.js';
 import { useTheme } from './lib/theme.js';
+import { SIDEBAR_SPRING } from './lib/motion.js';
 import { Icon } from './components/ui.jsx';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
@@ -12,19 +13,23 @@ import ImportView from './views/ImportView.jsx';
 const Analytics = lazy(() => import('./views/Analytics.jsx'));
 
 const NAV = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { id: 'dashboard', label: 'Overview', icon: 'dashboard' },
   { id: 'comments', label: 'Viewpoints', icon: 'format_list_bulleted' },
   { id: 'analytics', label: 'Analytics', icon: 'insights' },
   { id: 'import', label: 'Import', icon: 'upload_file' },
 ];
+
+const EXPANDED = 300;
+const RAIL = 84;
 
 export default function App() {
   const store = useStore();
   const { theme, toggle } = useTheme();
   const [route, setRoute] = useState('dashboard');
   const [detailId, setDetailId] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const themeBtnRef = useRef(null);
 
-  // Seed the workspace from the bundled sample on first mount.
   useEffect(() => {
     let cancelled = false;
     store.setLoading();
@@ -45,72 +50,86 @@ export default function App() {
     setDetailId(id);
     setRoute('comments');
   }, []);
-
   const go = useCallback((id) => {
     setRoute(id);
     setDetailId(null);
   }, []);
 
+  const railStyle = {
+    '--rail-w': `${collapsed ? RAIL : EXPANDED}px`,
+    transition: `width ${SIDEBAR_SPRING.duration}ms ${SIDEBAR_SPRING.easing}`,
+  };
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row bg-background text-on-surface">
       {/* Sidebar / rail */}
-      <aside className="md:sticky md:top-0 md:h-screen md:w-64 shrink-0 border-b md:border-b-0 md:border-r border-outline-variant/60 bg-surface-low">
-        <div className="flex items-center gap-3 px-5 py-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-on-primary">
-            <Icon name="table_view" className="text-[22px]" />
+      <aside
+        data-rail
+        style={railStyle}
+        className="md:sticky md:top-0 md:h-screen shrink-0 border-b md:border-b-0 md:border-r border-outline-variant/60 bg-surface-low md:overflow-hidden"
+      >
+        <div className="w-full">
+          <div className={`flex items-center gap-3 px-5 py-4 ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-primary text-on-primary">
+              <Icon name="table_view" className="text-[22px]" />
+            </div>
+            <span className={`text-lg font-semibold tracking-tight ${collapsed ? 'md:hidden' : ''}`}>Tabelin</span>
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={`ml-auto hidden h-9 w-9 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-container md:inline-flex ${collapsed ? 'md:hidden' : ''}`}
+            >
+              <Icon name="chevron_right" className="rotate-180 text-[22px]" />
+            </button>
           </div>
-          <div className="leading-tight">
-            <div className="text-base font-semibold tracking-tight">Tabelin</div>
-            <div className="text-[11px] text-on-surface-variant">Navisworks Comments</div>
-          </div>
-        </div>
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible">
-          {NAV.map((item) => {
-            const active = route === item.id;
-            return (
+
+          <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible">
+            {NAV.map((item) => {
+              const active = route === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => go(item.id)}
+                  aria-current={active ? 'page' : undefined}
+                  title={item.label}
+                  className={`flex items-center gap-3 rounded-full px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    collapsed ? 'md:justify-center md:px-0' : ''
+                  } ${
+                    active
+                      ? 'bg-secondary-container text-on-secondary-container'
+                      : 'text-on-surface-variant hover:bg-surface-container'
+                  }`}
+                >
+                  <Icon name={item.icon} className="text-[22px]" />
+                  <span className={collapsed ? 'md:hidden' : ''}>{item.label}</span>
+                </button>
+              );
+            })}
+            {collapsed && (
               <button
-                key={item.id}
-                onClick={() => go(item.id)}
-                aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                  active
-                    ? 'bg-secondary-container text-on-secondary-container'
-                    : 'text-on-surface-variant hover:bg-surface-container'
-                }`}
+                onClick={() => setCollapsed(false)}
+                aria-label="Expand sidebar"
+                className="hidden md:mt-1 md:flex md:justify-center rounded-full px-0 py-3 text-on-surface-variant hover:bg-surface-container"
               >
-                <Icon name={item.icon} className="text-[20px]" />
-                {item.label}
+                <Icon name="chevron_right" className="text-[22px]" />
               </button>
-            );
-          })}
-        </nav>
+            )}
+          </nav>
+        </div>
       </aside>
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur">
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold capitalize">
-              {NAV.find((n) => n.id === route)?.label}
-            </h1>
-            <p className="truncate text-xs text-on-surface-variant">
-              {store.meta.source === 'sample'
-                ? 'Sumber: sample bawaan · sesi in-memory'
-                : `Sumber: impor pengguna · ${store.records.length} komentar`}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-surface-container px-3 py-1 text-xs text-on-surface-variant">
-              <Icon name="memory" className="text-[16px]" /> in-memory
-            </span>
-            <button
-              onClick={toggle}
-              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
-            </button>
-          </div>
+          <h1 className="truncate text-xl font-semibold">{NAV.find((n) => n.id === route)?.label}</h1>
+          <button
+            ref={themeBtnRef}
+            onClick={() => toggle(themeBtnRef.current)}
+            aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+            className="flex h-10 w-10 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
+          </button>
         </header>
 
         <main className="flex-1 p-4 sm:p-6">
@@ -128,9 +147,9 @@ function Screen({ route, detailId, setDetailId, openDetail, go }) {
 
   if (status === 'error') {
     return (
-      <div className="rounded-lg border border-error/40 bg-error-container p-6 text-on-error-container">
+      <div className="rounded-card border border-error/40 bg-error-container p-6 text-on-error-container">
         <div className="flex items-center gap-2 font-medium">
-          <Icon name="error" /> Gagal memuat data sample
+          <Icon name="error" /> Couldn’t load sample data
         </div>
         <p className="mt-1 text-sm">{error}</p>
       </div>
@@ -144,7 +163,7 @@ function Screen({ route, detailId, setDetailId, openDetail, go }) {
       return <Comments detailId={detailId} setDetailId={setDetailId} />;
     case 'analytics':
       return (
-        <Suspense fallback={<div className="skeleton mx-auto h-64 max-w-6xl rounded-lg" />}>
+        <Suspense fallback={<div className="skeleton mx-auto h-64 max-w-6xl rounded-card" />}>
           <Analytics />
         </Suspense>
       );

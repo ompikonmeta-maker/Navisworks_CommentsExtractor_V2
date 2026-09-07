@@ -50,6 +50,8 @@ export default {
         md: '12px',
         lg: '16px',
         xl: '28px',
+        card: 'var(--tabelin-radius-card)', // 26px
+        control: 'var(--tabelin-radius-control)', // 15px
       },
       fontFamily: {
         sans: ['Roboto Flex', 'Roboto', 'system-ui', 'sans-serif'],

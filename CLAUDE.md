@@ -9,8 +9,11 @@ HTML reports into a searchable, filterable review workspace with Excel (`.xlsx`)
 Everything runs client-side: files are parsed in the browser, held in memory for the
 session, and never uploaded. Reloading the page returns to the bundled sample dataset.
 
-Stack: **React 18 + Vite 5 + Tailwind CSS 3**. UI follows a Material Design 3 teal scheme
-(seed `#006A6A`) implemented as CSS custom properties, so light/dark switch without a rebuild.
+Stack: **React 18 + Vite 5 + Tailwind CSS 3**. UI follows a Material Design 3 scheme
+seeded from `#1768f7` (generated with the `docs/material-design-3-project` dynamic-color
+engine), implemented as CSS custom properties so light/dark switch without a rebuild. Shape
+tokens `--tabelin-radius-card` (26px) and `--tabelin-radius-control` (15px) map to Tailwind
+`rounded-card` / `rounded-control`.
 
 ## Commands
 
@@ -60,6 +63,12 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   ~430 KB out of the initial chunk; the single-file build inlines it like everything else.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. No persistence by
   design. `computeKpis` is the shared status aggregation.
+- `src/lib/motion.js` — MD3 Expressive motion. `springLinear(overshoot)` generates a CSS
+  `linear()` easing that approximates a damped spring; used for the sidebar collapse spring
+  (660ms, overshoot 1.45), the staggered card reveal (`revealCards`: fade + overshoot 1.75,
+  700ms, 15ms stagger, via `components/Reveal.jsx`), and the two-stage circular theme
+  transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
+  a 300ms spring hold, then 250ms to full). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
   route switch: Dashboard, Comments (list + editable detail drawer), Analytics, Import.
   **Analytics is `React.lazy`** because it pulls in Recharts.

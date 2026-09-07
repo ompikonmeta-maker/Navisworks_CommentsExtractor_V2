@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { useStore } from '../store/store.jsx';
 import { Card, EmptyState, Icon } from '../components/ui.jsx';
+import Reveal from '../components/Reveal.jsx';
 
 // Read MD3 tokens at render time so charts follow the active theme.
 function cssVar(name, fallback) {
@@ -62,8 +63,8 @@ export default function Analytics() {
   if (!records.length) {
     return (
       <div className="mx-auto max-w-6xl">
-        <EmptyState icon="insights" title="Belum ada data untuk dianalisis">
-          Impor laporan HTML Navisworks untuk melihat tren waktu dan beban disiplin.
+        <EmptyState icon="insights" title="Nothing to analyze">
+          Import a Navisworks HTML report to see trends and discipline load.
         </EmptyState>
       </div>
     );
@@ -83,29 +84,29 @@ export default function Analytics() {
   const tooltipStyle = {
     background: surface,
     border: `1px solid ${grid}`,
-    borderRadius: 8,
+    borderRadius: 12,
     color: onSurface,
     fontSize: 12,
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <Reveal className="mx-auto max-w-6xl space-y-6" deps={[]}>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="p-5">
-          <ChartTitle icon="bar_chart" title="Komentar per disiplin" />
+        <Card className="p-6">
+          <ChartTitle icon="bar_chart" title="By discipline" />
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={byDiscipline} margin={{ top: 8, right: 8, bottom: 4, left: -12 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
               <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} />
               <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={tooltipStyle} cursor={{ fill: `${primary}22` }} />
-              <Bar dataKey="value" name="Komentar" fill={primary} radius={[6, 6, 0, 0]} />
+              <Bar dataKey="value" name="Comments" fill={primary} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
-        <Card className="p-5">
-          <ChartTitle icon="donut_large" title="Distribusi status" />
+        <Card className="p-6">
+          <ChartTitle icon="donut_large" title="Status" />
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={byStatus} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={2}>
@@ -120,8 +121,8 @@ export default function Analytics() {
         </Card>
       </div>
 
-      <Card className="p-5">
-        <ChartTitle icon="timeline" title="Tren komentar per bulan" />
+      <Card className="p-6">
+        <ChartTitle icon="timeline" title="Over time" />
         {overTime.length ? (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={overTime} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
@@ -129,14 +130,14 @@ export default function Analytics() {
               <XAxis dataKey="month" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} />
               <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={tooltipStyle} />
-              <Line type="monotone" dataKey="value" name="Komentar" stroke={primary} strokeWidth={2.5} dot={{ r: 3, fill: primary }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="value" name="Comments" stroke={primary} strokeWidth={2.5} dot={{ r: 3, fill: primary }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <p className="py-10 text-center text-sm text-on-surface-variant">Tanggal komentar tidak dapat diurai untuk tren waktu.</p>
+          <p className="py-10 text-center text-sm text-on-surface-variant">Dates couldn’t be parsed for a time trend.</p>
         )}
       </Card>
-    </div>
+    </Reveal>
   );
 }
 
