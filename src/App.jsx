@@ -61,12 +61,12 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row bg-background text-on-surface">
-      {/* Sidebar / rail */}
+    <div className="flex min-h-screen flex-col bg-background text-on-surface md:flex-row md:gap-3 md:p-3">
+      {/* Floating sidebar panel */}
       <aside
         data-rail
         style={railStyle}
-        className="md:sticky md:top-0 md:h-screen shrink-0 border-b md:border-b-0 md:border-r border-outline-variant/60 bg-surface-low md:overflow-hidden"
+        className="t-panel shrink-0 border-b border-outline-variant/60 bg-surface-container md:sticky md:top-3 md:h-[calc(100vh_-_1.5rem)] md:overflow-hidden md:rounded-card md:border md:border-outline-variant/50 md:shadow-md-2"
       >
         <div className={`t-shell w-full ${collapsed ? 'collapsed' : ''}`}>
           <div className="t-brand flex items-center gap-3 px-4 py-4">
@@ -77,10 +77,15 @@ export default function App() {
             <button
               onClick={() => setCollapsed((c) => !c)}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="ml-auto hidden h-9 w-9 shrink-0 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-container md:inline-flex"
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-control transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary md:inline-flex ${
+                collapsed
+                  ? 'ml-0 bg-primary text-on-primary shadow-md-1 hover:brightness-110'
+                  : 'ml-auto text-on-surface-variant hover:bg-surface-high'
+              }`}
             >
-              {/* chevron points left to collapse, rotates to point right to expand */}
-              <Icon name="chevron_right" className="t-chev rotate-180 text-[22px]" />
+              {/* chevron points left to collapse; rotates to point right to expand */}
+              <Icon name="chevron_right" className="t-chev text-[22px]" />
             </button>
           </div>
 
@@ -97,7 +102,7 @@ export default function App() {
                   className={`t-navitem flex items-center gap-3 rounded-full px-4 py-3 text-sm font-medium whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     active
                       ? 'bg-secondary-container text-on-secondary-container'
-                      : 'text-on-surface-variant hover:bg-surface-container'
+                      : 'text-on-surface-variant hover:bg-surface-high'
                   }`}
                 >
                   <Icon name={item.icon} className="shrink-0 text-[22px]" />
@@ -110,20 +115,20 @@ export default function App() {
       </aside>
 
       {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur">
+      <div className="flex min-w-0 flex-1 flex-col md:gap-3">
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur md:top-3 md:rounded-card md:border md:border-outline-variant/50 md:bg-surface-container/85 md:shadow-md-1">
           <h1 className="truncate text-xl font-semibold">{NAV.find((n) => n.id === route)?.label}</h1>
           <button
             ref={themeBtnRef}
             onClick={() => toggle(themeBtnRef.current)}
             aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
-            className="flex h-10 w-10 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex h-10 w-10 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
           </button>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6">
+        <main className="flex-1 p-4 sm:p-6 md:p-0">
           <Screen route={route} detailId={detailId} setDetailId={setDetailId} openDetail={openDetail} go={go} />
         </main>
       </div>

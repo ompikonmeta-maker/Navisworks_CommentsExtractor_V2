@@ -12,7 +12,7 @@ const KPI_META = [
 ];
 
 export default function Dashboard({ openDetail, go }) {
-  const { status, records, meta, toast } = useStore();
+  const { status, records, meta, notify } = useStore();
   const loading = status === 'loading';
 
   const kpis = useMemo(() => computeKpis(records), [records]);
@@ -27,9 +27,9 @@ export default function Dashboard({ openDetail, go }) {
     if (!records.length) return;
     try {
       await exportToExcel(records);
-      toast(`Exported ${records.length} comments.`, 'success');
+      notify(`Exported ${records.length} comments.`, 'success');
     } catch (e) {
-      toast(`Export failed: ${e.message}`, 'error');
+      notify(`Export failed: ${e.message}`, 'error');
     }
   };
 

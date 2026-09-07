@@ -58,15 +58,17 @@ export function StoreProvider({ children }) {
     (id, patch) => dispatch({ type: 'UPDATE_RECORD', id, patch }),
     []
   );
-  const toast = useCallback(
+  // Named `notify` (not `toast`) so it doesn't collide with `state.toast`,
+  // the current toast payload the provider also exposes.
+  const notify = useCallback(
     (message, kind = 'success') => dispatch({ type: 'TOAST', toast: { message, kind, ts: Date.now() } }),
     []
   );
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);
 
   const value = useMemo(
-    () => ({ ...state, setLoading, setError, setData, updateRecord, toast, clearToast }),
-    [state, setLoading, setError, setData, updateRecord, toast, clearToast]
+    () => ({ ...state, setLoading, setError, setData, updateRecord, notify, clearToast }),
+    [state, setLoading, setError, setData, updateRecord, notify, clearToast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

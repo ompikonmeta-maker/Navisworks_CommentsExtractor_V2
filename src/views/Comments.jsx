@@ -7,7 +7,7 @@ import Reveal from '../components/Reveal.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
 
 export default function Comments({ detailId, setDetailId }) {
-  const { status, records, toast } = useStore();
+  const { status, records, notify } = useStore();
   const loading = status === 'loading';
 
   const [query, setQuery] = useState('');
@@ -33,9 +33,9 @@ export default function Comments({ detailId, setDetailId }) {
     if (!filtered.length) return;
     try {
       await exportToExcel(filtered);
-      toast(`Exported ${filtered.length} comments.`, 'success');
+      notify(`Exported ${filtered.length} comments.`, 'success');
     } catch (e) {
-      toast(`Export failed: ${e.message}`, 'error');
+      notify(`Export failed: ${e.message}`, 'error');
     }
   };
 

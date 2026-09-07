@@ -6,7 +6,7 @@ import { Icon, Button, Card } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 
 export default function ImportView({ go }) {
-  const { setData, toast } = useStore();
+  const { setData, notify } = useStore();
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -22,19 +22,19 @@ export default function ImportView({ go }) {
         const { records, stats, errors } = await ingestFiles(files);
         if (records.length === 0) {
           setResult({ stats, errors });
-          toast(errors[0] || 'No comments could be imported.', 'error');
+          notify(errors[0] || 'No comments could be imported.', 'error');
         } else {
           setData(records, 'user', stats);
           setResult({ stats, errors });
-          toast(`Imported ${stats.comments} comments from ${stats.html} HTML · ${stats.linked} images linked.`, 'success');
+          notify(`Imported ${stats.comments} comments from ${stats.html} HTML · ${stats.linked} images linked.`, 'success');
         }
       } catch (e) {
-        toast(`Import failed: ${e.message}`, 'error');
+        notify(`Import failed: ${e.message}`, 'error');
       } finally {
         setBusy(false);
       }
     },
-    [setData, toast]
+    [setData, notify]
   );
 
   const onDrop = (e) => {
@@ -48,10 +48,10 @@ export default function ImportView({ go }) {
     try {
       const { records, stats } = await loadSampleData();
       setData(records, 'sample', stats);
-      toast('Sample data restored.', 'info');
+      notify('Sample data restored.', 'info');
       setResult(null);
     } catch (e) {
-      toast(`Couldn’t load sample: ${e.message}`, 'error');
+      notify(`Couldn’t load sample: ${e.message}`, 'error');
     } finally {
       setBusy(false);
     }
