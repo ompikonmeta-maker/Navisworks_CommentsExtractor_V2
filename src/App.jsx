@@ -116,17 +116,22 @@ export default function App() {
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col md:gap-3">
-        {/* Floating title over the canvas — no border, no fill on desktop */}
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur md:top-3 md:border-0 md:bg-transparent md:px-2 md:py-1 md:backdrop-blur-0">
-          <h1 className="truncate text-xl font-semibold">{NAV.find((n) => n.id === route)?.label}</h1>
-          <button
-            ref={themeBtnRef}
-            onClick={() => toggle(themeBtnRef.current)}
-            aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
-            className="flex h-10 w-10 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
-          </button>
+        {/* Floating title over the canvas — no border/fill on desktop,
+            aligned with the content column (max-w-6xl) below. */}
+        <header className="sticky top-0 z-10 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur md:top-3 md:border-0 md:bg-transparent md:px-0 md:py-2 md:backdrop-blur-0">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
+            <h1 className="truncate text-2xl font-bold tracking-tight md:text-3xl">
+              {NAV.find((n) => n.id === route)?.label}
+            </h1>
+            <button
+              ref={themeBtnRef}
+              onClick={() => toggle(themeBtnRef.current)}
+              aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 p-4 sm:p-6 md:p-0">

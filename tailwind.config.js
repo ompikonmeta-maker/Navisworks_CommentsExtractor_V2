@@ -54,7 +54,7 @@ export default {
         control: 'var(--tabelin-radius-control)', // 15px
       },
       fontFamily: {
-        sans: ['Roboto Flex', 'Roboto', 'system-ui', 'sans-serif'],
+        sans: ['Roboto', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         'md-1': '0 1px 2px rgba(0,0,0,.30), 0 1px 3px 1px rgba(0,0,0,.15)',
