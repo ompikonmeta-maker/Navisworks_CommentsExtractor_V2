@@ -1,49 +1,42 @@
 // =====================================================================
 // Seed dataset — parses the bundled Navisworks sample report and links the
-// companion viewpoint images shipped in /public/sample. This is the data
-// the workspace starts with on every load (spec: refresh returns to sample).
+// companion viewpoint images. Everything is embedded at build time (report
+// as a raw string, images as inlined data URLs) so the app works offline
+// and even when opened directly from the filesystem (file://) with no
+// server or network — nothing is fetched. This is the data the workspace
+// starts with on every load (spec: refresh returns to sample).
 // =====================================================================
 import { parseReportHtml, linkImages, resetIdCounter } from './parser.js';
 
-const BASE = import.meta.env.BASE_URL || '/';
-const SAMPLE_IMAGES = ['vp0026.jpg', 'vp0027.jpg', 'vp0028.jpg', 'vp0029.jpg', 'vp0030.jpg'];
+import reportHtml from '../sample/report.html?raw';
+import vp0026 from '../sample/vp0026.jpg';
+import vp0027 from '../sample/vp0027.jpg';
+import vp0028 from '../sample/vp0028.jpg';
+import vp0029 from '../sample/vp0029.jpg';
+import vp0030 from '../sample/vp0030.jpg';
 
-async function fetchDataUrl(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result);
-    fr.onerror = () => reject(fr.error);
-    fr.readAsDataURL(blob);
-  });
-}
+// With a high build.assetsInlineLimit these imports resolve to base64
+// data: URLs; keyed by the file name each viewpoint references.
+const SAMPLE_IMAGES = {
+  'vp0026.jpg': vp0026,
+  'vp0027.jpg': vp0027,
+  'vp0028.jpg': vp0028,
+  'vp0029.jpg': vp0029,
+  'vp0030.jpg': vp0030,
+};
 
 export async function loadSampleData() {
-  const html = await fetch(`${BASE}sample/report.html`).then((r) => {
-    if (!r.ok) throw new Error(`Sample report tidak ditemukan (HTTP ${r.status})`);
-    return r.text();
-  });
-
   resetIdCounter();
-  const { records } = parseReportHtml(html, '2500_UBA-2026.08.26.html');
+  const { records } = parseReportHtml(reportHtml, '2500_UBA-2026.08.26.html');
 
-  // Best-effort image linking for the handful of shipped viewpoint images.
   const imagesByName = {};
-  await Promise.all(
-    SAMPLE_IMAGES.map(async (name) => {
-      try {
-        imagesByName[name.toLowerCase()] = await fetchDataUrl(`${BASE}sample/${name}`);
-      } catch {
-        /* image optional */
-      }
-    })
-  );
+  for (const [name, url] of Object.entries(SAMPLE_IMAGES)) {
+    imagesByName[name.toLowerCase()] = url;
+  }
   const linked = linkImages(records, imagesByName);
 
   return {
     records,
-    stats: { html: 1, comments: records.length, images: SAMPLE_IMAGES.length, linked },
+    stats: { html: 1, comments: records.length, images: Object.keys(SAMPLE_IMAGES).length, linked },
   };
 }

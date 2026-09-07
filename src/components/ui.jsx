@@ -1,10 +1,52 @@
 // Small Material-flavored UI primitives shared across views.
 import { forwardRef } from 'react';
 
+// Material Symbols codepoints for the icons this app uses. Rendering by
+// codepoint (not ligature) lets the embedded font subset stay ~4 KB and
+// work fully offline. Keep this map in sync with the font subset in
+// index.css when adding a new icon.
+const ICON_CODEPOINTS = {
+  bar_chart: 'e26b',
+  check_circle: 'f0be',
+  chevron_right: 'e5cc',
+  close: 'e5cd',
+  cloud_upload: 'e2c3',
+  dark_mode: 'e51c',
+  dashboard: 'e871',
+  description: 'e873',
+  donut_large: 'e917',
+  download: 'f090',
+  error: 'f8b6',
+  fact_check: 'f0c5',
+  filter_alt_off: 'eb32',
+  folder_open: 'e2c8',
+  format_list_bulleted: 'e241',
+  forum: 'e8af',
+  hourglass_top: 'ea5b',
+  image: 'e3f4',
+  image_not_supported: 'f116',
+  info: 'e88e',
+  insights: 'f092',
+  light_mode: 'e518',
+  link: 'e250',
+  memory: 'e322',
+  person: 'f0d3',
+  radio_button_unchecked: 'e836',
+  restart_alt: 'f053',
+  search: 'ef7a',
+  search_off: 'ea76',
+  table_view: 'f1be',
+  timeline: 'e922',
+  upload_file: 'e9fc',
+  videocam: 'e04b',
+  warning: 'f083',
+};
+
 export function Icon({ name, className = '', style }) {
+  const cp = ICON_CODEPOINTS[name];
   return (
     <span className={`msym ${className}`} style={style} aria-hidden="true">
-      {name}
+      {cp ? String.fromCodePoint(parseInt(cp, 16)) : name}
     </span>
   );
 }

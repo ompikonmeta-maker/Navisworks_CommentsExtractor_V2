@@ -17,9 +17,19 @@ Stack: **React 18 + Vite 5 + Tailwind CSS 3**. UI follows a Material Design 3 te
 ```bash
 npm install        # install dependencies
 npm run dev        # Vite dev server (HMR) at http://localhost:5173
-npm run build      # production build to dist/
+npm run build      # production build → a single self-contained dist/index.html
 npm run preview    # serve the production build (default port 4173)
 ```
+
+### Portable single-file build
+
+`npm run build` emits **one self-contained `dist/index.html`** (~2.3 MB) via
+`vite-plugin-singlefile` — all JS/CSS inlined, the sample report + images embedded as
+data URLs, and a subset of the Material Symbols icon font embedded too. It has **no runtime
+dependencies**: open it by double-click (`file://`), copy it to a USB stick, or host it
+anywhere static. No server, no install, no admin rights, works fully offline. The
+`build.assetsInlineLimit` in `vite.config.js` is set very high specifically so nothing is
+emitted as a separate fetched asset.
 
 There is no test runner or linter configured yet. Verification during development was done
 with a headless Chromium smoke script (`playwright-core` driving the pre-installed browser
@@ -41,11 +51,13 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   a `.zip` (via JSZip). Images are read to data URLs and linked to `imageRef`
   case-insensitively. Unsupported formats are ignored; a corrupt ZIP or a comment-less HTML
   is reported, not fatal.
-- `src/lib/sample.js` — parses the bundled report in `public/sample/` and links the few
-  shipped viewpoint images. This is the seed dataset loaded on every startup.
+- `src/lib/sample.js` — parses the bundled report and links the few shipped viewpoint
+  images. Both are **embedded at build time** (report via `?raw`, images as inlined asset
+  imports) — nothing is fetched, so the seed dataset loads even from `file://` offline.
+  This is the data loaded on every startup.
 - `src/lib/excel.js` — `.xlsx` export (Comments + Summary sheets) via SheetJS. **SheetJS is
-  dynamically imported** so its ~430 KB stays out of the initial bundle; `exportToExcel` is
-  therefore `async`.
+  dynamically imported** (`exportToExcel` is `async`) so a multi-file build keeps its
+  ~430 KB out of the initial chunk; the single-file build inlines it like everything else.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. No persistence by
   design. `computeKpis` is the shared status aggregation.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
@@ -59,6 +71,11 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - Tailwind color utilities map to MD3 role tokens (`bg-surface`, `text-on-surface`,
   `text-primary`, `status-open/review/closed`) defined in `tailwind.config.js` +
   `src/index.css`. Prefer these over hard-coded colors so theming stays consistent.
+- Icons render via the embedded Material Symbols subset. `Icon` in `components/ui.jsx` maps
+  each name to a **codepoint** (not a ligature) so the font subset stays ~4 KB. When you use
+  a new icon, add its name→codepoint to `ICON_CODEPOINTS` **and** re-subset the font in
+  `index.css` to include that codepoint (see the `@font-face` data URL there), otherwise it
+  won't render offline.
 - The record shape is defined in `parser.js` and mirrored by the Excel column map in
   `excel.js`. If you add or rename a record field, update **both**, plus any filters in
   `views/Comments.jsx`.
@@ -71,4 +88,4 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   Follow it when extending behavior.
 - `docs/material-design-3-project/` — the MD3 token/component reference the theme is based on.
 - `docs/Sample/` — the original Navisworks report and viewpoint images (also copied into
-  `public/sample/` as the app's seed data).
+  `src/sample/` where they are embedded into the bundle as the app's seed data).

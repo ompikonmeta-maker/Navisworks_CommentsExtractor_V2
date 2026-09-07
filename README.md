@@ -19,6 +19,19 @@ Tidak ada berkas yang diunggah ke server; data hidup di memori selama sesi berja
 Data disimpan di memori browser. Memuat ulang halaman mengembalikan data ke sample bawaan;
 tidak ada penyimpanan permanen.
 
+## Portable · independen · tanpa admin
+
+`npm run build` menghasilkan **satu file `dist/index.html`** (~2,3 MB) yang benar-benar
+mandiri: semua JS/CSS, data sample, gambar, dan font ikon sudah tertanam di dalamnya.
+
+- **Portable** — cukup satu file; copy ke USB atau folder mana pun.
+- **Independen** — buka dengan **dobel-klik** di browser (`file://`). Tanpa server,
+  tanpa Node, tanpa koneksi internet. Berfungsi penuh offline.
+- **Tanpa admin** — tidak ada instalasi apa pun; tidak butuh hak administrator.
+
+Ambil filenya dari tab **Actions** GitHub (artifact `tabelin-dist`) atau bangun sendiri
+dengan `npm run build`.
+
 ## Menjalankan
 
 ```bash
