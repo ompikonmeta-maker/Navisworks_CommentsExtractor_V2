@@ -72,8 +72,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   theme transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
   a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
-  route switch: Dashboard, Comments (list + editable detail drawer), Analytics, Import.
-  **Analytics is `React.lazy`** because it pulls in Recharts.
+  route switch: Dashboard (Overview), Comments (Viewpoints — list + editable detail drawer),
+  and Analytics. Import is a single action — the Overview Import button opens the file picker
+  and calls `ingestFiles` — not its own route. **Analytics is `React.lazy`** (it pulls in
+  Recharts).
 - `src/views/*` and `src/components/*` — screens and shared MD3-flavored primitives
   (`ui.jsx`), the editable `DetailPanel.jsx`, and the `Toast.jsx` notifier.
 

@@ -125,6 +125,38 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
   );
 }
 
+// MD3 segmented button group — a single connected, outlined control for a
+// small set of mutually-exclusive choices. The selected segment fills with
+// the secondary container and shows a check (inline SVG so it works offline
+// without adding to the icon-font subset).
+export function SegmentedButtons({ value, onChange, options, 'aria-label': ariaLabel }) {
+  return (
+    <div role="group" aria-label={ariaLabel} className="seg-group">
+      {options.map((o) => {
+        const val = o.value ?? o;
+        const label = o.label ?? o;
+        const on = val === value;
+        return (
+          <button
+            key={val}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(val)}
+            className={`seg-btn ${on ? 'on' : ''}`}
+          >
+            <span className="seg-chk">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" />
+              </svg>
+            </span>
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function EmptyState({ icon = 'inbox', title, children, action }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-card border border-dashed border-outline-variant bg-surface-low p-10 text-center">

@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useStore, computeKpis } from '../store/store.jsx';
 import { exportToExcel } from '../lib/excel.js';
+import { ingestFiles } from '../lib/ingest.js';
 import { Icon, Button, Card, StatusBadge, DisciplineBadge } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 
@@ -11,9 +12,26 @@ const KPI_META = [
   { key: 'Closed', label: 'Closed', icon: 'check_circle', accent: 'text-status-closed' },
 ];
 
-export default function Dashboard({ openDetail, go }) {
-  const { status, records, meta, notify } = useStore();
+export default function Dashboard({ openDetail }) {
+  const { status, records, meta, notify, setData } = useStore();
   const loading = status === 'loading';
+  const fileInputRef = useRef(null);
+
+  const handleImport = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    try {
+      const { records: recs, stats, errors } = await ingestFiles(files);
+      if (recs.length === 0) {
+        notify(errors[0] || 'No comments could be imported.', 'error');
+      } else {
+        setData(recs, 'user', stats);
+        notify(`Imported ${stats.comments} comments from ${stats.html} HTML · ${stats.linked} images linked.`, 'success');
+      }
+    } catch (e) {
+      notify(`Import failed: ${e.message}`, 'error');
+    }
+  };
 
   const kpis = useMemo(() => computeKpis(records), [records]);
   const topDisciplines = useMemo(() => {
@@ -41,9 +59,17 @@ export default function Dashboard({ openDetail, go }) {
           {loading ? 'Loading…' : `${records.length} review comments · ${meta.source === 'sample' ? 'sample data' : 'imported'}`}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="tonal" icon="upload_file" onClick={() => go('import')}>
+          <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>
             Import
           </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".html,.htm,.jpg,.jpeg,.png,.zip"
+            className="hidden"
+            onChange={(e) => handleImport(e.target.files)}
+          />
           <Button icon="download" onClick={handleExport} disabled={!records.length}>
             Excel
           </Button>

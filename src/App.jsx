@@ -7,7 +7,6 @@ import { Icon } from './components/ui.jsx';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
-import ImportView from './views/ImportView.jsx';
 
 // Analytics pulls in Recharts — load it only when that route is opened.
 const Analytics = lazy(() => import('./views/Analytics.jsx'));
@@ -16,7 +15,6 @@ const NAV = [
   { id: 'dashboard', label: 'Overview', icon: 'dashboard' },
   { id: 'comments', label: 'Viewpoints', icon: 'format_list_bulleted' },
   { id: 'analytics', label: 'Analytics', icon: 'insights' },
-  { id: 'import', label: 'Import', icon: 'upload_file' },
 ];
 
 const EXPANDED = 300;
@@ -169,8 +167,6 @@ function Screen({ route, detailId, setDetailId, openDetail, go }) {
           <Analytics />
         </Suspense>
       );
-    case 'import':
-      return <ImportView go={go} />;
     default:
       return null;
   }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { DISCIPLINES, STATUSES } from '../lib/parser.js';
-import { Icon, Select, StatusBadge, DisciplineBadge } from './ui.jsx';
+import { Icon, Select, SegmentedButtons, StatusBadge, DisciplineBadge } from './ui.jsx';
 
 // Non-modal detail drawer. It is always mounted and slides in/out via a
 // `transform` transition (no flicker, no mount/unmount). The main table is
@@ -111,15 +111,14 @@ export default function DetailPanel({ record, onClose }) {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs font-medium text-on-surface-variant">
-                Discipline
-                <Select className="mt-1 w-full" aria-label="Change discipline" value={rec.discipline} onChange={(v) => set({ discipline: v })} options={DISCIPLINES} />
-              </label>
-              <label className="text-xs font-medium text-on-surface-variant">
-                Status
-                <Select className="mt-1 w-full" aria-label="Change status" value={rec.status} onChange={(v) => set({ status: v })} options={STATUSES} />
-              </label>
+            <label className="block text-xs font-medium text-on-surface-variant">
+              Discipline
+              <Select className="mt-1 w-full" aria-label="Change discipline" value={rec.discipline} onChange={(v) => set({ discipline: v })} options={DISCIPLINES} />
+            </label>
+
+            <div>
+              <div className="mb-1 text-xs font-medium text-on-surface-variant">Status</div>
+              <SegmentedButtons aria-label="Change status" value={rec.status} onChange={(v) => set({ status: v })} options={STATUSES} />
             </div>
 
             <label className="block text-xs font-medium text-on-surface-variant">
@@ -132,21 +131,6 @@ export default function DetailPanel({ record, onClose }) {
                 className="mt-1 w-full resize-y rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
             </label>
-          </div>
-
-          {/* Status stepper */}
-          <div className="flex items-center gap-2 border-t border-outline-variant/60 px-5 py-3">
-            {STATUSES.map((s) => (
-              <button
-                key={s}
-                onClick={() => set({ status: s })}
-                className={`flex-1 rounded-control px-3 py-2 text-xs font-medium transition-colors ${
-                  rec.status === s ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-variant'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
           </div>
         </>
       )}
