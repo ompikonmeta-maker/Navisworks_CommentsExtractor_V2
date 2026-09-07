@@ -68,23 +68,24 @@ export default function App() {
         style={railStyle}
         className="md:sticky md:top-0 md:h-screen shrink-0 border-b md:border-b-0 md:border-r border-outline-variant/60 bg-surface-low md:overflow-hidden"
       >
-        <div className="w-full">
-          <div className={`flex items-center gap-3 px-5 py-4 ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
+        <div className={`t-shell w-full ${collapsed ? 'collapsed' : ''}`}>
+          <div className="t-brand flex items-center gap-3 px-4 py-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-primary text-on-primary">
               <Icon name="table_view" className="text-[22px]" />
             </div>
-            <span className={`text-lg font-semibold tracking-tight ${collapsed ? 'md:hidden' : ''}`}>Tabelin</span>
+            <span className="t-name text-lg font-semibold tracking-tight">Tabelin</span>
             <button
               onClick={() => setCollapsed((c) => !c)}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className={`ml-auto hidden h-9 w-9 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-container md:inline-flex ${collapsed ? 'md:hidden' : ''}`}
+              className="ml-auto hidden h-9 w-9 shrink-0 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-container md:inline-flex"
             >
-              <Icon name="chevron_right" className="rotate-180 text-[22px]" />
+              {/* chevron points left to collapse, rotates to point right to expand */}
+              <Icon name="chevron_right" className="t-chev rotate-180 text-[22px]" />
             </button>
           </div>
 
           <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible">
-            {NAV.map((item) => {
+            {NAV.map((item, i) => {
               const active = route === item.id;
               return (
                 <button
@@ -92,28 +93,18 @@ export default function App() {
                   onClick={() => go(item.id)}
                   aria-current={active ? 'page' : undefined}
                   title={item.label}
-                  className={`flex items-center gap-3 rounded-full px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    collapsed ? 'md:justify-center md:px-0' : ''
-                  } ${
+                  style={{ '--d': `${i * 15}ms` }}
+                  className={`t-navitem flex items-center gap-3 rounded-full px-4 py-3 text-sm font-medium whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     active
                       ? 'bg-secondary-container text-on-secondary-container'
                       : 'text-on-surface-variant hover:bg-surface-container'
                   }`}
                 >
-                  <Icon name={item.icon} className="text-[22px]" />
-                  <span className={collapsed ? 'md:hidden' : ''}>{item.label}</span>
+                  <Icon name={item.icon} className="shrink-0 text-[22px]" />
+                  <span className="t-lbl">{item.label}</span>
                 </button>
               );
             })}
-            {collapsed && (
-              <button
-                onClick={() => setCollapsed(false)}
-                aria-label="Expand sidebar"
-                className="hidden md:mt-1 md:flex md:justify-center rounded-full px-0 py-3 text-on-surface-variant hover:bg-surface-container"
-              >
-                <Icon name="chevron_right" className="text-[22px]" />
-              </button>
-            )}
           </nav>
         </div>
       </aside>

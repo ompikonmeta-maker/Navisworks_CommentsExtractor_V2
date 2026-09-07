@@ -181,11 +181,56 @@
   }
 }
 
-/* Sidebar rail width is animated (spring) only on desktop; on mobile the
-   sidebar is a full-width horizontal bar. */
+/* =====================================================================
+   Sidebar collapse — MD3 Expressive spatial spring (single overshoot,
+   cubic-bezier p1y = 1.45). Width springs on desktop; labels fade +
+   collapse with a small per-item stagger. On mobile the sidebar is a
+   full-width horizontal bar and none of the collapse rules apply.
+   ===================================================================== */
+.t-lbl,
+.t-name {
+  overflow: hidden;
+  max-width: 170px;
+  white-space: nowrap;
+  transition: opacity 250ms cubic-bezier(0.2, 0, 0, 1) 140ms,
+    max-width 400ms cubic-bezier(0.2, 0, 0, 1) 140ms;
+}
+.t-navitem {
+  transition: background 180ms cubic-bezier(0.2, 0, 0, 1),
+    padding 660ms cubic-bezier(0.38, 1.45, 0.22, 1);
+}
+.t-chev {
+  transition: transform 660ms cubic-bezier(0.38, 1.45, 0.22, 1);
+}
+
 @media (min-width: 768px) {
   aside[data-rail] {
     width: var(--rail-w, 300px);
+  }
+  .t-shell.collapsed .t-lbl,
+  .t-shell.collapsed .t-name {
+    opacity: 0;
+    max-width: 0;
+    transition: opacity 120ms cubic-bezier(0.2, 0, 0, 1) var(--d, 0ms),
+      max-width 260ms cubic-bezier(0.2, 0, 0, 1) var(--d, 0ms);
+  }
+  .t-shell.collapsed .t-navitem {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+    gap: 0;
+  }
+  .t-shell.collapsed .t-brand {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  /* neutralize the toggle's ml-auto so it centers under the logo */
+  .t-shell.collapsed .t-brand > button {
+    margin-left: 0;
+  }
+  .t-shell.collapsed .t-chev {
+    transform: rotate(180deg);
   }
 }
 

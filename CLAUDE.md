@@ -63,12 +63,14 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   ~430 KB out of the initial chunk; the single-file build inlines it like everything else.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. No persistence by
   design. `computeKpis` is the shared status aggregation.
-- `src/lib/motion.js` — MD3 Expressive motion. `springLinear(overshoot)` generates a CSS
-  `linear()` easing that approximates a damped spring; used for the sidebar collapse spring
-  (660ms, overshoot 1.45), the staggered card reveal (`revealCards`: fade + overshoot 1.75,
-  700ms, 15ms stagger, via `components/Reveal.jsx`), and the two-stage circular theme
-  transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
-  a 300ms spring hold, then 250ms to full). All honor `prefers-reduced-motion`.
+- `src/lib/motion.js` — MD3 Expressive motion. `mdSpring(bounce)` returns the single-overshoot
+  spring easing `cubic-bezier(0.38, bounce, 0.22, 1)` (bounce = p1y), matching the repo's MD3
+  reference — not a multi-oscillation `linear()` curve. Used for the sidebar collapse (660ms,
+  overshoot 1.45; label fade + stagger choreographed by the `.t-shell`/`.t-navitem`/`.t-lbl`
+  rules in `index.css`), the staggered card reveal (`revealCards`: fade + scale 0.88→1 with
+  overshoot 1.75, 700ms, 15ms stagger, via `components/Reveal.jsx`), and the two-stage circular
+  theme transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
+  a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
   route switch: Dashboard, Comments (list + editable detail drawer), Analytics, Import.
   **Analytics is `React.lazy`** because it pulls in Recharts.
