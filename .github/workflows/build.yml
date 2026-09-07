@@ -1,0 +1,34 @@
+name: Build
+
+# Build the Tabelin app and publish the production dist/ as a downloadable
+# artifact (Actions tab → this run → Artifacts).
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabelin-dist
+          path: dist
+          if-no-files-found: error
