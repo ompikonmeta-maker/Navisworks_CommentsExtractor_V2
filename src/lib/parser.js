@@ -150,7 +150,8 @@ export function parseReportHtml(htmlString, sourceName = 'report.html') {
         authorCode,
         cameraPosition: camera,
         imageRef,
-        imageData: '', // linked later from companion images
+        imageData: '', // "before" image, linked later from companion images
+        afterImageData: '', // "after" photo, uploaded in the detail drawer
         source: sourceName,
       });
     });

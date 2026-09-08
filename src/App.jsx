@@ -3,7 +3,18 @@ import { useStore } from './store/store.jsx';
 import { loadSampleData } from './lib/sample.js';
 import { useTheme } from './lib/theme.js';
 import { SIDEBAR_SPRING } from './lib/motion.js';
-import { Icon } from './components/ui.jsx';
+import {
+  FS_SUPPORTED,
+  requestPersistentStorage,
+  loadSessionLocal,
+  saveSessionLocal,
+  clearSessionLocal,
+  pickFolder,
+  getStoredFolder,
+  folderPermission,
+  writeSessionToFolder,
+} from './lib/persist.js';
+import { Icon, Button } from './components/ui.jsx';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
@@ -28,21 +39,114 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const themeBtnRef = useRef(null);
 
+  // Session persistence state
+  const [folderName, setFolderName] = useState(null);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
+  const [saving, setSaving] = useState('idle'); // 'idle' | 'saving' | 'saved'
+  const folderHandleRef = useRef(null);
+
+  // Startup: restore the saved session (IndexedDB) if any, else the sample.
   useEffect(() => {
     let cancelled = false;
     store.setLoading();
-    loadSampleData()
-      .then(({ records, stats }) => {
-        if (!cancelled) store.setData(records, 'sample', stats);
-      })
-      .catch((e) => {
-        if (!cancelled) store.setError(e.message);
-      });
+    (async () => {
+      await requestPersistentStorage();
+      let restored = false;
+      const saved = await loadSessionLocal();
+      if (saved && !cancelled) {
+        store.setData(saved.records, saved.source || 'user', {
+          comments: saved.records.length,
+          html: 0,
+          images: 0,
+          linked: 0,
+        });
+        restored = true;
+      }
+      if (!restored && !cancelled) {
+        try {
+          const { records, stats } = await loadSampleData();
+          if (!cancelled) store.setData(records, 'sample', stats);
+        } catch (e) {
+          if (!cancelled) store.setError(e.message);
+        }
+      }
+      // Reconnect a previously chosen session folder (needs a gesture to re-grant).
+      if (FS_SUPPORTED) {
+        const h = await getStoredFolder();
+        if (h && !cancelled) {
+          folderHandleRef.current = h;
+          setFolderName(h.name);
+          const perm = await folderPermission(h, false);
+          setNeedsReconnect(perm !== 'granted');
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Autosave: browser (IndexedDB) always; mirror to the folder when granted.
+  useEffect(() => {
+    if (store.status !== 'ready') return undefined;
+    const t = setTimeout(async () => {
+      setSaving('saving');
+      await saveSessionLocal(store.records, store.meta.source);
+      const h = folderHandleRef.current;
+      if (h && !needsReconnect) {
+        try {
+          await writeSessionToFolder(h, store.records, store.meta.source);
+        } catch {
+          setNeedsReconnect(true);
+        }
+      }
+      setSaving('saved');
+    }, 700);
+    return () => clearTimeout(t);
+  }, [store.records, store.meta.source, store.status, needsReconnect]);
+
+  const connectFolder = useCallback(async () => {
+    try {
+      const h = await pickFolder();
+      folderHandleRef.current = h;
+      setFolderName(h.name);
+      setNeedsReconnect(false);
+      await writeSessionToFolder(h, store.records, store.meta.source);
+      store.notify(`Session folder connected · ${h.name}/`, 'success');
+    } catch (e) {
+      if (e.name !== 'AbortError') store.notify(`Couldn’t open folder: ${e.message}`, 'error');
+    }
+  }, [store]);
+
+  const reconnectFolder = useCallback(async () => {
+    const h = folderHandleRef.current;
+    if (!h) return;
+    const perm = await folderPermission(h, true);
+    if (perm === 'granted') {
+      setNeedsReconnect(false);
+      try {
+        await writeSessionToFolder(h, store.records, store.meta.source);
+      } catch {
+        /* ignore */
+      }
+      store.notify('Session folder reconnected.', 'success');
+    } else {
+      store.notify('Folder permission denied.', 'error');
+    }
+  }, [store]);
+
+  const resetToSample = useCallback(async () => {
+    if (!window.confirm('Reset to the bundled sample? Your current edits and uploaded photos will be cleared.')) return;
+    await clearSessionLocal();
+    try {
+      const { records, stats } = await loadSampleData();
+      store.setData(records, 'sample', stats);
+      store.notify('Reset to sample.', 'info');
+    } catch (e) {
+      store.notify(`Couldn’t load sample: ${e.message}`, 'error');
+    }
+  }, [store]);
 
   const openDetail = useCallback((id) => {
     setDetailId(id);
@@ -121,13 +225,36 @@ export default function App() {
             <h1 className="truncate text-2xl font-bold tracking-tight md:text-3xl">
               {NAV.find((n) => n.id === route)?.label}
             </h1>
-            <button
-              ref={themeBtnRef}
-              onClick={() => toggle(themeBtnRef.current)}
-              aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
+            <div className="flex shrink-0 items-center gap-1">
+              {FS_SUPPORTED &&
+                (needsReconnect ? (
+                  <Button variant="tonal" icon="folder_open" onClick={reconnectFolder}>Reconnect folder</Button>
+                ) : folderName ? (
+                  <Button variant="text" icon="folder_open" onClick={connectFolder}>{folderName}/</Button>
+                ) : (
+                  <Button variant="text" icon="folder_open" onClick={connectFolder}>Session folder</Button>
+                ))}
+              <button
+                ref={themeBtnRef}
+                onClick={() => toggle(themeBtnRef.current)}
+                aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
+              </button>
+            </div>
+          </div>
+          <div className="mx-auto mt-1 flex w-full max-w-6xl items-center gap-2 text-xs text-on-surface-variant">
+            <span
+              className={`h-2 w-2 rounded-full ${saving === 'saving' ? 'bg-status-review' : 'bg-status-closed'}`}
+              title={saving === 'saving' ? 'Saving…' : 'Saved'}
+            />
+            <span>
+              Autosaving · browser{folderName ? ` + ${folderName}/` : ''}
+              {needsReconnect && folderName ? ' (folder paused)' : ''}
+            </span>
+            <button onClick={resetToSample} className="ml-auto inline-flex items-center gap-1 text-on-surface-variant hover:text-primary">
+              <Icon name="restart_alt" className="text-[15px]" /> Reset to sample
             </button>
           </div>
         </header>

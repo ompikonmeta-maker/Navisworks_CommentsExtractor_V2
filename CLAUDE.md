@@ -6,8 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Tabelin** — a browser-only web app that converts Autodesk Navisworks review-comment
 HTML reports into a searchable, filterable review workspace with Excel (`.xlsx`) export.
-Everything runs client-side: files are parsed in the browser, held in memory for the
-session, and never uploaded. Reloading the page returns to the bundled sample dataset.
+Everything runs client-side: files are parsed in the browser and never uploaded. The
+working session (records, edits, and before/after images) is **autosaved to the browser
+(IndexedDB)** so a reload restores it, and can also be mirrored to a user-chosen
+**dedicated folder** (File System Access API → `tabelin-session.json`). "Reset to sample"
+clears the session and returns to the bundled sample dataset (`src/lib/persist.js`).
 
 Stack: **React 18 + Vite 5 + Tailwind CSS 3**. UI follows a Material Design 3 scheme
 seeded from `#1768f7` (generated with the `docs/material-design-3-project` dynamic-color
@@ -61,8 +64,12 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `src/lib/excel.js` — `.xlsx` export (Comments + Summary sheets) via SheetJS. **SheetJS is
   dynamically imported** (`exportToExcel` is `async`) so a multi-file build keeps its
   ~430 KB out of the initial chunk; the single-file build inlines it like everything else.
-- `src/store/store.jsx` — React context + `useReducer` in-memory store. No persistence by
-  design. `computeKpis` is the shared status aggregation.
+- `src/store/store.jsx` — React context + `useReducer` in-memory store. `computeKpis` is the
+  shared status aggregation. Persistence lives in `App.jsx` (autosave effect) + `lib/persist.js`.
+- `src/lib/persist.js` — session persistence: a tiny IndexedDB key/value for the autosaved
+  session and the stored folder handle, plus File System Access helpers
+  (`pickFolder`/`writeSessionToFolder`). `App.jsx` restores on startup and autosaves
+  (debounced) on every change; `components/BeforeAfter.jsx` is the drag before/after slider.
 - `src/lib/motion.js` — MD3 Expressive motion. `mdSpring(bounce)` returns the single-overshoot
   spring easing `cubic-bezier(0.38, bounce, 0.22, 1)` (bounce = p1y), matching the repo's MD3
   reference — not a multi-oscillation `linear()` curve. Used for the sidebar collapse (660ms,
