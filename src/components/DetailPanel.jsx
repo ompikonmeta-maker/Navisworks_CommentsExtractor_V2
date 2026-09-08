@@ -176,12 +176,24 @@ export default function DetailPanel({ record, onClose }) {
               </div>
 
               {rec.afterImageData && (
-                <button
-                  onClick={() => afterInputRef.current?.click()}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  <Icon name="restart_alt" className="text-[15px]" /> Replace after photo
-                </button>
+                <div className="flex items-center gap-4 text-xs font-medium">
+                  <button
+                    onClick={() => afterInputRef.current?.click()}
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <Icon name="restart_alt" className="text-[15px]" /> Replace
+                  </button>
+                  <button
+                    onClick={() => set({ afterImageData: null })}
+                    className="inline-flex items-center gap-1 text-error hover:underline"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                        d="M4 7h16M9 7V5h6v2m-7 0 1 13h6l1-13" />
+                    </svg>
+                    Remove
+                  </button>
+                </div>
               )}
               {!rec.afterImageData && (
                 <p className="text-xs text-on-surface-variant">Uploading an after photo crops it to a uniform size and marks this comment Closed.</p>
