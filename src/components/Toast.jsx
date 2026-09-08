@@ -13,7 +13,7 @@ export default function Toast() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(clearToast, 4500);
+    const t = setTimeout(clearToast, toast.action ? 6500 : 4500);
     return () => clearTimeout(t);
   }, [toast, clearToast]);
 
@@ -23,11 +23,20 @@ export default function Toast() {
   return (
     <div
       role="status"
+      data-toast
       className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 px-4"
     >
       <div className={`flex items-start gap-3 rounded-control border px-4 py-3 shadow-md-3 max-w-md ${k.cls}`}>
         <Icon name={k.icon} className="text-[20px] mt-0.5" />
         <p className="text-sm whitespace-pre-line">{toast.message}</p>
+        {toast.action && (
+          <button
+            onClick={() => { toast.action.onClick(); clearToast(); }}
+            className="ml-1 shrink-0 text-sm font-semibold underline underline-offset-2 hover:opacity-80"
+          >
+            {toast.action.label}
+          </button>
+        )}
         <button onClick={clearToast} aria-label="Dismiss" className="ml-1 opacity-70 hover:opacity-100">
           <Icon name="close" className="text-[18px]" />
         </button>

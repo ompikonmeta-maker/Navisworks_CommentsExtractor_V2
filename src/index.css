@@ -552,6 +552,11 @@
   outline: 2px solid var(--md-sys-color-primary);
   outline-offset: 2px;
 }
+.ba-thumb.drop-over {
+  border-color: var(--md-sys-color-primary);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+}
 .ba-thumb .ba-zoom {
   position: absolute;
   right: 6px;

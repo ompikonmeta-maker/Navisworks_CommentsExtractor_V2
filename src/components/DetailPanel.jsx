@@ -14,35 +14,51 @@ function readAsDataURL(file) {
   });
 }
 
-// A square thumbnail that enlarges to the lightbox when tapped.
-function Thumb({ caption, src, alt, onEnlarge }) {
+// A square thumbnail button that enlarges to the lightbox when tapped.
+function Thumb({ src, alt, onEnlarge }) {
   return (
-    <div className="ba-cell">
-      <span className="ba-cap">{caption}</span>
-      <button
-        type="button"
-        className="ba-thumb"
-        onClick={(e) => onEnlarge(src, alt, e.currentTarget.querySelector('img'))}
-        aria-label={`Enlarge ${caption.toLowerCase()} image`}
-      >
-        <img src={src} alt={alt} />
-        <span className="ba-zoom">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              d="M9 4H5a1 1 0 0 0-1 1v4m11-5h4a1 1 0 0 1 1 1v4M9 20H5a1 1 0 0 1-1-1v-4m11 5h4a1 1 0 0 0 1-1v-4" />
-          </svg>
-        </span>
-      </button>
-    </div>
+    <button
+      type="button"
+      className="ba-thumb"
+      onClick={(e) => onEnlarge(src, alt, e.currentTarget.querySelector('img'))}
+      aria-label={`Enlarge ${alt}`}
+    >
+      <img src={src} alt={alt} />
+      <span className="ba-zoom">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            d="M9 4H5a1 1 0 0 0-1 1v4m11-5h4a1 1 0 0 1 1 1v4M9 20H5a1 1 0 0 1-1-1v-4m11 5h4a1 1 0 0 0 1-1v-4" />
+        </svg>
+      </span>
+    </button>
   );
 }
+
+// Small text action (replace / remove) shown under a thumbnail.
+function MiniAction({ danger, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${danger ? 'text-error' : 'text-primary'}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const TrashIcon = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+    <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      d="M4 7h16M9 7V5h6v2m-7 0 1 13h6l1-13" />
+  </svg>
+);
 
 // Non-modal detail drawer. It is always mounted and slides in/out via a
 // `transform` transition (no flicker, no mount/unmount). The main table is
 // never dimmed and stays interactive: clicking another row swaps the
 // drawer's content in place; clicking anywhere else closes it.
 export default function DetailPanel({ record, onClose }) {
-  const { updateRecord } = useStore();
+  const { updateRecord, notify } = useStore();
   const open = !!record;
   const [shown, setShown] = useState(record); // persists during the exit slide
   const closeRef = useRef(null);
@@ -64,6 +80,7 @@ export default function DetailPanel({ record, onClose }) {
     const onDown = (e) => {
       if (e.target.closest('[data-drawer]')) return; // inside the drawer
       if (e.target.closest('tbody tr')) return; // row → handled as a switch
+      if (e.target.closest('[data-toast]')) return; // toast action (e.g. Undo)
       onClose();
     };
     window.addEventListener('keydown', onKey);
@@ -74,32 +91,74 @@ export default function DetailPanel({ record, onClose }) {
     };
   }, [open, onClose]);
 
-  const rec = shown;
+  // While open, render the live store record so edits (image add/remove,
+  // undo) reflect immediately; `shown` is only the frozen copy kept for the
+  // exit slide, when `record` has already gone null.
+  const rec = record || shown;
   const set = (patch) => rec && updateRecord(rec.ID, patch);
+  const beforeInputRef = useRef(null);
   const afterInputRef = useRef(null);
-  const [cropSrc, setCropSrc] = useState(null); // data URL being cropped
+  const [crop, setCrop] = useState(null); // { src, target: 'before'|'after' }
   const [lightbox, setLightbox] = useState(null); // { src, alt, from }
+  const [dropOver, setDropOver] = useState(null); // slot being dragged over
 
   const enlarge = (src, alt, imgEl) => {
     const r = imgEl.getBoundingClientRect();
     setLightbox({ src, alt, from: { x: r.left, y: r.top, w: r.width, h: r.height } });
   };
 
-  const handleAfter = async (fileList) => {
-    const file = Array.from(fileList || [])[0];
+  // Any image source (file picker, drop, or paste) opens the crop dialog for
+  // the given slot; the crop result is written on "Use photo".
+  const pickImage = async (fileList, target) => {
+    const file = Array.from(fileList || []).find((f) => f.type.startsWith('image/'));
     if (!file || !rec) return;
     try {
-      setCropSrc(await readAsDataURL(file)); // open the crop dialog
+      setCrop({ src: await readAsDataURL(file), target });
     } catch {
       /* ignore read errors */
     }
   };
 
   const cropDone = (dataUrl) => {
-    // A cropped after photo implies the issue is resolved → Closed.
-    if (rec) updateRecord(rec.ID, { afterImageData: dataUrl, status: 'Closed' });
-    setCropSrc(null);
+    if (rec) {
+      // A cropped after photo implies the issue is resolved → Closed.
+      const patch = crop.target === 'after'
+        ? { afterImageData: dataUrl, status: 'Closed' }
+        : { imageData: dataUrl };
+      updateRecord(rec.ID, patch);
+    }
+    setCrop(null);
   };
+
+  const removeImage = (target) => {
+    if (!rec) return;
+    const field = target === 'after' ? 'afterImageData' : 'imageData';
+    const prev = rec[field];
+    const id = rec.ID;
+    updateRecord(id, { [field]: null });
+    notify(`${target === 'after' ? 'After' : 'Before'} photo removed`, 'info', {
+      label: 'Undo',
+      onClick: () => updateRecord(id, { [field]: prev }),
+    });
+  };
+
+  // Paste an image anywhere in the drawer → treat it as an after photo.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPaste = (e) => {
+      const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+      if (item) pickImage([item.getAsFile()], 'after');
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, rec?.ID]);
+
+  const dropProps = (target) => ({
+    onDragOver: (e) => { e.preventDefault(); setDropOver(target); },
+    onDragLeave: () => setDropOver((t) => (t === target ? null : t)),
+    onDrop: (e) => { e.preventDefault(); setDropOver(null); pickImage(e.dataTransfer.files, target); },
+  });
 
   // Enter uses emphasized-decelerate; exit uses emphasized-accelerate.
   const style = {
@@ -150,66 +209,53 @@ export default function DetailPanel({ record, onClose }) {
                 after upload passes through the crop dialog and marks Closed. */}
             <div className="space-y-2">
               <div className="ba-grid">
-                {rec.imageData ? (
-                  <Thumb caption="Before" src={rec.imageData} alt={`Before — ${rec.viewpoint}`} onEnlarge={enlarge} />
-                ) : (
-                  <div className="ba-cell">
-                    <span className="ba-cap">Before</span>
-                    <div className="ba-thumb flex flex-col items-center justify-center gap-1 text-on-surface-variant" style={{ cursor: 'default' }}>
-                      <Icon name="image_not_supported" className="text-[24px]" />
-                      <span className="px-2 text-center text-[11px]">{rec.imageRef ? `${rec.imageRef} unavailable` : 'No image'}</span>
-                    </div>
+                {[
+                  { target: 'before', caption: 'Before', src: rec.imageData, alt: `Before — ${rec.viewpoint}`, inputRef: beforeInputRef },
+                  { target: 'after', caption: 'After', src: rec.afterImageData, alt: 'After', inputRef: afterInputRef },
+                ].map((slot) => (
+                  <div key={slot.target} className="ba-cell" {...dropProps(slot.target)}>
+                    <span className="ba-cap">{slot.caption}</span>
+                    {slot.src ? (
+                      <Thumb src={slot.src} alt={slot.alt} onEnlarge={enlarge} />
+                    ) : (
+                      <button
+                        className={`ba-thumb flex flex-col items-center justify-center gap-1 text-on-surface-variant ${dropOver === slot.target ? 'drop-over' : ''}`}
+                        onClick={() => slot.inputRef.current?.click()}
+                      >
+                        <Icon name="cloud_upload" className="text-[26px] text-primary" />
+                        <span className="text-xs font-medium">Upload</span>
+                        <span className="text-[10px]">or drop / paste</span>
+                      </button>
+                    )}
+                    {slot.src && (
+                      <div className="flex items-center gap-4">
+                        <MiniAction onClick={() => slot.inputRef.current?.click()}>
+                          <Icon name="restart_alt" className="text-[15px]" /> Replace
+                        </MiniAction>
+                        <MiniAction danger onClick={() => removeImage(slot.target)}>
+                          <TrashIcon /> Remove
+                        </MiniAction>
+                      </div>
+                    )}
+                    <input
+                      ref={slot.inputRef}
+                      type="file"
+                      accept=".jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => { pickImage(e.target.files, slot.target); e.target.value = ''; }}
+                    />
                   </div>
-                )}
-
-                {rec.afterImageData ? (
-                  <Thumb caption="After" src={rec.afterImageData} alt="After" onEnlarge={enlarge} />
-                ) : (
-                  <div className="ba-cell">
-                    <span className="ba-cap">After</span>
-                    <button className="ba-thumb flex flex-col items-center justify-center gap-1 text-on-surface-variant" onClick={() => afterInputRef.current?.click()}>
-                      <Icon name="cloud_upload" className="text-[26px] text-primary" />
-                      <span className="text-xs font-medium">Upload</span>
-                    </button>
-                  </div>
-                )}
+                ))}
               </div>
 
-              {rec.afterImageData && (
-                <div className="flex items-center gap-4 text-xs font-medium">
-                  <button
-                    onClick={() => afterInputRef.current?.click()}
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                  >
-                    <Icon name="restart_alt" className="text-[15px]" /> Replace
-                  </button>
-                  <button
-                    onClick={() => set({ afterImageData: null })}
-                    className="inline-flex items-center gap-1 text-error hover:underline"
-                  >
-                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
-                      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                        d="M4 7h16M9 7V5h6v2m-7 0 1 13h6l1-13" />
-                    </svg>
-                    Remove
-                  </button>
-                </div>
-              )}
               {!rec.afterImageData && (
-                <p className="text-xs text-on-surface-variant">Uploading an after photo crops it to a uniform size and marks this comment Closed.</p>
+                <p className="text-xs text-on-surface-variant">An after photo is cropped to a uniform size and marks this comment Closed.</p>
               )}
               {rec.cameraPosition && (
                 <div className="flex items-center gap-2 text-xs text-on-surface-variant">
                   <Icon name="videocam" className="text-[16px]" /> {rec.cameraPosition}
                 </div>
               )}
-              <input
-                ref={afterInputRef}
-                type="file"
-                accept=".jpg,.jpeg,.png"
-                className="hidden"
-                onChange={(e) => { handleAfter(e.target.files); e.target.value = ''; }}
-              />
             </div>
 
             <p className="whitespace-pre-line text-sm leading-relaxed">{rec.commentText}</p>
@@ -245,8 +291,8 @@ export default function DetailPanel({ record, onClose }) {
       )}
     </div>
 
-    {cropSrc && (
-      <ImageCropper src={cropSrc} onDone={cropDone} onCancel={() => setCropSrc(null)} />
+    {crop && (
+      <ImageCropper src={crop.src} onDone={cropDone} onCancel={() => setCrop(null)} />
     )}
     {lightbox && (
       <Lightbox src={lightbox.src} alt={lightbox.alt} from={lightbox.from} onClose={() => setLightbox(null)} />

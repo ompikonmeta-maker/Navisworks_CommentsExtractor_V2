@@ -60,8 +60,11 @@ export function StoreProvider({ children }) {
   );
   // Named `notify` (not `toast`) so it doesn't collide with `state.toast`,
   // the current toast payload the provider also exposes.
+  // `action` (optional): { label, onClick } renders a button in the toast —
+  // used for Undo. The onClick lives only in memory, never persisted.
   const notify = useCallback(
-    (message, kind = 'success') => dispatch({ type: 'TOAST', toast: { message, kind, ts: Date.now() } }),
+    (message, kind = 'success', action = null) =>
+      dispatch({ type: 'TOAST', toast: { message, kind, action, ts: Date.now() } }),
     []
   );
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);

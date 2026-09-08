@@ -188,7 +188,16 @@ export default function ImageCropper({ src, onDone, onCancel }) {
               </button>
             ))}
           </div>
-          <div className="crop-note">Output: {ow} × {oh} px</div>
+          <div className="crop-note flex items-center justify-between">
+            <span>Output: {ow} × {oh} px</span>
+            <button
+              type="button"
+              className="font-medium text-primary hover:underline"
+              onClick={() => { touched.current = false; fitCover(); }}
+            >
+              Reset
+            </button>
+          </div>
         </div>
         <div className="crop-foot">
           <Button variant="text" onClick={onCancel}>Cancel</Button>
