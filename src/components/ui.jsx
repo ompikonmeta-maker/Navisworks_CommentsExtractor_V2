@@ -1,5 +1,5 @@
 // Small Material-flavored UI primitives shared across views.
-import { forwardRef } from 'react';
+import { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
 
 // Material Symbols codepoints for the icons this app uses. Rendering by
 // codepoint (not ligature) lets the embedded font subset stay ~4 KB and
@@ -108,20 +108,108 @@ export function Card({ children, className = '' }) {
   );
 }
 
+// MD3 exposed dropdown menu — an outlined field that opens an anchored menu
+// (surface-container, elevation 2, spring open). Same props as the old
+// native <select> so all call sites keep working. Chevron + check are inline
+// SVG so they render offline without enlarging the icon-font subset.
 export function Select({ value, onChange, options, className = '', 'aria-label': ariaLabel }) {
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [active, setActive] = useState(-1);
+  const rootRef = useRef(null);
+  const btnRef = useRef(null);
+  const current = opts.find((o) => o.value === value);
+
+  const close = useCallback(() => {
+    setOpen((wasOpen) => {
+      if (wasOpen) {
+        setClosing(true);
+        setTimeout(() => setClosing(false), 140);
+      }
+      return false;
+    });
+  }, []);
+  const openMenu = () => {
+    setClosing(false);
+    setOpen(true);
+    setActive(Math.max(0, opts.findIndex((o) => o.value === value)));
+  };
+  const choose = (v) => {
+    onChange(v);
+    close();
+    btnRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => {
+      if (!rootRef.current?.contains(e.target)) close();
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open, close]);
+
+  const onKey = (e) => {
+    if (e.key === 'Escape') return close();
+    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      return openMenu();
+    }
+    if (open) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(opts.length - 1, a + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+      else if (e.key === 'Home') { e.preventDefault(); setActive(0); }
+      else if (e.key === 'End') { e.preventDefault(); setActive(opts.length - 1); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (active >= 0) choose(opts[active].value); }
+    }
+    return undefined;
+  };
+
   return (
-    <select
-      aria-label={ariaLabel}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`h-10 rounded-control border border-outline bg-surface-container px-3 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
-    >
-      {options.map((o) => (
-        <option key={o.value ?? o} value={o.value ?? o}>
-          {o.label ?? o}
-        </option>
-      ))}
-    </select>
+    <div ref={rootRef} className={`dd ${className}`}>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => (open ? close() : openMenu())}
+        onKeyDown={onKey}
+        className="dd-trigger"
+      >
+        <span className="truncate">{current ? current.label : ''}</span>
+        <svg className="dd-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {(open || closing) && (
+        <ul role="listbox" aria-label={ariaLabel} className={`dd-menu ${open ? 'open' : 'closing'}`}>
+          {opts.map((o, i) => {
+            const sel = o.value === value;
+            return (
+              <li
+                key={o.value}
+                role="option"
+                aria-selected={sel}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => choose(o.value)}
+                className={`dd-item ${sel ? 'selected' : ''} ${i === active ? 'active' : ''}`}
+              >
+                <span className="dd-lead">
+                  {sel && (
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" />
+                    </svg>
+                  )}
+                </span>
+                {o.label}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 

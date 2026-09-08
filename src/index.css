@@ -31,6 +31,9 @@
   /* Shape tokens */
   --tabelin-radius-card: 26px;
   --tabelin-radius-control: 15px;
+  --tabelin-radius-menu: 12px;
+  --md-sys-elevation-level2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-level3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
 
   /* Color — light, seeded from #1768f7 (MD3 Expressive) */
   --md-sys-color-primary: #0056d2;
@@ -390,6 +393,124 @@
 .seg-btn.on .seg-chk {
   width: 18px;
   opacity: 1;
+}
+
+/* =====================================================================
+   MD3 exposed dropdown menu (replaces native <select>). Matches the repo's
+   md-menu reference: surface-container, elevation 2, 48px items, spring open
+   (scaleY .8→1 + fade) from the top.
+   ===================================================================== */
+.dd {
+  position: relative;
+  display: inline-block;
+}
+.dd-trigger {
+  width: 100%;
+  min-width: 8.5rem;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  border-radius: var(--tabelin-radius-control);
+  padding: 0 10px 0 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.dd-trigger:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+.dd-trigger:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+.dd-trigger[aria-expanded='true'] {
+  border-color: var(--md-sys-color-primary);
+}
+.dd-chev {
+  flex: 0 0 auto;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.dd-trigger[aria-expanded='true'] .dd-chev {
+  transform: rotate(180deg);
+}
+
+.dd-menu {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  top: calc(100% + 6px);
+  min-width: max(100%, 180px);
+  width: max-content;
+  max-width: 320px;
+  max-height: 264px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 8px 0;
+  list-style: none;
+  background: var(--md-sys-color-surface-container-low);
+  border-radius: var(--tabelin-radius-menu);
+  box-shadow: var(--md-sys-elevation-level3),
+    0 6px 22px -6px color-mix(in srgb, #000 55%, transparent);
+  transform-origin: top center;
+}
+/* Expressive open: surface + content spring down from the top edge. */
+.dd-menu.open {
+  animation: dd-open 380ms cubic-bezier(0.42, 1.67, 0.21, 0.9) both;
+}
+.dd-menu.closing {
+  animation: dd-close 140ms cubic-bezier(0.3, 0, 1, 1) both;
+  pointer-events: none;
+}
+@keyframes dd-open {
+  0% { opacity: 0; transform: scaleY(0.4); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: scaleY(1); }
+}
+@keyframes dd-close {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.9); }
+}
+.dd-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 12px;
+  cursor: pointer;
+  color: var(--md-sys-color-on-surface);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.dd-item.active,
+.dd-item:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
+}
+/* selected — MD3 reference uses the tertiary container for the marked item */
+.dd-item.selected {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+.dd-item.selected.active,
+.dd-item.selected:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-tertiary-container) 8%, var(--md-sys-color-tertiary-container));
+}
+.dd-lead {
+  width: 24px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--md-sys-color-primary);
+}
+.dd-item.selected .dd-lead {
+  color: var(--md-sys-color-on-tertiary-container);
 }
 
 /* Before/after comparison slider */
