@@ -54,7 +54,7 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
   const hasFilters = query || discipline !== 'all' || statusFilter !== 'all';
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="canvas-w space-y-4">
       {/* Toolbar */}
       <Card className="p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

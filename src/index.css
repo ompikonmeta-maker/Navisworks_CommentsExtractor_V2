@@ -558,6 +558,16 @@
   background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
 }
 
+/* Work-canvas width — fluid with the viewport up to a ceiling, centred. The
+   ceiling lives in one variable so the whole app's content width is a one-line
+   tweak. Header and views share `.canvas-w` so they stay aligned. */
+:root { --tabelin-canvas-max: 1680px; }
+.canvas-w {
+  width: 100%;
+  max-width: var(--tabelin-canvas-max);
+  margin-inline: auto;
+}
+
 /* Sticky app header — a translucent ground so scrolled content doesn't bleed
    through the title (Tailwind's token-alpha utilities can't build this from a
    var-based color, so it's set explicitly here). */

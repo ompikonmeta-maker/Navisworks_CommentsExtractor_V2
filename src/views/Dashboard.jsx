@@ -190,7 +190,7 @@ export default function Dashboard({ openDetail, goComments }) {
   const pctColor = (p) => (p >= 60 ? STATUS_COLORS.Closed : p >= 35 ? STATUS_COLORS['In Review'] : STATUS_COLORS.Open);
 
   return (
-    <div ref={overviewRef} className="mx-auto max-w-6xl space-y-6">
+    <div ref={overviewRef} className="canvas-w space-y-6">
       {/* Action bar */}
       <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-on-surface-variant">

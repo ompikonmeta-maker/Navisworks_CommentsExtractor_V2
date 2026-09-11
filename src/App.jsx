@@ -223,9 +223,9 @@ export default function App() {
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col md:gap-3">
         {/* Floating title over the canvas — no border/fill on desktop,
-            aligned with the content column (max-w-6xl) below. */}
+            aligned with the content column (.canvas-w) below. */}
         <header className="t-appbar sticky top-0 z-10 border-b border-outline-variant/60 px-5 py-3 backdrop-blur md:top-3 md:rounded-card md:border-0 md:px-4 md:py-2.5">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
+          <div className="canvas-w flex items-center justify-between gap-4">
             <h1 className="truncate text-2xl font-bold tracking-tight md:text-3xl">
               {NAV.find((n) => n.id === route)?.label}
             </h1>
@@ -248,7 +248,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className="mx-auto mt-1 flex w-full max-w-6xl items-center gap-2 text-xs text-on-surface-variant">
+          <div className="canvas-w mt-1 flex items-center gap-2 text-xs text-on-surface-variant">
             <span
               className={`h-2 w-2 rounded-full ${saving === 'saving' ? 'bg-status-review' : 'bg-status-closed'}`}
               title={saving === 'saving' ? 'Saving…' : 'Saved'}
