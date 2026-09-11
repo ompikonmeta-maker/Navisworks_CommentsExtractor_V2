@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import { snapshotNode, nodeToImage } from '../lib/snapshot.js';
 import {
   ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, LabelList,
   AreaChart, Area,
 } from 'recharts';
 import { useStore, computeKpis } from '../store/store.jsx';
@@ -295,31 +295,37 @@ export default function Dashboard({ openDetail, goComments }) {
       <Reveal deps={[status]}>
         <Card ref={disciplineRef} className="relative p-6">
           <SnapButton onClick={() => snap(disciplineRef, 'by-discipline')} />
-          <ChartTitle icon="bar_chart" title="By discipline" sub="Status mix per discipline — shape above, exact numbers below" />
+          <ChartTitle icon="bar_chart" title="By discipline" sub="Status mix per discipline — chart and exact numbers side by side" />
           {loading ? (
             <SkeletonChart />
           ) : (
             <>
-              <div className="mb-2 flex flex-wrap gap-4 text-xs">
+              <div className="mb-3 flex flex-wrap gap-4 text-xs">
                 {STATUSES.map((s) => (
                   <span key={s} className="inline-flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_COLORS[s] }} /> {s}
                   </span>
                 ))}
               </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={byDiscipline} margin={{ top: 16, right: 8, bottom: 4, left: -12 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
-                  <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
-                  <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: `${primary}22` }} />
-                  {STATUSES.map((s, i) => (
-                    <Bar key={s} dataKey={s} stackId="status" fill={STATUS_COLORS[s]} radius={i === STATUSES.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]} maxBarSize={48} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="grid gap-6 lg:grid-cols-2 lg:items-center">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={byDiscipline} margin={{ top: 20, right: 8, bottom: 4, left: -12 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+                    <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
+                    <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: `${primary}22` }} />
+                    {STATUSES.map((s, i) => (
+                      <Bar key={s} dataKey={s} stackId="status" fill={STATUS_COLORS[s]} radius={i === STATUSES.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]} maxBarSize={48}>
+                        {/* Total sits above each stacked bar (on the topmost segment). */}
+                        {i === STATUSES.length - 1 && (
+                          <LabelList dataKey="total" position="top" fill={axis} fontSize={11} fontWeight={600} />
+                        )}
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
 
-              <div className="mt-4 overflow-x-auto">
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-[10.5px] font-semibold uppercase tracking-wide text-on-surface-variant">
@@ -352,6 +358,7 @@ export default function Dashboard({ openDetail, goComments }) {
                     })}
                   </tbody>
                 </table>
+              </div>
               </div>
             </>
           )}
