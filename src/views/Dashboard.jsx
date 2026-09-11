@@ -307,8 +307,11 @@ export default function Dashboard({ openDetail, goComments }) {
                   </span>
                 ))}
               </div>
-              <div className="grid gap-6 lg:grid-cols-2 lg:items-center">
-                <ResponsiveContainer width="100%" height={300}>
+              {/* items-stretch (default) so the chart column takes the table's
+                  height; the chart fills it via height="100%". */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="min-h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={byDiscipline} margin={{ top: 20, right: 8, bottom: 4, left: -12 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
                     <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
@@ -324,6 +327,7 @@ export default function Dashboard({ openDetail, goComments }) {
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
