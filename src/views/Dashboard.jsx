@@ -1,5 +1,12 @@
 import { useMemo, useRef } from 'react';
+import {
+  ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
+  PieChart, Pie, Cell,
+  LineChart, Line,
+} from 'recharts';
 import { useStore, computeKpis } from '../store/store.jsx';
+import { STATUSES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
 import { Icon, Button, Card, StatusBadge, DisciplineBadge } from '../components/ui.jsx';
@@ -11,6 +18,19 @@ const KPI_META = [
   { key: 'In Review', label: 'In Review', icon: 'hourglass_top', accent: 'text-status-review' },
   { key: 'Closed', label: 'Closed', icon: 'check_circle', accent: 'text-status-closed' },
 ];
+
+// Read MD3 tokens at render time so the charts follow the active theme.
+function cssVar(name, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+// Parse Navisworks dates like "2024/12/9 04:0:23" → "YYYY-MM".
+function toMonth(dateStr) {
+  const m = /(\d{4})[/-](\d{1,2})/.exec(dateStr || '');
+  if (!m) return 'Unknown';
+  return `${m[1]}-${String(m[2]).padStart(2, '0')}`;
+}
 
 export default function Dashboard({ openDetail }) {
   const { status, records, meta, notify, setData } = useStore();
@@ -34,11 +54,35 @@ export default function Dashboard({ openDetail }) {
   };
 
   const kpis = useMemo(() => computeKpis(records), [records]);
-  const topDisciplines = useMemo(() => {
+
+  // One row per discipline holding its per-status counts, for the stacked bars.
+  const byDiscipline = useMemo(() => {
     const m = {};
-    for (const r of records) m[r.discipline] = (m[r.discipline] || 0) + 1;
-    return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    for (const r of records) {
+      const row = m[r.discipline] || (m[r.discipline] = { name: r.discipline, Open: 0, 'In Review': 0, Closed: 0, total: 0 });
+      row[r.status] = (row[r.status] || 0) + 1;
+      row.total += 1;
+    }
+    return Object.values(m).sort((a, b) => b.total - a.total);
   }, [records]);
+
+  const byStatus = useMemo(
+    () => STATUSES.map((name) => ({ name, value: kpis[name] || 0 })),
+    [kpis]
+  );
+
+  const overTime = useMemo(() => {
+    const m = {};
+    for (const r of records) {
+      const key = toMonth(r.commentDate);
+      m[key] = (m[key] || 0) + 1;
+    }
+    return Object.entries(m)
+      .filter(([k]) => k !== 'Unknown')
+      .map(([month, value]) => ({ month, value }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+  }, [records]);
+
   const recent = useMemo(() => records.slice(0, 6), [records]);
 
   const handleExport = async () => {
@@ -50,6 +94,19 @@ export default function Dashboard({ openDetail }) {
       notify(`Export failed: ${e.message}`, 'error');
     }
   };
+
+  const primary = cssVar('--md-sys-color-primary', '#1768f7');
+  const grid = cssVar('--md-sys-color-outline-variant', '#c4c6d0');
+  const axis = cssVar('--md-sys-color-on-surface-variant', '#44464f');
+  const surface = cssVar('--md-sys-color-surface-container-high', '#e7e7f6');
+  const surfaceLow = cssVar('--md-sys-color-surface-low', '#f2f3fb');
+  const onSurface = cssVar('--md-sys-color-on-surface', '#191b23');
+  const STATUS_COLORS = {
+    Open: cssVar('--tabelin-status-open', '#bf0031'),
+    'In Review': cssVar('--tabelin-status-review', '#9a6800'),
+    Closed: cssVar('--tabelin-status-closed', '#1f7a4d'),
+  };
+  const tooltipStyle = { background: surface, border: `1px solid ${grid}`, borderRadius: 12, color: onSurface, fontSize: 12 };
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -98,37 +155,81 @@ export default function Dashboard({ openDetail }) {
         ))}
       </Reveal>
 
+      {/* Discipline (stacked) + status donut */}
       <Reveal className="grid gap-6 lg:grid-cols-2" deps={[status]}>
-        {/* Discipline load */}
         <Card className="p-6">
-          <h3 className="mb-4 text-sm font-semibold">By discipline</h3>
+          <ChartTitle icon="bar_chart" title="By discipline" sub="Open · In Review · Closed, stacked per discipline" />
           {loading ? (
-            <SkeletonRows />
+            <SkeletonChart />
           ) : (
-            <ul className="space-y-3">
-              {topDisciplines.map(([disc, count]) => {
-                const pct = kpis.total ? Math.round((count / kpis.total) * 100) : 0;
-                return (
-                  <li key={disc}>
-                    <div className="mb-1 flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <DisciplineBadge discipline={disc} /> <span className="text-on-surface-variant tabular-nums">{count}</span>
-                      </span>
-                      <span className="text-xs text-on-surface-variant tabular-nums">{pct}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-surface-variant">
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={byDiscipline} margin={{ top: 16, right: 8, bottom: 4, left: -12 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
+                <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: `${primary}22` }} />
+                <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
+                {STATUSES.map((s, i) => (
+                  <Bar
+                    key={s}
+                    dataKey={s}
+                    stackId="status"
+                    fill={STATUS_COLORS[s]}
+                    radius={i === STATUSES.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
+                    maxBarSize={48}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </Card>
 
-        {/* Recent comments */}
         <Card className="p-6">
-          <h3 className="mb-4 text-sm font-semibold">Recent</h3>
+          <ChartTitle icon="donut_large" title="Status" sub="Resolution mix" />
+          {loading ? (
+            <SkeletonChart />
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={byStatus} dataKey="value" nameKey="name" innerRadius={64} outerRadius={104} paddingAngle={2}>
+                  {byStatus.map((entry) => (
+                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name]} stroke={surfaceLow} strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
+                <Tooltip contentStyle={tooltipStyle} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+      </Reveal>
+
+      {/* Over time */}
+      <Reveal deps={[status]}>
+        <Card className="p-6">
+          <ChartTitle icon="timeline" title="Over time" sub="Comments per month" />
+          {loading ? (
+            <SkeletonChart />
+          ) : overTime.length ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={overTime} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} />
+                <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Line type="monotone" dataKey="value" name="Comments" stroke={primary} strokeWidth={2.5} dot={{ r: 3, fill: primary }} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="py-10 text-center text-sm text-on-surface-variant">Dates couldn’t be parsed for a time trend.</p>
+          )}
+        </Card>
+      </Reveal>
+
+      {/* Recent comments */}
+      <Reveal deps={[status]}>
+        <Card className="p-6">
+          <ChartTitle icon="fact_check" title="Recent" />
           {loading ? (
             <SkeletonRows />
           ) : (
@@ -154,6 +255,21 @@ export default function Dashboard({ openDetail }) {
       </Reveal>
     </div>
   );
+}
+
+function ChartTitle({ icon, title, sub }) {
+  return (
+    <div className="mb-4">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <Icon name={icon} className="text-[20px] text-primary" /> {title}
+      </h3>
+      {sub && <p className="mt-0.5 pl-7 text-xs text-on-surface-variant">{sub}</p>}
+    </div>
+  );
+}
+
+function SkeletonChart() {
+  return <div className="skeleton h-64 w-full rounded" />;
 }
 
 function SkeletonRows() {

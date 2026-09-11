@@ -58,7 +58,7 @@ const TrashIcon = () => (
 // never dimmed and stays interactive: clicking another row swaps the
 // drawer's content in place; clicking anywhere else closes it.
 export default function DetailPanel({ record, onClose }) {
-  const { updateRecord, notify } = useStore();
+  const { updateRecord } = useStore();
   const open = !!record;
   const [shown, setShown] = useState(record); // persists during the exit slide
   const closeRef = useRef(null);
@@ -101,6 +101,17 @@ export default function DetailPanel({ record, onClose }) {
   const [crop, setCrop] = useState(null); // { src, target: 'before'|'after' }
   const [lightbox, setLightbox] = useState(null); // { src, alt, from }
   const [dropOver, setDropOver] = useState(null); // slot being dragged over
+  const [undo, setUndo] = useState(null); // { target, field, prev, id } — inline Undo card
+  const undoTimer = useRef(null);
+  const UNDO_MS = 5000;
+
+  const clearUndo = () => { clearTimeout(undoTimer.current); setUndo(null); };
+  // Drop the pending Undo when the drawer switches records or closes.
+  useEffect(() => {
+    clearUndo();
+    return () => clearTimeout(undoTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record?.ID, open]);
 
   const enlarge = (src, alt, imgEl) => {
     const r = imgEl.getBoundingClientRect();
@@ -130,16 +141,23 @@ export default function DetailPanel({ record, onClose }) {
     setCrop(null);
   };
 
+  // Removing a photo empties its slot and turns it into an inline Undo card
+  // (right where the eye is) with a countdown ring; it clears itself after a
+  // few seconds. Undo restores the exact image.
   const removeImage = (target) => {
     if (!rec) return;
     const field = target === 'after' ? 'afterImageData' : 'imageData';
     const prev = rec[field];
     const id = rec.ID;
     updateRecord(id, { [field]: null });
-    notify(`${target === 'after' ? 'After' : 'Before'} photo removed`, 'info', {
-      label: 'Undo',
-      onClick: () => updateRecord(id, { [field]: prev }),
-    });
+    clearTimeout(undoTimer.current);
+    setUndo({ target, field, prev, id });
+    undoTimer.current = setTimeout(() => setUndo(null), UNDO_MS);
+  };
+
+  const doUndo = () => {
+    if (undo) updateRecord(undo.id, { [undo.field]: undo.prev });
+    clearUndo();
   };
 
   // Paste an image anywhere in the drawer → treat it as an after photo.
@@ -215,7 +233,15 @@ export default function DetailPanel({ record, onClose }) {
                 ].map((slot) => (
                   <div key={slot.target} className="ba-cell" {...dropProps(slot.target)}>
                     <span className="ba-cap">{slot.caption}</span>
-                    {slot.src ? (
+                    {undo?.target === slot.target ? (
+                      <div className="ba-thumb ba-undo">
+                        <span className="ba-undo-msg">Photo removed</span>
+                        <button type="button" className="ba-undo-btn" onClick={doUndo}>
+                          <span className="ba-undo-ring" style={{ animationDuration: `${UNDO_MS}ms` }} />
+                          Undo
+                        </button>
+                      </div>
+                    ) : slot.src ? (
                       <Thumb src={slot.src} alt={slot.alt} onEnlarge={enlarge} />
                     ) : (
                       <button
@@ -227,7 +253,7 @@ export default function DetailPanel({ record, onClose }) {
                         <span className="text-[10px]">or drop / paste</span>
                       </button>
                     )}
-                    {slot.src && (
+                    {slot.src && undo?.target !== slot.target && (
                       <div className="flex items-center gap-4">
                         <MiniAction onClick={() => slot.inputRef.current?.click()}>
                           <Icon name="restart_alt" className="text-[15px]" /> Replace

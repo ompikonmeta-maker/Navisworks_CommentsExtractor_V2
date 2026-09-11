@@ -557,6 +557,52 @@
   border-style: dashed;
   background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
 }
+
+/* Inline Undo card — fills the emptied slot after a photo is removed. */
+.ba-undo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: default;
+  background: color-mix(in srgb, var(--md-sys-color-primary) 12%, var(--md-sys-color-surface-container));
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 30%, var(--md-sys-color-outline-variant));
+}
+.ba-undo-msg {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+.ba-undo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ba-undo-btn:hover { filter: brightness(1.06); }
+@property --undo-p { syntax: '<number>'; inherits: false; initial-value: 100; }
+.ba-undo-ring {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  --undo-p: 100;
+  background: conic-gradient(currentColor calc(var(--undo-p) * 1%), color-mix(in srgb, currentColor 30%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent 54%, #000 56%);
+  mask: radial-gradient(farthest-side, transparent 54%, #000 56%);
+  animation: ba-undo-drain linear forwards;
+}
+@keyframes ba-undo-drain { to { --undo-p: 0; } }
+@media (prefers-reduced-motion: reduce) { .ba-undo-ring { animation: none; } }
 .ba-thumb .ba-zoom {
   position: absolute;
   right: 6px;
