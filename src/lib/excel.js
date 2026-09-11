@@ -23,6 +23,7 @@ const COLUMNS = [
   { key: 'resolution', header: 'Resolution', width: 40 },
   { key: 'status', header: 'Status', width: 12 },
   { key: 'commentDate', header: 'Date', width: 18 },
+  { key: 'closedAt', header: 'Closed At', width: 18, ts: true },
   { key: 'authorCode', header: 'Author', width: 14 },
   { key: 'cameraPosition', header: 'Camera Position', width: 24 },
   { key: 'imageRef', header: 'Image', width: 16 },
@@ -34,10 +35,19 @@ const ROW_PT = 74;
 
 // --- Comments sheet ---------------------------------------------------
 
+// ISO → "YYYY-MM-DD HH:mm" (local), blank if unset.
+function fmtTs(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function buildCommentsSheet(X, records) {
   const headers = [...COLUMNS.map((c) => c.header), ...IMG_COLS.map((c) => c.header)];
   const aoa = [headers];
-  for (const r of records) aoa.push([...COLUMNS.map((c) => r[c.key] ?? ''), '', '']);
+  for (const r of records) aoa.push([...COLUMNS.map((c) => (c.ts ? fmtTs(r[c.key]) : r[c.key] ?? '')), '', '']);
   const ws = X.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [...COLUMNS, ...IMG_COLS].map((c) => ({ wch: c.width }));
   ws['!rows'] = records.map(() => ({ hpt: ROW_PT }));

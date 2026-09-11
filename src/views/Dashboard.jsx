@@ -3,7 +3,7 @@ import { snapshotNode, nodeToImage } from '../lib/snapshot.js';
 import {
   ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, LabelList,
-  AreaChart, Area,
+  AreaChart, Area, LineChart, Line,
 } from 'recharts';
 import { useStore, computeKpis } from '../store/store.jsx';
 import { STATUSES } from '../lib/parser.js';
@@ -118,6 +118,31 @@ export default function Dashboard({ openDetail, goComments }) {
     for (const s of STATUSES) series[s] = rows.map((row) => row[s]);
     return { rows, series };
   }, [records]);
+
+  // Real burndown: cumulative opened (by comment date) vs closed (by close-out
+  // time). Closes recorded before v1.1 have no close-out time, so they don't
+  // count here — only comments closed in-app going forward do.
+  const burndown = useMemo(() => {
+    const opened = {};
+    const closed = {};
+    for (const r of records) {
+      const om = toMonth(r.commentDate);
+      if (om !== 'Unknown') opened[om] = (opened[om] || 0) + 1;
+      if (r.closedAt) {
+        const cm = toMonth(r.closedAt);
+        if (cm !== 'Unknown') closed[cm] = (closed[cm] || 0) + 1;
+      }
+    }
+    const months = [...new Set([...Object.keys(opened), ...Object.keys(closed)])].sort();
+    let oC = 0;
+    let cC = 0;
+    return months.map((m) => {
+      oC += opened[m] || 0;
+      cC += closed[m] || 0;
+      return { month: m, Opened: oC, Closed: cC, Open: oC - cC };
+    });
+  }, [records]);
+  const [timeView, setTimeView] = useState('intake'); // 'intake' | 'burndown'
 
   const recent = useMemo(() => records.slice(0, 6), [records]);
 
@@ -287,25 +312,62 @@ export default function Dashboard({ openDetail, goComments }) {
         </Card>
 
         <Card ref={overtimeRef} className="relative p-6">
-          <SnapButton onClick={() => snap(overtimeRef, 'over-time')} />
-          <ChartTitle icon="timeline" title="Over time" sub="Monthly comments, stacked by current status" />
+          <SnapButton onClick={() => snap(overtimeRef, timeView === 'intake' ? 'over-time' : 'burndown')} />
+          <ChartTitle
+            icon="timeline"
+            title="Over time"
+            sub={timeView === 'intake' ? 'Monthly comments, stacked by current status' : 'Cumulative opened vs closed — a real burndown, from close-out times'}
+          />
+          <div className="mb-3 flex gap-1 text-xs" data-nosnap>
+            {[['intake', 'Intake'], ['burndown', 'Burndown']].map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setTimeView(v)}
+                className={`rounded-full px-3 py-1 font-medium ${timeView === v ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {loading ? (
             <SkeletonChart />
-          ) : trend.rows.length ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={trend.rows} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} />
-                <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
-                {STATUSES.map((s) => (
-                  <Area key={s} type="monotone" dataKey={s} stackId="1" stroke={STATUS_COLORS[s]} fill={STATUS_COLORS[s]} fillOpacity={0.22} strokeWidth={2} />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
+          ) : timeView === 'intake' ? (
+            trend.rows.length ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={trend.rows} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} />
+                  <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
+                  {STATUSES.map((s) => (
+                    <Area key={s} type="monotone" dataKey={s} stackId="1" stroke={STATUS_COLORS[s]} fill={STATUS_COLORS[s]} fillOpacity={0.22} strokeWidth={2} />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="py-10 text-center text-sm text-on-surface-variant">Dates couldn’t be parsed for a time trend.</p>
+            )
+          ) : burndown.length ? (
+            <>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={burndown} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} />
+                  <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
+                  <Line type="monotone" dataKey="Opened" name="Opened" stroke={axis} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Closed" name="Closed" stroke={STATUS_COLORS.Closed} strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="Open" name="Open (backlog)" stroke={STATUS_COLORS.Open} strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+              {coverage.closed > 0 && !records.some((r) => r.closedAt) && (
+                <p className="mt-2 text-xs text-on-surface-variant">Existing closed comments have no recorded close-out time, so the burndown fills in as you close comments here.</p>
+              )}
+            </>
           ) : (
-            <p className="py-10 text-center text-sm text-on-surface-variant">Dates couldn’t be parsed for a time trend.</p>
+            <p className="py-10 text-center text-sm text-on-surface-variant">No dated comments to chart yet.</p>
           )}
         </Card>
       </Reveal>

@@ -32,9 +32,20 @@ function reducer(state, action) {
     case 'UPDATE_RECORD':
       return {
         ...state,
-        records: state.records.map((r) =>
-          r.ID === action.id ? { ...r, ...action.patch } : r
-        ),
+        records: state.records.map((r) => {
+          if (r.ID !== action.id) return r;
+          const next = { ...r, ...action.patch };
+          // Auto-stamp the close-out time when a comment moves into Closed, and
+          // clear it when it leaves — unless the patch sets closedAt explicitly
+          // (a manual edit in the detail drawer).
+          if ('status' in action.patch && !('closedAt' in action.patch)) {
+            const wasClosed = r.status === 'Closed';
+            const nowClosed = next.status === 'Closed';
+            if (nowClosed && !wasClosed) next.closedAt = new Date().toISOString();
+            else if (!nowClosed && wasClosed) next.closedAt = null;
+          }
+          return next;
+        }),
       };
     case 'TOAST':
       return { ...state, toast: action.toast };

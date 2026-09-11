@@ -5,6 +5,17 @@ import { Icon, Select, SegmentedButtons, StatusBadge, DisciplineBadge } from './
 import ImageCropper from './ImageCropper.jsx';
 import Lightbox from './Lightbox.jsx';
 
+// ISO ⇄ <input type="datetime-local"> (which works in the viewer's local time).
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function fromLocalInput(v) {
+  return v ? new Date(v).toISOString() : null;
+}
+
 function readAsDataURL(file) {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -301,6 +312,19 @@ export default function DetailPanel({ record, onClose }) {
               <div className="mb-1 text-xs font-medium text-on-surface-variant">Status</div>
               <SegmentedButtons aria-label="Change status" value={rec.status} onChange={(v) => set({ status: v })} options={STATUSES} />
             </div>
+
+            {rec.status === 'Closed' && (
+              <label className="block text-xs font-medium text-on-surface-variant">
+                Closed at
+                <input
+                  type="datetime-local"
+                  value={toLocalInput(rec.closedAt)}
+                  onChange={(e) => set({ closedAt: fromLocalInput(e.target.value) })}
+                  className="mt-1 w-full rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+                <span className="mt-1 block text-[11px] font-normal text-on-surface-variant">Set automatically when closed — edit if the fix happened earlier.</span>
+              </label>
+            )}
 
             <label className="block text-xs font-medium text-on-surface-variant">
               Resolution

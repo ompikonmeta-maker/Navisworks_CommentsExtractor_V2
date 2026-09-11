@@ -75,7 +75,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   to capture the dashboard charts for the Excel Overview sheet. Elements marked `data-nosnap`
   (the snapshot buttons) are filtered out of the capture.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. `computeKpis` is the
-  shared status aggregation. Persistence lives in `App.jsx` (autosave effect) + `lib/persist.js`.
+  shared status aggregation. The `UPDATE_RECORD` reducer auto-stamps `closedAt` (ISO) when a
+  record moves into `Closed` and clears it when it leaves — unless the patch sets `closedAt`
+  itself (the detail drawer's manual editor). Persistence lives in `App.jsx` (autosave
+  effect) + `lib/persist.js`.
 - `src/store/settings.jsx` — **v1.1** app settings context (`useSettings`), persisted to
   IndexedDB (separate `settings` key) and independent of the session: theme mode
   (`system`/`light`/`dark`, applied via `applyThemeMode` — `system` removes `data-theme` and
@@ -100,9 +103,12 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   driven by `useSettings` (the toggle animates via `animateThemeSwitch`); there is no longer a
   `lib/theme.js`. Import is a single action — the Overview Import button opens the file picker
   and calls `ingestFiles` — not its own route. The **Overview carries all the analytics**
-  (KPIs + Recharts: a status-stacked "By discipline" bar, a Status donut, and an "Over time"
-  line) plus a Recent list; there is no separate Analytics route, so `Dashboard.jsx` pulls in
-  Recharts on initial load.
+  (KPIs + Recharts: a status-stacked "By discipline" bar, a Resolution ring, and an "Over
+  time" card that toggles between **Intake** (monthly comments stacked by current status) and
+  **Burndown** (cumulative opened vs closed — a real burndown, computed from `closedAt`; only
+  comments closed in-app since v1.1 have a close-out time, so it fills in going forward)) plus
+  Needs-attention and Recent lists; there is no separate Analytics route, so `Dashboard.jsx`
+  pulls in Recharts on initial load.
 - `src/views/*` and `src/components/*` — screens and shared MD3-flavored primitives
   (`ui.jsx`), the editable `DetailPanel.jsx`, and the `Toast.jsx` notifier.
 

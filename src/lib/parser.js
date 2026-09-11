@@ -146,6 +146,9 @@ export function parseReportHtml(htmlString, sourceName = 'report.html') {
         resolution: '',
         status: normalizeStatus(rawStatus),
         rawStatus: rawStatus || 'New',
+        // Close-out timestamp (ISO). The source has no close date, so this is
+        // null on import and stamped when the comment is set to Closed here.
+        closedAt: null,
         commentDate: readCommentDate(c),
         authorCode,
         cameraPosition: camera,
