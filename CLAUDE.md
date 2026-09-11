@@ -115,7 +115,11 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
   route switch: Dashboard (Overview), Comments (Viewpoints — list + editable detail
-  drawer), and Settings (`views/Settings.jsx`, v1.1 — Appearance + Disciplines). Theme is
+  drawer), and Settings (`views/Settings.jsx`, v1.1 — a **two-pane** page: a category rail
+  (Appearance · Labels · Detection · Export[soon] · About) beside one focused panel. **Labels**
+  merges Disciplines (colours) + Commenters behind an inner segmented toggle; **Detection** hosts
+  `DetectionEditor`. The panel is wrapped in `<Reveal deps={[section]}>` so the staggered card
+  reveal re-plays on every section switch). Theme is
   driven by `useSettings` (the toggle animates via `animateThemeSwitch`); there is no longer a
   `lib/theme.js`. Import is a single action — the Overview Import button opens the file picker
   and calls `ingestFiles` — not its own route. The **Overview carries all the analytics**
