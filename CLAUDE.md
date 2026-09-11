@@ -29,7 +29,7 @@ npm run preview    # serve the production build (default port 4173)
 
 ### Portable single-file build
 
-`npm run build` emits **one self-contained `dist/index.html`** (~2.3 MB) via
+`npm run build` emits **one self-contained `dist/index.html`** (~2.6 MB) via
 `vite-plugin-singlefile` — all JS/CSS inlined, the sample report + images embedded as
 data URLs, and a subset of the Material Symbols icon font embedded too. It has **no runtime
 dependencies**: open it by double-click (`file://`), copy it to a USB stick, or host it
@@ -61,9 +61,16 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   images. Both are **embedded at build time** (report via `?raw`, images as inlined asset
   imports) — nothing is fetched, so the seed dataset loads even from `file://` offline.
   This is the data loaded on every startup.
-- `src/lib/excel.js` — `.xlsx` export (Comments + Summary sheets) via SheetJS. **SheetJS is
-  dynamically imported** (`exportToExcel` is `async`) so a multi-file build keeps its
-  ~430 KB out of the initial chunk; the single-file build inlines it like everything else.
+- `src/lib/excel.js` — `.xlsx` export via SheetJS (dynamically imported). Writes a
+  **Comments** sheet and, when the Overview passes its data, an **Overview** sheet (KPI /
+  coverage / by-discipline / over-time / needs-attention tables). SheetJS (community) can't
+  write pictures, so after it writes the workbook the file (a zip) is re-opened with JSZip and
+  drawings are injected per sheet — the before/after **photos** on Comments, and the rendered
+  **chart images** on Overview (`embedDrawings` handles multiple sheets/drawings).
+- `src/lib/snapshot.js` — DOM→PNG via **html2canvas** (dynamically imported, bundled so it
+  stays offline). `snapshotNode` downloads a card / whole-Overview PNG; `nodeToImage` returns a
+  data URL, used to capture the dashboard charts for the Excel Overview sheet. Snapshot buttons
+  carry `data-nosnap` so they're excluded from their own capture.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. `computeKpis` is the
   shared status aggregation. Persistence lives in `App.jsx` (autosave effect) + `lib/persist.js`.
 - `src/lib/persist.js` — session persistence: a tiny IndexedDB key/value for the autosaved

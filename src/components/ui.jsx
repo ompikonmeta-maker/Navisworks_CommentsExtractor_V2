@@ -100,13 +100,13 @@ export function DisciplineBadge({ discipline }) {
   );
 }
 
-export function Card({ children, className = '' }) {
+export const Card = forwardRef(function Card({ children, className = '' }, ref) {
   return (
-    <div className={`rounded-card bg-surface-low border border-outline-variant/60 ${className}`}>
+    <div ref={ref} className={`rounded-card bg-surface-low border border-outline-variant/60 ${className}`}>
       {children}
     </div>
   );
-}
+});
 
 // MD3 exposed dropdown menu — an outlined field that opens an anchored menu
 // (surface-container, elevation 2, spring open). Same props as the old

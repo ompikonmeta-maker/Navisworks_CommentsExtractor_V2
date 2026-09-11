@@ -224,7 +224,7 @@ export default function App() {
       <div className="flex min-w-0 flex-1 flex-col md:gap-3">
         {/* Floating title over the canvas — no border/fill on desktop,
             aligned with the content column (max-w-6xl) below. */}
-        <header className="sticky top-0 z-10 border-b border-outline-variant/60 bg-background/85 px-5 py-3 backdrop-blur md:top-3 md:border-0 md:bg-transparent md:px-0 md:py-2 md:backdrop-blur-0">
+        <header className="t-appbar sticky top-0 z-10 border-b border-outline-variant/60 px-5 py-3 backdrop-blur md:top-3 md:rounded-card md:border-0 md:px-4 md:py-2.5">
           <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
             <h1 className="truncate text-2xl font-bold tracking-tight md:text-3xl">
               {NAV.find((n) => n.id === route)?.label}

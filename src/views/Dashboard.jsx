@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react';
+import { snapshotNode, nodeToImage } from '../lib/snapshot.js';
 import {
   ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
@@ -41,6 +42,21 @@ export default function Dashboard({ openDetail, goComments }) {
   const { status, records, meta, notify, setData } = useStore();
   const loading = status === 'loading';
   const fileInputRef = useRef(null);
+  // Refs for snapshots (per-card + whole overview) and Excel chart capture.
+  const overviewRef = useRef(null);
+  const resolutionRef = useRef(null);
+  const overtimeRef = useRef(null);
+  const disciplineRef = useRef(null);
+  const needsRef = useRef(null);
+  const recentRef = useRef(null);
+
+  const snap = async (ref, name) => {
+    try {
+      await snapshotNode(ref.current, name);
+    } catch (e) {
+      notify(`Snapshot failed: ${e.message}`, 'error');
+    }
+  };
 
   const handleImport = async (fileList) => {
     const files = Array.from(fileList || []);
@@ -112,12 +128,36 @@ export default function Dashboard({ openDetail, goComments }) {
   const handleExport = async () => {
     if (!records.length) return;
     try {
-      await exportToExcel(records);
-      notify(`Exported ${records.length} comments.`, 'success');
+      notify('Building Excel — rendering charts…', 'info');
+      // Capture the on-screen charts as images to embed on the Overview sheet.
+      const [resImg, timeImg, discImg] = await Promise.all([
+        nodeToImage(resolutionRef.current),
+        nodeToImage(overtimeRef.current),
+        nodeToImage(disciplineRef.current),
+      ]);
+      const overview = {
+        generatedAt: new Date().toLocaleString(),
+        total,
+        kpis,
+        closedPct,
+        coverage,
+        byDiscipline,
+        trend: trend.rows,
+        needsAttention,
+        charts: [
+          { name: 'Resolution', img: resImg },
+          { name: 'Over time', img: timeImg },
+          { name: 'By discipline', img: discImg },
+        ],
+      };
+      await exportToExcel(records, { overview });
+      notify(`Exported ${records.length} comments with the Overview.`, 'success');
     } catch (e) {
       notify(`Export failed: ${e.message}`, 'error');
     }
   };
+
+  const snapshotOverview = () => snap(overviewRef, 'overview');
 
   const primary = cssVar('--md-sys-color-primary', '#1768f7');
   const grid = cssVar('--md-sys-color-outline-variant', '#c4c6d0');
@@ -135,13 +175,13 @@ export default function Dashboard({ openDetail, goComments }) {
   const pctColor = (p) => (p >= 60 ? STATUS_COLORS.Closed : p >= 35 ? STATUS_COLORS['In Review'] : STATUS_COLORS.Open);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div ref={overviewRef} className="mx-auto max-w-6xl space-y-6">
       {/* Action bar */}
       <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-on-surface-variant">
           {loading ? 'Loading…' : `${records.length} review comments · ${meta.source === 'sample' ? 'sample data' : 'imported'}`}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-nosnap>
           <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import</Button>
           <input
             ref={fileInputRef}
@@ -151,6 +191,7 @@ export default function Dashboard({ openDetail, goComments }) {
             className="hidden"
             onChange={(e) => handleImport(e.target.files)}
           />
+          <Button variant="text" icon="image" onClick={snapshotOverview} disabled={!records.length}>Snapshot</Button>
           <Button icon="download" onClick={handleExport} disabled={!records.length}>Excel</Button>
         </div>
       </Card>
@@ -194,7 +235,8 @@ export default function Dashboard({ openDetail, goComments }) {
 
       {/* Resolution ring + over-time (stacked by status) */}
       <Reveal className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]" deps={[status]}>
-        <Card className="flex flex-col p-6">
+        <Card ref={resolutionRef} className="relative flex flex-col p-6">
+          <SnapButton onClick={() => snap(resolutionRef, 'resolution')} />
           <ChartTitle icon="fact_check" title="Resolution" sub="Closure and after-photo coverage" />
           {loading ? (
             <SkeletonChart />
@@ -225,7 +267,8 @@ export default function Dashboard({ openDetail, goComments }) {
           )}
         </Card>
 
-        <Card className="p-6">
+        <Card ref={overtimeRef} className="relative p-6">
+          <SnapButton onClick={() => snap(overtimeRef, 'over-time')} />
           <ChartTitle icon="timeline" title="Over time" sub="Monthly comments, stacked by current status" />
           {loading ? (
             <SkeletonChart />
@@ -250,7 +293,8 @@ export default function Dashboard({ openDetail, goComments }) {
 
       {/* By discipline — stacked bar + numeric table */}
       <Reveal deps={[status]}>
-        <Card className="p-6">
+        <Card ref={disciplineRef} className="relative p-6">
+          <SnapButton onClick={() => snap(disciplineRef, 'by-discipline')} />
           <ChartTitle icon="bar_chart" title="By discipline" sub="Status mix per discipline — shape above, exact numbers below" />
           {loading ? (
             <SkeletonChart />
@@ -316,7 +360,8 @@ export default function Dashboard({ openDetail, goComments }) {
 
       {/* Needs attention (oldest open) + Recent */}
       <Reveal className="grid gap-6 lg:grid-cols-2" deps={[status]}>
-        <Card className="p-6">
+        <Card ref={needsRef} className="relative p-6">
+          <SnapButton onClick={() => snap(needsRef, 'needs-attention')} />
           <ChartTitle icon="hourglass_top" title="Needs attention" sub="Oldest comments still open" />
           {loading ? (
             <SkeletonRows />
@@ -345,7 +390,8 @@ export default function Dashboard({ openDetail, goComments }) {
           )}
         </Card>
 
-        <Card className="p-6">
+        <Card ref={recentRef} className="relative p-6">
+          <SnapButton onClick={() => snap(recentRef, 'recent')} />
           <ChartTitle icon="forum" title="Recent" sub="Latest comments" />
           {loading ? (
             <SkeletonRows />
@@ -407,6 +453,23 @@ function Ring({ pct, color, track, size = 176 }) {
         <span className="text-xs text-on-surface-variant">closed</span>
       </div>
     </div>
+  );
+}
+
+// Small "save as image" button pinned to a card's corner. Marked
+// [data-nosnap] so it's excluded from the snapshot it triggers.
+function SnapButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      data-nosnap
+      onClick={onClick}
+      title="Save as image"
+      aria-label="Save as image"
+      className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      <Icon name="image" className="text-[18px]" />
+    </button>
   );
 }
 

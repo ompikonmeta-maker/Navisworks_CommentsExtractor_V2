@@ -558,6 +558,13 @@
   background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
 }
 
+/* Sticky app header — a translucent ground so scrolled content doesn't bleed
+   through the title (Tailwind's token-alpha utilities can't build this from a
+   var-based color, so it's set explicitly here). */
+.t-appbar {
+  background: color-mix(in srgb, var(--md-sys-color-background) 82%, transparent);
+}
+
 /* Inline Undo card — fills the emptied slot after a photo is removed. */
 .ba-undo {
   display: flex;
