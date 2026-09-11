@@ -1,6 +1,6 @@
 {
   "name": "tabelin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Tabelin — convert Navisworks review-comment HTML reports into a searchable, filterable review workspace with Excel export.",
   "type": "module",

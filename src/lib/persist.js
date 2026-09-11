@@ -13,6 +13,7 @@
 const DB_NAME = 'tabelin';
 const STORE = 'kv';
 const SESSION_KEY = 'session';
+const SETTINGS_KEY = 'settings';
 const HANDLE_KEY = 'folderHandle';
 const SESSION_FILE = 'tabelin-session.json';
 const SCHEMA_VERSION = 1;
@@ -88,6 +89,23 @@ export async function clearSessionLocal() {
     /* ignore */
   }
 }
+// ---------- app settings (IndexedDB) ----------
+export async function saveSettings(settings) {
+  try {
+    await idbSet(SETTINGS_KEY, settings);
+    return true;
+  } catch {
+    return false;
+  }
+}
+export async function loadSettings() {
+  try {
+    return (await idbGet(SETTINGS_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function requestPersistentStorage() {
   try {
     if (navigator.storage?.persist) await navigator.storage.persist();

@@ -1,5 +1,17 @@
 // Small Material-flavored UI primitives shared across views.
 import { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
+import { useSettings } from '../store/settings.jsx';
+
+// Icons not in the embedded Material Symbols subset render as inline SVG so we
+// don't have to re-subset the font. Sized in `em` to follow the text size set
+// on the span (e.g. text-[22px]).
+const INLINE_SVG = {
+  settings: (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true">
+      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.13.22.39.3.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" />
+    </svg>
+  ),
+};
 
 // Material Symbols codepoints for the icons this app uses. Rendering by
 // codepoint (not ligature) lets the embedded font subset stay ~4 KB and
@@ -43,6 +55,13 @@ const ICON_CODEPOINTS = {
 };
 
 export function Icon({ name, className = '', style }) {
+  if (INLINE_SVG[name]) {
+    return (
+      <span className={`msym inline-flex ${className}`} style={style} aria-hidden="true">
+        {INLINE_SVG[name]}
+      </span>
+    );
+  }
   const cp = ICON_CODEPOINTS[name];
   return (
     <span className={`msym ${className}`} style={style} aria-hidden="true">
@@ -93,8 +112,14 @@ export function StatusBadge({ status }) {
 }
 
 export function DisciplineBadge({ discipline }) {
+  const { settings } = useSettings();
+  const c = settings.disciplineColors?.[discipline];
+  const style = c ? { background: `color-mix(in srgb, ${c} 16%, transparent)`, color: c } : undefined;
   return (
-    <span className="inline-flex items-center rounded-md bg-tertiary-container px-2 py-0.5 text-xs font-medium text-on-tertiary-container">
+    <span
+      style={style}
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${c ? '' : 'bg-tertiary-container text-on-tertiary-container'}`}
+    >
       {discipline}
     </span>
   );

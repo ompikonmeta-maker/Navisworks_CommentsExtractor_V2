@@ -76,10 +76,16 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   (the snapshot buttons) are filtered out of the capture.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. `computeKpis` is the
   shared status aggregation. Persistence lives in `App.jsx` (autosave effect) + `lib/persist.js`.
+- `src/store/settings.jsx` — **v1.1** app settings context (`useSettings`), persisted to
+  IndexedDB (separate `settings` key) and independent of the session: theme mode
+  (`system`/`light`/`dark`, applied via `applyThemeMode` — `system` removes `data-theme` and
+  lets the media query decide) and per-discipline colour overrides + custom disciplines. The
+  header theme toggle and the Settings page both write here; `DisciplineBadge` reads the colour
+  map. Wrapped around the app in `main.jsx`, outside `StoreProvider`.
 - `src/lib/persist.js` — session persistence: a tiny IndexedDB key/value for the autosaved
-  session and the stored folder handle, plus File System Access helpers
-  (`pickFolder`/`writeSessionToFolder`). `App.jsx` restores on startup and autosaves
-  (debounced) on every change; `components/BeforeAfter.jsx` is the drag before/after slider.
+  session, the stored folder handle, and the settings blob (`saveSettings`/`loadSettings`),
+  plus File System Access helpers (`pickFolder`/`writeSessionToFolder`). `App.jsx` restores on
+  startup and autosaves (debounced) on every change.
 - `src/lib/motion.js` — MD3 Expressive motion. `mdSpring(bounce)` returns the single-overshoot
   spring easing `cubic-bezier(0.38, bounce, 0.22, 1)` (bounce = p1y), matching the repo's MD3
   reference — not a multi-oscillation `linear()` curve. Used for the sidebar collapse (660ms,
@@ -89,8 +95,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   theme transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
   a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
-  route switch: Dashboard (Overview) and Comments (Viewpoints — list + editable detail
-  drawer). Import is a single action — the Overview Import button opens the file picker
+  route switch: Dashboard (Overview), Comments (Viewpoints — list + editable detail
+  drawer), and Settings (`views/Settings.jsx`, v1.1 — Appearance + Disciplines). Theme is
+  driven by `useSettings` (the toggle animates via `animateThemeSwitch`); there is no longer a
+  `lib/theme.js`. Import is a single action — the Overview Import button opens the file picker
   and calls `ingestFiles` — not its own route. The **Overview carries all the analytics**
   (KPIs + Recharts: a status-stacked "By discipline" bar, a Status donut, and an "Over time"
   line) plus a Recent list; there is no separate Analytics route, so `Dashboard.jsx` pulls in

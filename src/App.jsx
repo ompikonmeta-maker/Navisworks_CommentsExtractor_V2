@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from './store/store.jsx';
+import { useSettings, applyThemeMode } from './store/settings.jsx';
 import { loadSampleData } from './lib/sample.js';
-import { useTheme } from './lib/theme.js';
-import { SIDEBAR_SPRING } from './lib/motion.js';
+import { SIDEBAR_SPRING, animateThemeSwitch } from './lib/motion.js';
 import {
   FS_SUPPORTED,
   requestPersistentStorage,
@@ -18,23 +18,48 @@ import { Icon, Button } from './components/ui.jsx';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
+import Settings from './views/Settings.jsx';
 
 const NAV = [
   { id: 'dashboard', label: 'Overview', icon: 'dashboard' },
   { id: 'comments', label: 'Viewpoints', icon: 'format_list_bulleted' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
+
+function systemPrefersDark() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function effectiveTheme() {
+  return document.documentElement.getAttribute('data-theme') || (systemPrefersDark() ? 'dark' : 'light');
+}
 
 const EXPANDED = 300;
 const RAIL = 84;
 
 export default function App() {
   const store = useStore();
-  const { theme, toggle } = useTheme();
+  const { settings, update } = useSettings();
+  const [effTheme, setEffTheme] = useState(effectiveTheme);
   const [route, setRoute] = useState('dashboard');
   const [detailId, setDetailId] = useState(null);
   const [commentsFilter, setCommentsFilter] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const themeBtnRef = useRef(null);
+
+  // Keep the toggle icon in sync with the saved theme mode (applied by the
+  // SettingsProvider on load; re-synced here on any mode change).
+  useEffect(() => {
+    applyThemeMode(settings.themeMode);
+    setEffTheme(effectiveTheme());
+  }, [settings.themeMode]);
+
+  // Header toggle: flip light↔dark, persist the choice, animate the reveal.
+  const toggleTheme = useCallback((origin) => {
+    const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    animateThemeSwitch(() => applyThemeMode(next), origin);
+    setEffTheme(next);
+    update({ themeMode: next });
+  }, [update]);
 
   // Session persistence state
   const [folderName, setFolderName] = useState(null);
@@ -240,11 +265,11 @@ export default function App() {
                 ))}
               <button
                 ref={themeBtnRef}
-                onClick={() => toggle(themeBtnRef.current)}
-                aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                onClick={() => toggleTheme(themeBtnRef.current)}
+                aria-label={effTheme === 'dark' ? 'Light theme' : 'Dark theme'}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
+                <Icon name={effTheme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
               </button>
             </div>
           </div>
@@ -299,6 +324,8 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
       return <Dashboard openDetail={openDetail} goComments={goComments} />;
     case 'comments':
       return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} />;
+    case 'settings':
+      return <Settings />;
     default:
       return null;
   }
