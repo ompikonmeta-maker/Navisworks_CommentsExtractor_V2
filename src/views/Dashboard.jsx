@@ -186,7 +186,8 @@ export default function Dashboard({ openDetail, goComments }) {
     Closed: cssVar('--tabelin-status-closed', '#1f7a4d'),
   };
   const tooltipStyle = { background: surface, border: `1px solid ${grid}`, borderRadius: 12, color: onSurface, fontSize: 12 };
-  const closedPct = total ? Math.round((kpis.Closed / total) * 100) : 0;
+  const closedFrac = total ? kpis.Closed / total : 0; // exact fraction for the ring
+  const closedPct = Math.round(closedFrac * 100); // rounded, used in the Excel Overview
   const pctColor = (p) => (p >= 60 ? STATUS_COLORS.Closed : p >= 35 ? STATUS_COLORS['In Review'] : STATUS_COLORS.Open);
 
   return (
@@ -258,7 +259,7 @@ export default function Dashboard({ openDetail, goComments }) {
           ) : (
             <div className="flex flex-1 flex-col justify-center gap-5">
               <div className="flex items-center gap-6">
-                <Ring pct={closedPct / 100} color={STATUS_COLORS.Closed} track={surfaceVar} size={176} />
+                <Ring pct={closedFrac} color={STATUS_COLORS.Closed} track={surfaceVar} size={176} />
                 <ul className="space-y-2.5 text-sm">
                   {[['Closed', kpis.Closed], ['In Review', kpis['In Review']], ['Open', kpis.Open]].map(([s, n]) => (
                     <li key={s} className="flex items-center gap-2">
@@ -466,6 +467,9 @@ function Ring({ pct, color, track, size = 176 }) {
   const cx = 60;
   const cy = 60;
   const C = 2 * Math.PI * r;
+  const rounded = Math.round(pct * 100);
+  // Don't read a misleading "0%" when some progress exists; show "<1%".
+  const label = pct > 0 && rounded === 0 ? '<1%' : `${rounded}%`;
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg viewBox="0 0 120 120" className="h-full w-full">
@@ -473,7 +477,7 @@ function Ring({ pct, color, track, size = 176 }) {
         <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="11" strokeLinecap="round" strokeDasharray={`${C * pct} ${C}`} transform={`rotate(-90 ${cx} ${cy})`} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold tabular-nums" style={{ color }}>{Math.round(pct * 100)}%</span>
+        <span className="text-3xl font-bold tabular-nums" style={{ color }}>{label}</span>
         <span className="text-xs text-on-surface-variant">closed</span>
       </div>
     </div>
