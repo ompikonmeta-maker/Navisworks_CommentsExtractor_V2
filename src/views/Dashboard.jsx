@@ -30,6 +30,13 @@ function toMonth(dateStr) {
   return `${m[1]}-${String(m[2]).padStart(2, '0')}`;
 }
 
+// Navisworks dates like "2024/12/9 04:0:23" → epoch ms (0 if unparseable).
+function parseTs(dateStr) {
+  const m = /(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}):?(\d{1,2})?)?/.exec(dateStr || '');
+  if (!m) return 0;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4] || 0, +m[5] || 0, +m[6] || 0).getTime();
+}
+
 export default function Dashboard({ openDetail, goComments }) {
   const { status, records, meta, notify, setData } = useStore();
   const loading = status === 'loading';
@@ -82,6 +89,25 @@ export default function Dashboard({ openDetail, goComments }) {
   }, [records]);
 
   const recent = useMemo(() => records.slice(0, 6), [records]);
+
+  // After-photo coverage: of the closed comments, how many carry an after
+  // photo (i.e. the fix is documented).
+  const coverage = useMemo(() => {
+    const closed = records.filter((r) => r.status === 'Closed');
+    const withPhoto = closed.filter((r) => r.afterImageData).length;
+    return { closed: closed.length, withPhoto, pct: closed.length ? Math.round((withPhoto / closed.length) * 100) : 0 };
+  }, [records]);
+
+  // Needs attention: the oldest still-open comments (by comment date — the
+  // export has no close date, so age is measured from when it was raised).
+  const needsAttention = useMemo(() => {
+    return records
+      .filter((r) => r.status === 'Open')
+      .map((r) => ({ r, ts: parseTs(r.commentDate) }))
+      .sort((a, b) => a.ts - b.ts)
+      .slice(0, 5)
+      .map(({ r, ts }) => ({ ...r, ageDays: ts ? Math.floor((Date.now() - ts) / 86400000) : null }));
+  }, [records]);
 
   const handleExport = async () => {
     if (!records.length) return;
@@ -152,13 +178,13 @@ export default function Dashboard({ openDetail, goComments }) {
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div>
                       <div className="text-3xl font-semibold tabular-nums leading-none">{value}</div>
-                      <div className="mt-1 text-xs text-on-surface-variant">{pct == null ? 'all comments' : `${pct}% of total`}</div>
+                      <div className="mt-1 text-xs">
+                        <span className="text-on-surface-variant group-hover:hidden">{pct == null ? 'all comments' : `${pct}% of total`}</span>
+                        <span className="hidden font-semibold text-primary group-hover:inline">{k.key === 'total' ? 'View all →' : 'Filter →'}</span>
+                      </div>
                     </div>
                     {spark && <Sparkline values={spark} color={STATUS_COLORS[k.key]} />}
                   </div>
-                  <span className="pointer-events-none absolute bottom-3 right-4 text-xs font-semibold text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                    {k.key === 'total' ? 'View →' : 'Filter →'}
-                  </span>
                 </button>
               )}
             </Card>
@@ -168,22 +194,33 @@ export default function Dashboard({ openDetail, goComments }) {
 
       {/* Resolution ring + over-time (stacked by status) */}
       <Reveal className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]" deps={[status]}>
-        <Card className="p-6">
-          <ChartTitle icon="fact_check" title="Resolution" sub="Share of comments closed" />
+        <Card className="flex flex-col p-6">
+          <ChartTitle icon="fact_check" title="Resolution" sub="Closure and after-photo coverage" />
           {loading ? (
             <SkeletonChart />
           ) : (
-            <div className="flex items-center gap-5">
-              <Ring pct={closedPct / 100} color={STATUS_COLORS.Closed} track={surfaceVar} />
-              <ul className="space-y-2 text-sm">
-                {[['Closed', kpis.Closed], ['In Review', kpis['In Review']], ['Open', kpis.Open]].map(([s, n]) => (
-                  <li key={s} className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_COLORS[s] }} />
-                    <span className="text-on-surface-variant">{s}</span>
-                    <span className="ml-3 font-semibold tabular-nums">{n || 0}</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="flex flex-1 flex-col justify-center gap-5">
+              <div className="flex items-center gap-6">
+                <Ring pct={closedPct / 100} color={STATUS_COLORS.Closed} track={surfaceVar} size={176} />
+                <ul className="space-y-2.5 text-sm">
+                  {[['Closed', kpis.Closed], ['In Review', kpis['In Review']], ['Open', kpis.Open]].map(([s, n]) => (
+                    <li key={s} className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_COLORS[s] }} />
+                      <span className="text-on-surface-variant">{s}</span>
+                      <span className="ml-3 font-semibold tabular-nums">{n || 0}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="border-t border-outline-variant/50 pt-4">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium">After-photo coverage</span>
+                  <span className="text-on-surface-variant tabular-nums">{coverage.withPhoto} of {coverage.closed} closed · {coverage.pct}%</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-variant">
+                  <div className="h-full rounded-full" style={{ width: `${coverage.pct}%`, background: STATUS_COLORS.Closed }} />
+                </div>
+              </div>
             </div>
           )}
         </Card>
@@ -277,10 +314,39 @@ export default function Dashboard({ openDetail, goComments }) {
         </Card>
       </Reveal>
 
-      {/* Recent comments */}
-      <Reveal deps={[status]}>
+      {/* Needs attention (oldest open) + Recent */}
+      <Reveal className="grid gap-6 lg:grid-cols-2" deps={[status]}>
         <Card className="p-6">
-          <ChartTitle icon="forum" title="Recent" />
+          <ChartTitle icon="hourglass_top" title="Needs attention" sub="Oldest comments still open" />
+          {loading ? (
+            <SkeletonRows />
+          ) : needsAttention.length ? (
+            <ul className="divide-y divide-outline-variant/50">
+              {needsAttention.map((r) => (
+                <li key={r.ID}>
+                  <button
+                    onClick={() => openDetail(r.ID)}
+                    className="flex w-full items-start gap-3 rounded-control px-2 -mx-2 py-2.5 text-left hover:bg-surface-container"
+                  >
+                    <DisciplineBadge discipline={r.discipline} />
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-1 text-sm">{r.commentText}</span>
+                      <span className="text-xs text-on-surface-variant">{r.viewpoint} · {r.commentDate}</span>
+                    </span>
+                    {r.ageDays != null && (
+                      <span className="shrink-0 rounded-full bg-status-open/10 px-2 py-0.5 text-xs font-medium tabular-nums text-status-open">{r.ageDays}d</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-10 text-center text-sm text-on-surface-variant">Nothing open — all caught up.</p>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <ChartTitle icon="forum" title="Recent" sub="Latest comments" />
           {loading ? (
             <SkeletonRows />
           ) : (
@@ -325,19 +391,19 @@ function Sparkline({ values, color }) {
 }
 
 // Donut-style progress ring showing the closed share.
-function Ring({ pct, color, track }) {
+function Ring({ pct, color, track, size = 176 }) {
   const r = 48;
   const cx = 60;
   const cy = 60;
   const C = 2 * Math.PI * r;
   return (
-    <div className="relative h-[132px] w-[132px] shrink-0">
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg viewBox="0 0 120 120" className="h-full w-full">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={track} strokeWidth="12" />
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${C * pct} ${C}`} transform={`rotate(-90 ${cx} ${cy})`} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={track} strokeWidth="11" />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="11" strokeLinecap="round" strokeDasharray={`${C * pct} ${C}`} transform={`rotate(-90 ${cx} ${cy})`} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold tabular-nums" style={{ color }}>{Math.round(pct * 100)}%</span>
+        <span className="text-3xl font-bold tabular-nums" style={{ color }}>{Math.round(pct * 100)}%</span>
         <span className="text-xs text-on-surface-variant">closed</span>
       </div>
     </div>
