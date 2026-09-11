@@ -2,8 +2,7 @@ import { useMemo, useRef } from 'react';
 import {
   ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-  PieChart, Pie, Cell,
-  LineChart, Line,
+  AreaChart, Area,
 } from 'recharts';
 import { useStore, computeKpis } from '../store/store.jsx';
 import { STATUSES } from '../lib/parser.js';
@@ -13,26 +12,25 @@ import { Icon, Button, Card, StatusBadge, DisciplineBadge } from '../components/
 import Reveal from '../components/Reveal.jsx';
 
 const KPI_META = [
-  { key: 'total', label: 'Total', icon: 'forum', accent: 'text-primary' },
-  { key: 'Open', label: 'Open', icon: 'radio_button_unchecked', accent: 'text-status-open' },
-  { key: 'In Review', label: 'In Review', icon: 'hourglass_top', accent: 'text-status-review' },
-  { key: 'Closed', label: 'Closed', icon: 'check_circle', accent: 'text-status-closed' },
+  { key: 'total', label: 'Total', icon: 'forum', accent: 'text-primary', status: 'all' },
+  { key: 'Open', label: 'Open', icon: 'radio_button_unchecked', accent: 'text-status-open', status: 'Open' },
+  { key: 'In Review', label: 'In Review', icon: 'hourglass_top', accent: 'text-status-review', status: 'In Review' },
+  { key: 'Closed', label: 'Closed', icon: 'check_circle', accent: 'text-status-closed', status: 'Closed' },
 ];
 
-// Read MD3 tokens at render time so the charts follow the active theme.
+// Read MD3 tokens at render time so charts follow the active theme.
 function cssVar(name, fallback) {
   if (typeof window === 'undefined') return fallback;
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
-// Parse Navisworks dates like "2024/12/9 04:0:23" → "YYYY-MM".
 function toMonth(dateStr) {
   const m = /(\d{4})[/-](\d{1,2})/.exec(dateStr || '');
   if (!m) return 'Unknown';
   return `${m[1]}-${String(m[2]).padStart(2, '0')}`;
 }
 
-export default function Dashboard({ openDetail }) {
+export default function Dashboard({ openDetail, goComments }) {
   const { status, records, meta, notify, setData } = useStore();
   const loading = status === 'loading';
   const fileInputRef = useRef(null);
@@ -54,8 +52,10 @@ export default function Dashboard({ openDetail }) {
   };
 
   const kpis = useMemo(() => computeKpis(records), [records]);
+  const total = kpis.total || 0;
 
-  // One row per discipline holding its per-status counts, for the stacked bars.
+  // Per-discipline status breakdown, richest first — feeds both the stacked
+  // bar and the numeric table.
   const byDiscipline = useMemo(() => {
     const m = {};
     for (const r of records) {
@@ -66,21 +66,19 @@ export default function Dashboard({ openDetail }) {
     return Object.values(m).sort((a, b) => b.total - a.total);
   }, [records]);
 
-  const byStatus = useMemo(
-    () => STATUSES.map((name) => ({ name, value: kpis[name] || 0 })),
-    [kpis]
-  );
-
-  const overTime = useMemo(() => {
+  // Monthly intake split by current status — over-time area + KPI sparklines.
+  const trend = useMemo(() => {
     const m = {};
     for (const r of records) {
       const key = toMonth(r.commentDate);
-      m[key] = (m[key] || 0) + 1;
+      if (key === 'Unknown') continue;
+      const row = m[key] || (m[key] = { month: key, Open: 0, 'In Review': 0, Closed: 0 });
+      row[r.status] = (row[r.status] || 0) + 1;
     }
-    return Object.entries(m)
-      .filter(([k]) => k !== 'Unknown')
-      .map(([month, value]) => ({ month, value }))
-      .sort((a, b) => a.month.localeCompare(b.month));
+    const rows = Object.values(m).sort((a, b) => a.month.localeCompare(b.month));
+    const series = {};
+    for (const s of STATUSES) series[s] = rows.map((row) => row[s]);
+    return { rows, series };
   }, [records]);
 
   const recent = useMemo(() => records.slice(0, 6), [records]);
@@ -99,7 +97,7 @@ export default function Dashboard({ openDetail }) {
   const grid = cssVar('--md-sys-color-outline-variant', '#c4c6d0');
   const axis = cssVar('--md-sys-color-on-surface-variant', '#44464f');
   const surface = cssVar('--md-sys-color-surface-container-high', '#e7e7f6');
-  const surfaceLow = cssVar('--md-sys-color-surface-low', '#f2f3fb');
+  const surfaceVar = cssVar('--md-sys-color-surface-variant', '#e1e2ec');
   const onSurface = cssVar('--md-sys-color-on-surface', '#191b23');
   const STATUS_COLORS = {
     Open: cssVar('--tabelin-status-open', '#bf0031'),
@@ -107,6 +105,8 @@ export default function Dashboard({ openDetail }) {
     Closed: cssVar('--tabelin-status-closed', '#1f7a4d'),
   };
   const tooltipStyle = { background: surface, border: `1px solid ${grid}`, borderRadius: 12, color: onSurface, fontSize: 12 };
+  const closedPct = total ? Math.round((kpis.Closed / total) * 100) : 0;
+  const pctColor = (p) => (p >= 60 ? STATUS_COLORS.Closed : p >= 35 ? STATUS_COLORS['In Review'] : STATUS_COLORS.Open);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -116,9 +116,7 @@ export default function Dashboard({ openDetail }) {
           {loading ? 'Loading…' : `${records.length} review comments · ${meta.source === 'sample' ? 'sample data' : 'imported'}`}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>
-            Import
-          </Button>
+          <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import</Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -127,98 +125,85 @@ export default function Dashboard({ openDetail }) {
             className="hidden"
             onChange={(e) => handleImport(e.target.files)}
           />
-          <Button icon="download" onClick={handleExport} disabled={!records.length}>
-            Excel
-          </Button>
+          <Button icon="download" onClick={handleExport} disabled={!records.length}>Excel</Button>
         </div>
       </Card>
 
-      {/* KPI */}
+      {/* KPI — clickable → Viewpoints filtered; share + sparkline */}
       <Reveal className="grid grid-cols-2 gap-4 lg:grid-cols-4" deps={[status]}>
-        {KPI_META.map((k) => (
-          <Card key={k.key} className="p-5">
-            {loading ? (
-              <div className="space-y-2">
-                <div className="skeleton h-4 w-20 rounded" />
-                <div className="skeleton h-8 w-16 rounded" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-on-surface-variant">{k.label}</span>
-                  <Icon name={k.icon} className={`text-[20px] ${k.accent}`} />
-                </div>
-                <div className="mt-2 text-3xl font-semibold tabular-nums">{kpis[k.key] ?? 0}</div>
-              </>
-            )}
-          </Card>
-        ))}
+        {KPI_META.map((k) => {
+          const value = kpis[k.key] ?? 0;
+          const pct = k.key === 'total' || !total ? null : Math.round((value / total) * 100);
+          const spark = k.key === 'total' ? null : trend.series[k.key];
+          return (
+            <Card key={k.key} className="relative p-5">
+              {loading ? (
+                <div className="space-y-2"><div className="skeleton h-4 w-20 rounded" /><div className="skeleton h-8 w-16 rounded" /></div>
+              ) : (
+                <button
+                  onClick={() => goComments({ status: k.status, discipline: 'all' })}
+                  className="group block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-control -m-1 p-1"
+                  title={k.key === 'total' ? 'View all comments' : `Filter Viewpoints: ${k.label}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-on-surface-variant">{k.label}</span>
+                    <Icon name={k.icon} className={`text-[20px] ${k.accent}`} />
+                  </div>
+                  <div className="mt-2 flex items-end justify-between gap-2">
+                    <div>
+                      <div className="text-3xl font-semibold tabular-nums leading-none">{value}</div>
+                      <div className="mt-1 text-xs text-on-surface-variant">{pct == null ? 'all comments' : `${pct}% of total`}</div>
+                    </div>
+                    {spark && <Sparkline values={spark} color={STATUS_COLORS[k.key]} />}
+                  </div>
+                  <span className="pointer-events-none absolute bottom-3 right-4 text-xs font-semibold text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                    {k.key === 'total' ? 'View →' : 'Filter →'}
+                  </span>
+                </button>
+              )}
+            </Card>
+          );
+        })}
       </Reveal>
 
-      {/* Discipline (stacked) + status donut */}
-      <Reveal className="grid gap-6 lg:grid-cols-2" deps={[status]}>
+      {/* Resolution ring + over-time (stacked by status) */}
+      <Reveal className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]" deps={[status]}>
         <Card className="p-6">
-          <ChartTitle icon="bar_chart" title="By discipline" sub="Open · In Review · Closed, stacked per discipline" />
+          <ChartTitle icon="fact_check" title="Resolution" sub="Share of comments closed" />
           {loading ? (
             <SkeletonChart />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={byDiscipline} margin={{ top: 16, right: 8, bottom: 4, left: -12 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
-                <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: `${primary}22` }} />
-                <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
-                {STATUSES.map((s, i) => (
-                  <Bar
-                    key={s}
-                    dataKey={s}
-                    stackId="status"
-                    fill={STATUS_COLORS[s]}
-                    radius={i === STATUSES.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
-                    maxBarSize={48}
-                  />
+            <div className="flex items-center gap-5">
+              <Ring pct={closedPct / 100} color={STATUS_COLORS.Closed} track={surfaceVar} />
+              <ul className="space-y-2 text-sm">
+                {[['Closed', kpis.Closed], ['In Review', kpis['In Review']], ['Open', kpis.Open]].map(([s, n]) => (
+                  <li key={s} className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_COLORS[s] }} />
+                    <span className="text-on-surface-variant">{s}</span>
+                    <span className="ml-3 font-semibold tabular-nums">{n || 0}</span>
+                  </li>
                 ))}
-              </BarChart>
-            </ResponsiveContainer>
+              </ul>
+            </div>
           )}
         </Card>
 
         <Card className="p-6">
-          <ChartTitle icon="donut_large" title="Status" sub="Resolution mix" />
+          <ChartTitle icon="timeline" title="Over time" sub="Monthly comments, stacked by current status" />
           {loading ? (
             <SkeletonChart />
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={byStatus} dataKey="value" nameKey="name" innerRadius={64} outerRadius={104} paddingAngle={2}>
-                  {byStatus.map((entry) => (
-                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name]} stroke={surfaceLow} strokeWidth={2} />
-                  ))}
-                </Pie>
-                <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
-                <Tooltip contentStyle={tooltipStyle} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
-      </Reveal>
-
-      {/* Over time */}
-      <Reveal deps={[status]}>
-        <Card className="p-6">
-          <ChartTitle icon="timeline" title="Over time" sub="Comments per month" />
-          {loading ? (
-            <SkeletonChart />
-          ) : overTime.length ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={overTime} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
+          ) : trend.rows.length ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={trend.rows} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
                 <XAxis dataKey="month" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} />
                 <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="value" name="Comments" stroke={primary} strokeWidth={2.5} dot={{ r: 3, fill: primary }} activeDot={{ r: 5 }} />
-              </LineChart>
+                <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
+                {STATUSES.map((s) => (
+                  <Area key={s} type="monotone" dataKey={s} stackId="1" stroke={STATUS_COLORS[s]} fill={STATUS_COLORS[s]} fillOpacity={0.22} strokeWidth={2} />
+                ))}
+              </AreaChart>
             </ResponsiveContainer>
           ) : (
             <p className="py-10 text-center text-sm text-on-surface-variant">Dates couldn’t be parsed for a time trend.</p>
@@ -226,10 +211,76 @@ export default function Dashboard({ openDetail }) {
         </Card>
       </Reveal>
 
+      {/* By discipline — stacked bar + numeric table */}
+      <Reveal deps={[status]}>
+        <Card className="p-6">
+          <ChartTitle icon="bar_chart" title="By discipline" sub="Status mix per discipline — shape above, exact numbers below" />
+          {loading ? (
+            <SkeletonChart />
+          ) : (
+            <>
+              <div className="mb-2 flex flex-wrap gap-4 text-xs">
+                {STATUSES.map((s) => (
+                  <span key={s} className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_COLORS[s] }} /> {s}
+                  </span>
+                ))}
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={byDiscipline} margin={{ top: 16, right: 8, bottom: 4, left: -12 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
+                  <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: `${primary}22` }} />
+                  {STATUSES.map((s, i) => (
+                    <Bar key={s} dataKey={s} stackId="status" fill={STATUS_COLORS[s]} radius={i === STATUSES.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]} maxBarSize={48} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[10.5px] font-semibold uppercase tracking-wide text-on-surface-variant">
+                      <th className="pb-2 pr-2 text-left">Discipline</th>
+                      <th className="pb-2 text-center">Open</th>
+                      <th className="pb-2 text-center">In Review</th>
+                      <th className="pb-2 text-center">Closed</th>
+                      <th className="pb-2 text-center">Total</th>
+                      <th className="pb-2 text-center">% Closed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byDiscipline.map((d) => {
+                      const pct = d.total ? Math.round((d.Closed / d.total) * 100) : 0;
+                      return (
+                        <tr
+                          key={d.name}
+                          onClick={() => goComments({ discipline: d.name, status: 'all' })}
+                          className="cursor-pointer border-t border-outline-variant/50 hover:bg-surface-container"
+                          title={`Filter Viewpoints: ${d.name}`}
+                        >
+                          <td className="py-2 pr-2"><DisciplineBadge discipline={d.name} /></td>
+                          <td className="py-2 text-center font-medium tabular-nums text-status-open">{d.Open}</td>
+                          <td className="py-2 text-center font-medium tabular-nums text-status-review">{d['In Review']}</td>
+                          <td className="py-2 text-center font-medium tabular-nums text-status-closed">{d.Closed}</td>
+                          <td className="py-2 text-center font-semibold tabular-nums">{d.total}</td>
+                          <td className="py-2 text-center font-bold tabular-nums" style={{ color: pctColor(pct) }}>{pct}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Card>
+      </Reveal>
+
       {/* Recent comments */}
       <Reveal deps={[status]}>
         <Card className="p-6">
-          <ChartTitle icon="fact_check" title="Recent" />
+          <ChartTitle icon="forum" title="Recent" />
           {loading ? (
             <SkeletonRows />
           ) : (
@@ -253,6 +304,42 @@ export default function Dashboard({ openDetail }) {
           )}
         </Card>
       </Reveal>
+    </div>
+  );
+}
+
+// Tiny trend line for a KPI card.
+function Sparkline({ values, color }) {
+  if (!values || values.length < 2) return null;
+  const mx = Math.max(...values);
+  if (mx === 0) return null;
+  const w = 66;
+  const h = 24;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - (v / mx) * (h - 3) - 1.5]);
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  return (
+    <svg width={w} height={h} className="shrink-0" aria-hidden="true">
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+    </svg>
+  );
+}
+
+// Donut-style progress ring showing the closed share.
+function Ring({ pct, color, track }) {
+  const r = 48;
+  const cx = 60;
+  const cy = 60;
+  const C = 2 * Math.PI * r;
+  return (
+    <div className="relative h-[132px] w-[132px] shrink-0">
+      <svg viewBox="0 0 120 120" className="h-full w-full">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={track} strokeWidth="12" />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${C * pct} ${C}`} transform={`rotate(-90 ${cx} ${cy})`} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold tabular-nums" style={{ color }}>{Math.round(pct * 100)}%</span>
+        <span className="text-xs text-on-surface-variant">closed</span>
+      </div>
     </div>
   );
 }

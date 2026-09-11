@@ -1,17 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { DISCIPLINES, STATUSES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
 
-export default function Comments({ detailId, setDetailId }) {
+export default function Comments({ detailId, setDetailId, initialFilter }) {
   const { status, records, notify } = useStore();
   const loading = status === 'loading';
 
   const [query, setQuery] = useState('');
   const [discipline, setDiscipline] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Apply a filter handed in from Overview (KPI card / discipline row click).
+  // The object carries a nonce so re-clicking the same target re-applies.
+  useEffect(() => {
+    if (!initialFilter) return;
+    if ('status' in initialFilter) setStatusFilter(initialFilter.status);
+    if ('discipline' in initialFilter) setDiscipline(initialFilter.discipline);
+  }, [initialFilter]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

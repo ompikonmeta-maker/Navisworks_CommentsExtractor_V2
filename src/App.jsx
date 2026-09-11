@@ -32,6 +32,7 @@ export default function App() {
   const { theme, toggle } = useTheme();
   const [route, setRoute] = useState('dashboard');
   const [detailId, setDetailId] = useState(null);
+  const [commentsFilter, setCommentsFilter] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const themeBtnRef = useRef(null);
 
@@ -152,6 +153,13 @@ export default function App() {
     setRoute(id);
     setDetailId(null);
   }, []);
+  // Jump to Viewpoints with a preset filter (from an Overview KPI/discipline).
+  // The nonce lets the same target re-apply on a repeat click.
+  const goComments = useCallback((filter) => {
+    setDetailId(null);
+    setCommentsFilter(filter ? { ...filter, _n: Date.now() } : null);
+    setRoute('comments');
+  }, []);
 
   const railStyle = {
     '--rail-w': `${collapsed ? RAIL : EXPANDED}px`,
@@ -256,7 +264,14 @@ export default function App() {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 md:p-0">
-          <Screen route={route} detailId={detailId} setDetailId={setDetailId} openDetail={openDetail} go={go} />
+          <Screen
+            route={route}
+            detailId={detailId}
+            setDetailId={setDetailId}
+            openDetail={openDetail}
+            goComments={goComments}
+            commentsFilter={commentsFilter}
+          />
         </main>
       </div>
 
@@ -265,7 +280,7 @@ export default function App() {
   );
 }
 
-function Screen({ route, detailId, setDetailId, openDetail, go }) {
+function Screen({ route, detailId, setDetailId, openDetail, goComments, commentsFilter }) {
   const { status, error } = useStore();
 
   if (status === 'error') {
@@ -281,9 +296,9 @@ function Screen({ route, detailId, setDetailId, openDetail, go }) {
 
   switch (route) {
     case 'dashboard':
-      return <Dashboard openDetail={openDetail} go={go} />;
+      return <Dashboard openDetail={openDetail} goComments={goComments} />;
     case 'comments':
-      return <Comments detailId={detailId} setDetailId={setDetailId} />;
+      return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} />;
     default:
       return null;
   }
