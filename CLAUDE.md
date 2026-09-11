@@ -82,9 +82,12 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `src/store/settings.jsx` — **v1.1** app settings context (`useSettings`), persisted to
   IndexedDB (separate `settings` key) and independent of the session: theme mode
   (`system`/`light`/`dark`, applied via `applyThemeMode` — `system` removes `data-theme` and
-  lets the media query decide) and per-discipline colour overrides + custom disciplines. The
-  header theme toggle and the Settings page both write here; `DisciplineBadge` reads the colour
-  map. Wrapped around the app in `main.jsx`, outside `StoreProvider`.
+  lets the media query decide), per-discipline colour overrides + custom disciplines, and a
+  **commenter registry** (`commenterNames`: author-code → display name; `commenterLabel(code,
+  names)` resolves it, falling back to the code). The header theme toggle and the Settings
+  page both write here; `DisciplineBadge` reads the colour map; the detail drawer, the
+  Viewpoints search, and the Excel Author column resolve names via `commenterLabel`. Wrapped
+  around the app in `main.jsx`, outside `StoreProvider`.
 - `src/lib/persist.js` — session persistence: a tiny IndexedDB key/value for the autosaved
   session, the stored folder handle, and the settings blob (`saveSettings`/`loadSettings`),
   plus File System Access helpers (`pickFolder`/`writeSessionToFolder`). `App.jsx` restores on

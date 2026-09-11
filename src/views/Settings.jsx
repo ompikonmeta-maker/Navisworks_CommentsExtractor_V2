@@ -17,8 +17,18 @@ const SWATCHES = ['#1768f7', '#1f7a4d', '#a9730a', '#b3261e', '#7b3fe4', '#0e749
 
 export default function Settings() {
   const { records } = useStore();
-  const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, resetSettings } = useSettings();
+  const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, setCommenterName, resetSettings } = useSettings();
   const [newDisc, setNewDisc] = useState('');
+
+  // Author codes present in the data, richest first, for the name registry.
+  const commenters = useMemo(() => {
+    const m = {};
+    for (const r of records) {
+      if (!r.authorCode) continue;
+      m[r.authorCode] = (m[r.authorCode] || 0) + 1;
+    }
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([code, count]) => ({ code, count }));
+  }, [records]);
 
   // Everything colourable: the built-in disciplines, anything present in the
   // data, and the user's own additions — de-duplicated, custom ones flagged.
@@ -110,6 +120,32 @@ export default function Settings() {
           })}
         </ul>
         <p className="mt-3 text-xs text-on-surface-variant">A custom discipline can be removed only while no comment uses it.</p>
+      </Card>
+
+      {/* Commenters */}
+      <Card className="p-6">
+        <SectionTitle icon="person" title="Commenters" sub="Give the Navisworks author codes readable names. Names show in the detail drawer, search, and Excel." />
+        {commenters.length ? (
+          <ul className="divide-y divide-outline-variant/50">
+            {commenters.map((c) => (
+              <li key={c.code} className="flex flex-wrap items-center gap-3 py-2.5">
+                <span className="inline-flex items-center gap-2">
+                  <Icon name="person" className="text-[18px] text-on-surface-variant" />
+                  <code className="rounded bg-surface-container px-1.5 py-0.5 text-xs">{c.code}</code>
+                </span>
+                <span className="text-xs text-on-surface-variant tabular-nums">{c.count} comment{c.count === 1 ? '' : 's'}</span>
+                <input
+                  value={settings.commenterNames?.[c.code] || ''}
+                  onChange={(e) => setCommenterName(c.code, e.target.value)}
+                  placeholder="Display name"
+                  className="ml-auto w-56 rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="py-6 text-center text-sm text-on-surface-variant">No commenters in the current data.</p>
+        )}
       </Card>
 
       {/* About / reset */}

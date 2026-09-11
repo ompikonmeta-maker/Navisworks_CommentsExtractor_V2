@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
+import { useSettings, commenterLabel } from '../store/settings.jsx';
 import { DISCIPLINES, STATUSES } from '../lib/parser.js';
 import { Icon, Select, SegmentedButtons, StatusBadge, DisciplineBadge } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
@@ -70,6 +71,7 @@ const TrashIcon = () => (
 // drawer's content in place; clicking anywhere else closes it.
 export default function DetailPanel({ record, onClose }) {
   const { updateRecord } = useStore();
+  const { settings } = useSettings();
   const open = !!record;
   const [shown, setShown] = useState(record); // persists during the exit slide
   const closeRef = useRef(null);
@@ -299,7 +301,11 @@ export default function DetailPanel({ record, onClose }) {
 
             {rec.authorCode && (
               <div className="inline-flex items-center gap-1.5 text-sm text-on-surface-variant">
-                <Icon name="person" className="text-[18px]" /> {rec.authorCode}
+                <Icon name="person" className="text-[18px]" />
+                {commenterLabel(rec.authorCode, settings.commenterNames)}
+                {commenterLabel(rec.authorCode, settings.commenterNames) !== rec.authorCode && (
+                  <span className="opacity-60">· {rec.authorCode}</span>
+                )}
               </div>
             )}
 

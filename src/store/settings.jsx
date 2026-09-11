@@ -13,7 +13,15 @@ const DEFAULTS = {
   disciplineColors: {},
   // User-added disciplines (beyond those inferred from the data).
   customDisciplines: [],
+  // Commenter registry: author code → human-readable name, { [code]: 'Name' }.
+  commenterNames: {},
 };
+
+// Resolve an author code to its display name (falls back to the code).
+export function commenterLabel(code, names) {
+  const n = names?.[code];
+  return n && n.trim() ? n.trim() : code;
+}
 
 const SettingsContext = createContext(null);
 
@@ -33,7 +41,7 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     (async () => {
       const saved = await loadSettings();
-      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors } });
+      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, commenterNames: { ...saved.commenterNames } });
       applyThemeMode(saved?.themeMode || DEFAULTS.themeMode);
       loaded.current = true;
       setReady(true);
@@ -72,14 +80,22 @@ export function SettingsProvider({ children }) {
       return { ...s, customDisciplines: s.customDisciplines.filter((d) => d !== name), disciplineColors: colors };
     });
   }, []);
+  const setCommenterName = useCallback((code, name) => {
+    setSettings((s) => {
+      const next = { ...s.commenterNames };
+      if (name && name.trim()) next[code] = name.trim();
+      else delete next[code];
+      return { ...s, commenterNames: next };
+    });
+  }, []);
   const resetSettings = useCallback(() => {
     applyThemeMode(DEFAULTS.themeMode);
-    setSettings({ ...DEFAULTS, disciplineColors: {} });
+    setSettings({ ...DEFAULTS, disciplineColors: {}, commenterNames: {} });
   }, []);
 
   const value = useMemo(
-    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, resetSettings }),
-    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, resetSettings]
+    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, setCommenterName, resetSettings }),
+    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, setCommenterName, resetSettings]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

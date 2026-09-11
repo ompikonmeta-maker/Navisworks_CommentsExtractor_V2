@@ -44,10 +44,15 @@ function fmtTs(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function buildCommentsSheet(X, records) {
+function buildCommentsSheet(X, records, commenterNames = {}) {
   const headers = [...COLUMNS.map((c) => c.header), ...IMG_COLS.map((c) => c.header)];
+  const cell = (c, r) => {
+    if (c.key === 'authorCode') return commenterNames[r.authorCode]?.trim() || r.authorCode || '';
+    if (c.ts) return fmtTs(r[c.key]);
+    return r[c.key] ?? '';
+  };
   const aoa = [headers];
-  for (const r of records) aoa.push([...COLUMNS.map((c) => (c.ts ? fmtTs(r[c.key]) : r[c.key] ?? '')), '', '']);
+  for (const r of records) aoa.push([...COLUMNS.map((c) => cell(c, r)), '', '']);
   const ws = X.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [...COLUMNS, ...IMG_COLS].map((c) => ({ wch: c.width }));
   ws['!rows'] = records.map(() => ({ hpt: ROW_PT }));
@@ -252,10 +257,10 @@ function saveBytes(bytes, fileName) {
  * @param {{ overview?: object, fileName?: string }} [opts]
  */
 export async function exportToExcel(records, opts = {}) {
-  const { overview, fileName } = opts;
+  const { overview, fileName, commenterNames } = opts;
   const X = await loadXLSX();
   const wb = X.utils.book_new();
-  X.utils.book_append_sheet(wb, buildCommentsSheet(X, records), 'Comments'); // sheet1
+  X.utils.book_append_sheet(wb, buildCommentsSheet(X, records, commenterNames || {}), 'Comments'); // sheet1
   if (overview) X.utils.book_append_sheet(wb, buildOverviewSheet(X, overview), 'Overview'); // sheet2
 
   const bytes = new Uint8Array(X.write(wb, { type: 'array', bookType: 'xlsx' }));
