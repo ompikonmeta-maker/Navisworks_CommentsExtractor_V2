@@ -6,7 +6,6 @@ import {
   AreaChart, Area, LineChart, Line,
 } from 'recharts';
 import { useStore, computeKpis } from '../store/store.jsx';
-import { useSettings } from '../store/settings.jsx';
 import { STATUSES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
@@ -41,7 +40,6 @@ function parseTs(dateStr) {
 
 export default function Dashboard({ openDetail, goComments }) {
   const { status, records, meta, notify, setData } = useStore();
-  const { settings } = useSettings();
   const loading = status === 'loading';
   const fileInputRef = useRef(null);
   // Refs for snapshots (per-card + whole overview) and Excel chart capture.
@@ -192,7 +190,7 @@ export default function Dashboard({ openDetail, goComments }) {
           { name: 'By discipline', img: discImg },
         ],
       };
-      await exportToExcel(records, { overview, commenterNames: settings.commenterNames });
+      await exportToExcel(records, { overview });
       notify(`Exported ${records.length} comments with the Overview.`, 'success');
     } catch (e) {
       notify(`Export failed: ${e.message}`, 'error');

@@ -4,8 +4,15 @@
 // (per spec "Batasan sistem").
 // =====================================================================
 import { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
+import { detectCommenter } from '../lib/parser.js';
 
 const StoreContext = createContext(null);
+
+// Backfill the commenter field for records loaded from an older session (or
+// any that predate the field), without overriding a value that already exists.
+function withCommenters(records) {
+  return records.map((r) => (r.commenter === undefined ? { ...r, commenter: detectCommenter(r.commentText) } : r));
+}
 
 const initialState = {
   status: 'loading', // 'loading' | 'ready' | 'error'
@@ -26,7 +33,7 @@ function reducer(state, action) {
         ...state,
         status: 'ready',
         error: null,
-        records: action.records,
+        records: withCommenters(action.records),
         meta: { source: action.source, stats: action.stats },
       };
     case 'UPDATE_RECORD':

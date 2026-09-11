@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store/store.jsx';
-import { useSettings, commenterLabel } from '../store/settings.jsx';
 import { DISCIPLINES, STATUSES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
@@ -8,7 +7,6 @@ import DetailPanel from '../components/DetailPanel.jsx';
 
 export default function Comments({ detailId, setDetailId, initialFilter }) {
   const { status, records, notify } = useStore();
-  const { settings } = useSettings();
   const loading = status === 'loading';
 
   const [query, setQuery] = useState('');
@@ -29,20 +27,19 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
       if (discipline !== 'all' && r.discipline !== discipline) return false;
       if (statusFilter !== 'all' && r.status !== statusFilter) return false;
       if (q) {
-        const name = commenterLabel(r.authorCode, settings.commenterNames);
-        const hay = `${r.commentText} ${r.viewpoint} ${r.authorCode} ${name} ${r.resolution} ${r.commentId}`.toLowerCase();
+        const hay = `${r.commentText} ${r.viewpoint} ${r.authorCode} ${r.commenter || ''} ${r.resolution} ${r.commentId}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [records, query, discipline, statusFilter, settings.commenterNames]);
+  }, [records, query, discipline, statusFilter]);
 
   const active = detailId != null ? records.find((r) => r.ID === detailId) : null;
 
   const handleExport = async () => {
     if (!filtered.length) return;
     try {
-      await exportToExcel(filtered, { commenterNames: settings.commenterNames });
+      await exportToExcel(filtered);
       notify(`Exported ${filtered.length} comments.`, 'success');
     } catch (e) {
       notify(`Export failed: ${e.message}`, 'error');

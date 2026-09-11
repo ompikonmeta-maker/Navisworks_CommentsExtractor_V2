@@ -87,6 +87,20 @@ function readCommentDate(commentEl) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Detect the commenter from the comment text. Navisworks review comments
+ * usually begin with the author's tag then a colon, e.g. "CPY_Dito: …",
+ * "OPS(Teguh): …", "CTR_Loy: …". We take that leading single token (no
+ * spaces) as the commenter; anything else (a sentence before a colon) yields
+ * no match. Returns '' when nothing sensible is found — the user can assign.
+ */
+export function detectCommenter(text) {
+  const m = /^\s*([^\s:]{1,40})\s*:/.exec(text || '');
+  if (!m) return '';
+  const tok = m[1].trim();
+  return /[A-Za-z]/.test(tok) ? tok : '';
+}
+
 /** Infer a coordination discipline from the comment text. */
 export function inferDiscipline(text) {
   if (!text) return 'OTHER';
@@ -142,6 +156,7 @@ export function parseReportHtml(htmlString, sourceName = 'report.html') {
         commentId,
         viewpoint: name,
         discipline: inferDiscipline(commentText),
+        commenter: detectCommenter(commentText), // person who wrote it (from text)
         commentText,
         resolution: '',
         status: normalizeStatus(rawStatus),

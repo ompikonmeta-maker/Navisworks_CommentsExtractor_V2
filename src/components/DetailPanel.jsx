@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
-import { useSettings, commenterLabel } from '../store/settings.jsx';
+import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES, STATUSES } from '../lib/parser.js';
 import { Icon, Select, SegmentedButtons, StatusBadge, DisciplineBadge } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
@@ -70,8 +70,16 @@ const TrashIcon = () => (
 // never dimmed and stays interactive: clicking another row swaps the
 // drawer's content in place; clicking anywhere else closes it.
 export default function DetailPanel({ record, onClose }) {
-  const { updateRecord } = useStore();
+  const { updateRecord, records } = useStore();
   const { settings } = useSettings();
+  // Commenter dropdown options: everyone found in the data plus any names
+  // added in Settings, sorted; "" is the unassigned choice.
+  const commenterOptions = useMemo(() => {
+    const set = new Set();
+    for (const r of records) if (r.commenter) set.add(r.commenter);
+    for (const c of settings.customCommenters || []) set.add(c);
+    return [{ value: '', label: '— Unassigned —' }, ...[...set].sort().map((c) => ({ value: c, label: c }))];
+  }, [records, settings.customCommenters]);
   const open = !!record;
   const [shown, setShown] = useState(record); // persists during the exit slide
   const closeRef = useRef(null);
@@ -301,17 +309,18 @@ export default function DetailPanel({ record, onClose }) {
 
             {rec.authorCode && (
               <div className="inline-flex items-center gap-1.5 text-sm text-on-surface-variant">
-                <Icon name="person" className="text-[18px]" />
-                {commenterLabel(rec.authorCode, settings.commenterNames)}
-                {commenterLabel(rec.authorCode, settings.commenterNames) !== rec.authorCode && (
-                  <span className="opacity-60">· {rec.authorCode}</span>
-                )}
+                <Icon name="person" className="text-[18px]" /> {rec.authorCode}
               </div>
             )}
 
             <label className="block text-xs font-medium text-on-surface-variant">
               Discipline
               <Select className="mt-1 w-full" aria-label="Change discipline" value={rec.discipline} onChange={(v) => set({ discipline: v })} options={DISCIPLINES} />
+            </label>
+
+            <label className="block text-xs font-medium text-on-surface-variant">
+              Commenter
+              <Select className="mt-1 w-full" aria-label="Change commenter" value={rec.commenter || ''} onChange={(v) => set({ commenter: v })} options={commenterOptions} />
             </label>
 
             <div>

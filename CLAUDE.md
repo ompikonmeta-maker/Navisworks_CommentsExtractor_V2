@@ -83,11 +83,16 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   IndexedDB (separate `settings` key) and independent of the session: theme mode
   (`system`/`light`/`dark`, applied via `applyThemeMode` — `system` removes `data-theme` and
   lets the media query decide), per-discipline colour overrides + custom disciplines, and a
-  **commenter registry** (`commenterNames`: author-code → display name; `commenterLabel(code,
-  names)` resolves it, falling back to the code). The header theme toggle and the Settings
-  page both write here; `DisciplineBadge` reads the colour map; the detail drawer, the
-  Viewpoints search, and the Excel Author column resolve names via `commenterLabel`. Wrapped
-  around the app in `main.jsx`, outside `StoreProvider`.
+  **commenter master list** (`customCommenters`: names the user adds on top of those detected
+  in the data). The header theme toggle and the Settings page both write here; `DisciplineBadge`
+  reads the colour map. Wrapped around the app in `main.jsx`, outside `StoreProvider`.
+  Commenters are a **record field**, not an author mapping: `record.commenter` is the person
+  who wrote the comment, auto-detected by `parser.detectCommenter` from the leading `Name:`
+  token in the comment text (e.g. `CPY_Dito:`, `OPS(Teguh):`); `store.setData` backfills it for
+  older sessions. The detail drawer has a Commenter dropdown (options = detected ∪
+  `customCommenters`) to assign/override per comment; Viewpoints search and a dedicated Excel
+  **Commenter** column use `record.commenter`. The Navisworks `User` code stays as the raw
+  `authorCode` / Excel "Author" column.
 - `src/lib/persist.js` — session persistence: a tiny IndexedDB key/value for the autosaved
   session, the stored folder handle, and the settings blob (`saveSettings`/`loadSettings`),
   plus File System Access helpers (`pickFolder`/`writeSessionToFolder`). `App.jsx` restores on

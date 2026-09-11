@@ -13,15 +13,10 @@ const DEFAULTS = {
   disciplineColors: {},
   // User-added disciplines (beyond those inferred from the data).
   customDisciplines: [],
-  // Commenter registry: author code → human-readable name, { [code]: 'Name' }.
-  commenterNames: {},
+  // User-added commenter names (beyond those detected in comment text). The
+  // dropdown options are these unioned with the commenters found in the data.
+  customCommenters: [],
 };
-
-// Resolve an author code to its display name (falls back to the code).
-export function commenterLabel(code, names) {
-  const n = names?.[code];
-  return n && n.trim() ? n.trim() : code;
-}
 
 const SettingsContext = createContext(null);
 
@@ -41,7 +36,7 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     (async () => {
       const saved = await loadSettings();
-      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, commenterNames: { ...saved.commenterNames } });
+      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])] });
       applyThemeMode(saved?.themeMode || DEFAULTS.themeMode);
       loaded.current = true;
       setReady(true);
@@ -80,22 +75,22 @@ export function SettingsProvider({ children }) {
       return { ...s, customDisciplines: s.customDisciplines.filter((d) => d !== name), disciplineColors: colors };
     });
   }, []);
-  const setCommenterName = useCallback((code, name) => {
-    setSettings((s) => {
-      const next = { ...s.commenterNames };
-      if (name && name.trim()) next[code] = name.trim();
-      else delete next[code];
-      return { ...s, commenterNames: next };
-    });
+  const addCommenter = useCallback((name) => {
+    const clean = String(name || '').trim();
+    if (!clean) return;
+    setSettings((s) => (s.customCommenters.includes(clean) ? s : { ...s, customCommenters: [...s.customCommenters, clean] }));
+  }, []);
+  const removeCommenter = useCallback((name) => {
+    setSettings((s) => ({ ...s, customCommenters: s.customCommenters.filter((c) => c !== name) }));
   }, []);
   const resetSettings = useCallback(() => {
     applyThemeMode(DEFAULTS.themeMode);
-    setSettings({ ...DEFAULTS, disciplineColors: {}, commenterNames: {} });
+    setSettings({ ...DEFAULTS, disciplineColors: {}, customCommenters: [] });
   }, []);
 
   const value = useMemo(
-    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, setCommenterName, resetSettings }),
-    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, setCommenterName, resetSettings]
+    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings }),
+    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

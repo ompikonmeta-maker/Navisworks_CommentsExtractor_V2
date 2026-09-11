@@ -17,18 +17,27 @@ const SWATCHES = ['#1768f7', '#1f7a4d', '#a9730a', '#b3261e', '#7b3fe4', '#0e749
 
 export default function Settings() {
   const { records } = useStore();
-  const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, setCommenterName, resetSettings } = useSettings();
+  const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings } = useSettings();
   const [newDisc, setNewDisc] = useState('');
+  const [newComm, setNewComm] = useState('');
 
-  // Author codes present in the data, richest first, for the name registry.
+  // Commenters found in the data (auto-detected from comment text) unioned with
+  // the user's own additions — custom ones flagged; count = comments assigned.
   const commenters = useMemo(() => {
-    const m = {};
-    for (const r of records) {
-      if (!r.authorCode) continue;
-      m[r.authorCode] = (m[r.authorCode] || 0) + 1;
-    }
-    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([code, count]) => ({ code, count }));
-  }, [records]);
+    const inData = new Set();
+    for (const r of records) if (r.commenter) inData.add(r.commenter);
+    const names = new Set([...inData, ...settings.customCommenters]);
+    return [...names].sort().map((name) => ({
+      name,
+      custom: !inData.has(name),
+      count: records.filter((r) => r.commenter === name).length,
+    }));
+  }, [records, settings.customCommenters]);
+  const addNewComm = () => {
+    const clean = newComm.trim();
+    if (clean) addCommenter(clean);
+    setNewComm('');
+  };
 
   // Everything colourable: the built-in disciplines, anything present in the
   // data, and the user's own additions — de-duplicated, custom ones flagged.
@@ -124,28 +133,43 @@ export default function Settings() {
 
       {/* Commenters */}
       <Card className="p-6">
-        <SectionTitle icon="person" title="Commenters" sub="Give the Navisworks author codes readable names. Names show in the detail drawer, search, and Excel." />
+        <SectionTitle icon="person" title="Commenters" sub="The people who wrote the comments — auto-detected from the “Name:” prefix in the comment text. Add or remove names here; assign one to any comment in the detail drawer." />
+
+        <div className="mb-4 flex flex-wrap items-end gap-2">
+          <label className="text-xs font-medium text-on-surface-variant">
+            Add a commenter
+            <input
+              value={newComm}
+              onChange={(e) => setNewComm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addNewComm()}
+              placeholder="e.g. CPY_Dito"
+              className="mt-1 block w-56 rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          </label>
+          <Button variant="tonal" icon="upload_file" onClick={addNewComm} disabled={!newComm.trim()}>Add</Button>
+        </div>
+
         {commenters.length ? (
           <ul className="divide-y divide-outline-variant/50">
             {commenters.map((c) => (
-              <li key={c.code} className="flex flex-wrap items-center gap-3 py-2.5">
-                <span className="inline-flex items-center gap-2">
-                  <Icon name="person" className="text-[18px] text-on-surface-variant" />
-                  <code className="rounded bg-surface-container px-1.5 py-0.5 text-xs">{c.code}</code>
+              <li key={c.name} className="flex flex-wrap items-center gap-3 py-2.5">
+                <span className="inline-flex items-center gap-2 font-medium">
+                  <Icon name="person" className="text-[18px] text-on-surface-variant" /> {c.name}
                 </span>
                 <span className="text-xs text-on-surface-variant tabular-nums">{c.count} comment{c.count === 1 ? '' : 's'}</span>
-                <input
-                  value={settings.commenterNames?.[c.code] || ''}
-                  onChange={(e) => setCommenterName(c.code, e.target.value)}
-                  placeholder="Display name"
-                  className="ml-auto w-56 rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                />
+                {c.custom && <span className="rounded-full bg-secondary-container px-2 py-0.5 text-[10px] font-medium text-on-secondary-container">added</span>}
+                {c.custom && c.count === 0 && (
+                  <button onClick={() => removeCommenter(c.name)} aria-label={`Remove ${c.name}`} className="ml-auto rounded-full p-1 text-on-surface-variant hover:text-error" title="Remove commenter">
+                    <Icon name="close" className="text-[16px]" />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="py-6 text-center text-sm text-on-surface-variant">No commenters in the current data.</p>
+          <p className="py-6 text-center text-sm text-on-surface-variant">No commenters detected yet.</p>
         )}
+        <p className="mt-3 text-xs text-on-surface-variant">An added commenter can be removed only while no comment uses it.</p>
       </Card>
 
       {/* About / reset */}
