@@ -5,6 +5,7 @@
 // =====================================================================
 import { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
 import { detectCommenter } from '../lib/parser.js';
+import { extract } from '../lib/detect.js';
 
 const StoreContext = createContext(null);
 
@@ -54,6 +55,19 @@ function reducer(state, action) {
           return next;
         }),
       };
+    case 'APPLY_DETECT': {
+      // Re-run extraction for `field` ('commenter'|'discipline') across all
+      // records. mode 'fill' keeps existing non-empty values; 'overwrite'
+      // replaces every one.
+      const { field, config, allowed, mode } = action;
+      return {
+        ...state,
+        records: state.records.map((r) => {
+          if (mode === 'fill' && r[field] && !(field === 'discipline' && r[field] === 'OTHER')) return r;
+          return { ...r, [field]: extract(r.commentText, config, allowed).val };
+        }),
+      };
+    }
     case 'TOAST':
       return { ...state, toast: action.toast };
     case 'CLEAR_TOAST':
@@ -76,6 +90,10 @@ export function StoreProvider({ children }) {
     (id, patch) => dispatch({ type: 'UPDATE_RECORD', id, patch }),
     []
   );
+  const applyDetect = useCallback(
+    (field, config, allowed, mode) => dispatch({ type: 'APPLY_DETECT', field, config, allowed, mode }),
+    []
+  );
   // Named `notify` (not `toast`) so it doesn't collide with `state.toast`,
   // the current toast payload the provider also exposes.
   // `action` (optional): { label, onClick } renders a button in the toast —
@@ -88,8 +106,8 @@ export function StoreProvider({ children }) {
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);
 
   const value = useMemo(
-    () => ({ ...state, setLoading, setError, setData, updateRecord, notify, clearToast }),
-    [state, setLoading, setError, setData, updateRecord, notify, clearToast]
+    () => ({ ...state, setLoading, setError, setData, updateRecord, applyDetect, notify, clearToast }),
+    [state, setLoading, setError, setData, updateRecord, applyDetect, notify, clearToast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

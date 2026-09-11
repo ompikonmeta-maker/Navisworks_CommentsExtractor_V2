@@ -50,9 +50,17 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   list of `div.viewpoint` blocks; a viewpoint with review comments carries a nested
   `div.comments > div.comment`. Each comment holds `Status`, `User`, `Text` name/value spans
   plus a trailing text node with the date. Only viewpoints **with** comments become records.
-  Discipline is not a field in the source — it is inferred from the comment text
-  (`inferDiscipline`: leading `PIP:`/`STR:`… token, else whole-word scan, else `OTHER`).
+  Discipline is not a field in the source — it is extracted from the comment text.
   Raw statuses (e.g. `New`) are normalized to `Open` / `In Review` / `Closed`.
+- `src/lib/detect.js` — the shared, data-driven **extraction engine** (v1.1) behind both
+  commenter and discipline detection. A config is an ordered list of `rules` (modes:
+  `delimiter`, `brackets`, `keyword`, `word`, `list` (scan a set), `regex`) tried first-non-
+  empty-wins, plus normalization (`strip`, `case`) and an optional `constrain` to an allowed
+  list (→ `OTHER`). `DEFAULT_DETECT` reproduces the pre-v1.1 behaviour exactly, so
+  `parser.detectCommenter` / `inferDiscipline` are now thin wrappers over `extract`. The
+  Settings "Detection rules" editor (`components/DetectionEditor.jsx`) edits these live (with a
+  coverage preview) and the store's `APPLY_DETECT` action re-runs extraction across records
+  (fill-empty or overwrite). The config persists in `settings.detect`.
 - `src/lib/ingest.js` — turns a user file selection into records: loose `.html` + images, or
   a `.zip` (via JSZip). Images are read to data URLs and linked to `imageRef`
   case-insensitively. Unsupported formats are ignored; a corrupt ZIP or a comment-less HTML

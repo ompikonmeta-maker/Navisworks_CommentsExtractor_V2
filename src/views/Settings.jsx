@@ -3,6 +3,7 @@ import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
 import { Icon, Card, Button, SegmentedButtons, DisciplineBadge } from '../components/ui.jsx';
+import DetectionEditor from '../components/DetectionEditor.jsx';
 
 const APP_VERSION = '1.1.0';
 
@@ -170,6 +171,12 @@ export default function Settings() {
           <p className="py-6 text-center text-sm text-on-surface-variant">No commenters detected yet.</p>
         )}
         <p className="mt-3 text-xs text-on-surface-variant">An added commenter can be removed only while no comment uses it.</p>
+      </Card>
+
+      {/* Detection rules */}
+      <Card className="p-6">
+        <SectionTitle icon="search" title="Detection rules" sub="How commenter and discipline are extracted from the comment text — user-editable so a future project with a different format needs no code change. Preview updates live; Apply writes to the current data." />
+        <DetectionEditor />
       </Card>
 
       {/* About / reset */}

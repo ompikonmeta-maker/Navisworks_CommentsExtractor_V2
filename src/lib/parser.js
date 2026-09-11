@@ -22,6 +22,8 @@
 // "HTML tanpa komentar — jangan membuat record").
 // =====================================================================
 
+import { extract, DEFAULT_DETECT } from './detect.js';
+
 export const DISCIPLINES = [
   'PIP',
   'STR',
@@ -87,33 +89,19 @@ function readCommentDate(commentEl) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Detect the commenter from the comment text. Navisworks review comments
- * usually begin with the author's tag then a colon, e.g. "CPY_Dito: …",
- * "OPS(Teguh): …", "CTR_Loy: …". We take that leading single token (no
- * spaces) as the commenter; anything else (a sentence before a colon) yields
- * no match. Returns '' when nothing sensible is found — the user can assign.
- */
+// Commenter and discipline are both extracted by the shared, user-configurable
+// engine (lib/detect.js). These thin wrappers apply the built-in default
+// configs at import time; the Settings "Detection" editor can re-apply custom
+// rules across records later.
+
+/** Detect the commenter (person who wrote the comment) from the text. */
 export function detectCommenter(text) {
-  const m = /^\s*([^\s:]{1,40})\s*:/.exec(text || '');
-  if (!m) return '';
-  const tok = m[1].trim();
-  return /[A-Za-z]/.test(tok) ? tok : '';
+  return extract(text, DEFAULT_DETECT.commenter).val;
 }
 
 /** Infer a coordination discipline from the comment text. */
 export function inferDiscipline(text) {
-  if (!text) return 'OTHER';
-  // Leading token before the first ":" — e.g. "PIP: ..." or "STR : ..."
-  const head = text.split(':', 1)[0].trim().toUpperCase();
-  if (DISCIPLINES.includes(head)) return head;
-  // Otherwise scan for a discipline code as a whole word anywhere in the text.
-  const upper = text.toUpperCase();
-  for (const d of DISCIPLINES) {
-    if (d === 'OTHER') continue;
-    if (new RegExp(`\\b${d}\\b`).test(upper)) return d;
-  }
-  return 'OTHER';
+  return extract(text, DEFAULT_DETECT.discipline, DISCIPLINES).val || 'OTHER';
 }
 
 /** Normalize a raw Navisworks status string to a workspace status. */

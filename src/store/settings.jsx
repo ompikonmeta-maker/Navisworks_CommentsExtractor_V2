@@ -5,6 +5,12 @@
 // =====================================================================
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { loadSettings, saveSettings } from '../lib/persist.js';
+import { DEFAULT_DETECT } from '../lib/detect.js';
+
+const cloneDetect = (d) => ({
+  commenter: { ...DEFAULT_DETECT.commenter, ...(d?.commenter || {}), rules: (d?.commenter?.rules || DEFAULT_DETECT.commenter.rules).map((r) => ({ ...r })) },
+  discipline: { ...DEFAULT_DETECT.discipline, ...(d?.discipline || {}), rules: (d?.discipline?.rules || DEFAULT_DETECT.discipline.rules).map((r) => ({ ...r })) },
+});
 
 const DEFAULTS = {
   version: 1,
@@ -16,6 +22,8 @@ const DEFAULTS = {
   // User-added commenter names (beyond those detected in comment text). The
   // dropdown options are these unioned with the commenters found in the data.
   customCommenters: [],
+  // User-editable extraction rules for commenter + discipline detection.
+  detect: DEFAULT_DETECT,
 };
 
 const SettingsContext = createContext(null);
@@ -36,7 +44,7 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     (async () => {
       const saved = await loadSettings();
-      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])] });
+      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect) });
       applyThemeMode(saved?.themeMode || DEFAULTS.themeMode);
       loaded.current = true;
       setReady(true);
@@ -83,14 +91,17 @@ export function SettingsProvider({ children }) {
   const removeCommenter = useCallback((name) => {
     setSettings((s) => ({ ...s, customCommenters: s.customCommenters.filter((c) => c !== name) }));
   }, []);
+  const setDetect = useCallback((kind, config) => {
+    setSettings((s) => ({ ...s, detect: { ...s.detect, [kind]: config } }));
+  }, []);
   const resetSettings = useCallback(() => {
     applyThemeMode(DEFAULTS.themeMode);
-    setSettings({ ...DEFAULTS, disciplineColors: {}, customCommenters: [] });
+    setSettings({ ...DEFAULTS, disciplineColors: {}, customCommenters: [], detect: cloneDetect() });
   }, []);
 
   const value = useMemo(
-    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings }),
-    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings]
+    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, resetSettings }),
+    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, resetSettings]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
