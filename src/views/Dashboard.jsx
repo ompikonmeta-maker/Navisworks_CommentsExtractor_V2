@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { snapshotNode, nodeToImage } from '../lib/snapshot.js';
 import {
   ResponsiveContainer,
@@ -49,6 +49,21 @@ export default function Dashboard({ openDetail, goComments }) {
   const disciplineRef = useRef(null);
   const needsRef = useRef(null);
   const recentRef = useRef(null);
+  // The by-discipline chart matches the numeric table's height so both columns
+  // line up top and bottom, whatever the discipline count.
+  const discTableRef = useRef(null);
+  const [discChartH, setDiscChartH] = useState(300);
+  useEffect(() => {
+    const el = discTableRef.current;
+    if (!el) return undefined;
+    // offsetHeight is the untransformed layout height — getBoundingClientRect
+    // would report the shrunken size during the card's scale-in animation.
+    const measure = () => setDiscChartH(Math.max(240, el.offsetHeight));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [loading, records]);
 
   const snap = async (ref, name) => {
     try {
@@ -307,11 +322,10 @@ export default function Dashboard({ openDetail, goComments }) {
                   </span>
                 ))}
               </div>
-              {/* items-stretch (default) so the chart column takes the table's
-                  height; the chart fills it via height="100%". */}
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="min-h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
+              {/* Chart height is measured from the table so both align top and
+                  bottom (see discChartH / discTableRef). */}
+              <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+                <ResponsiveContainer width="100%" height={discChartH}>
                   <BarChart data={byDiscipline} margin={{ top: 20, right: 8, bottom: 4, left: -12 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
                     <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
@@ -327,10 +341,9 @@ export default function Dashboard({ openDetail, goComments }) {
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
-                </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table ref={discTableRef} className="w-full text-sm">
                   <thead>
                     <tr className="text-[10.5px] font-semibold uppercase tracking-wide text-on-surface-variant">
                       <th className="pb-2 pr-2 text-left">Discipline</th>
