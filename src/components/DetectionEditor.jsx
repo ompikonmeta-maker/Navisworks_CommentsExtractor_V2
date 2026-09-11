@@ -3,7 +3,7 @@ import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
 import { extract, RULE_MODES, DELIMITERS, BRACKETS } from '../lib/detect.js';
-import { Icon, Button } from './ui.jsx';
+import { Icon, Button, Select } from './ui.jsx';
 
 const CASES = [['none', 'as-is'], ['upper', 'UPPER'], ['lower', 'lower']];
 const inputCls = 'rounded-control border border-outline bg-surface-container px-2.5 py-1.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
@@ -92,19 +92,13 @@ export default function DetectionEditor() {
           <div key={i} className="rounded-2xl border border-outline-variant bg-surface p-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary-container text-[11px] font-bold text-on-secondary-container">{i + 1}</span>
-              <select className={inputCls} value={r.mode} onChange={(e) => setMode(i, e.target.value)} aria-label="Rule mode">
-                {RULE_MODES.map((m) => <option key={m.mode} value={m.mode}>{m.label}</option>)}
-              </select>
+              <Select value={r.mode} onChange={(v) => setMode(i, v)} aria-label="Rule mode" options={RULE_MODES.map((m) => ({ value: m.mode, label: m.label }))} />
 
               {r.mode === 'delimiter' && (
-                <select className={inputCls} value={r.delim} onChange={(e) => patchRule(i, { delim: e.target.value })} aria-label="Delimiter">
-                  {DELIMITERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
+                <Select value={r.delim} onChange={(v) => patchRule(i, { delim: v })} aria-label="Delimiter" options={DELIMITERS.map(([v, l]) => ({ value: v, label: l }))} />
               )}
               {r.mode === 'brackets' && (
-                <select className={inputCls} value={r.br} onChange={(e) => patchRule(i, { br: e.target.value })} aria-label="Brackets">
-                  {BRACKETS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
+                <Select value={r.br} onChange={(v) => patchRule(i, { br: v })} aria-label="Brackets" options={BRACKETS.map(([v, l]) => ({ value: v, label: l }))} />
               )}
               {r.mode === 'keyword' && (
                 <input className={`${inputCls} w-24 font-mono`} value={r.kw} onChange={(e) => patchRule(i, { kw: e.target.value })} placeholder="By" aria-label="Keyword" />
@@ -137,9 +131,7 @@ export default function DetectionEditor() {
         </label>
         <label className="inline-flex items-center gap-1.5 text-on-surface-variant">
           case
-          <select className={inputCls} value={cfg.case} onChange={(e) => setNorm({ case: e.target.value })} aria-label="Case">
-            {CASES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
+          <Select value={cfg.case} onChange={(v) => setNorm({ case: v })} aria-label="Case" options={CASES.map(([v, l]) => ({ value: v, label: l }))} />
         </label>
         {isDisc && (
           <label className="inline-flex items-center gap-1.5 text-on-surface-variant">
