@@ -272,7 +272,10 @@ export default function Dashboard({ openDetail, goComments }) {
               </div>
               <div className="border-t border-outline-variant/50 pt-4">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium">After-photo coverage</span>
+                  <span className="flex items-center gap-1.5 font-medium">
+                    Photo evidence
+                    <InfoTip label="About photo evidence">Of the comments already closed, the share that has an after photo attached as proof of the fix.</InfoTip>
+                  </span>
                   <span className="text-on-surface-variant tabular-nums">{coverage.withPhoto} of {coverage.closed} closed · {coverage.pct}%</span>
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-variant">
@@ -498,6 +501,20 @@ function SnapButton({ onClick }) {
     >
       <Icon name="image" className="text-[18px]" />
     </button>
+  );
+}
+
+// Info "i" that reveals a tooltip on hover/focus (CSS-driven delay + spring).
+function InfoTip({ children, label = 'More info' }) {
+  return (
+    <span className="info-tip" tabIndex={0} role="button" aria-label={label}>
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+        <circle cx="12" cy="8" r="1.3" fill="currentColor" />
+        <path d="M12 11v6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      <span className="info-bubble" role="tooltip">{children}</span>
+    </span>
   );
 }
 

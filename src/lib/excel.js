@@ -62,7 +62,7 @@ function buildOverviewSheet(X, ov) {
     ['In Review', ov.kpis['In Review'] || 0, pct(ov.kpis['In Review'] || 0, ov.total)],
     ['Closed', ov.kpis.Closed || 0, pct(ov.kpis.Closed || 0, ov.total)],
     ['Closed rate', `${ov.closedPct}%`, ''],
-    ['After-photo coverage', `${ov.coverage.withPhoto} of ${ov.coverage.closed} closed`, `${ov.coverage.pct}%`],
+    ['Photo evidence', `${ov.coverage.withPhoto} of ${ov.coverage.closed} closed`, `${ov.coverage.pct}%`],
     [],
     ['By discipline'],
     ['Discipline', 'Open', 'In Review', 'Closed', 'Total', '% Closed'],

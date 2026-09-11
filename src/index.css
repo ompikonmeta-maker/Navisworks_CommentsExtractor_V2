@@ -568,6 +568,66 @@
   margin-inline: auto;
 }
 
+/* Info "i" with a hover tooltip. The tooltip waits ~0.4s before springing in
+   (opacity + scale), but leaves instantly — achieved CSS-only by putting the
+   transition delay ONLY on the :hover/:focus rule; the base rule has no delay,
+   so on leave it reverts immediately. */
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: help;
+  outline: none;
+}
+.info-tip:focus-visible { color: var(--md-sys-color-primary); }
+.info-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 30;
+  width: max-content;
+  max-width: 230px;
+  padding: 8px 10px;
+  border-radius: var(--tabelin-radius-menu, 12px);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: var(--md-sys-elevation-level3, 0 4px 8px 3px rgba(0,0,0,.15), 0 1px 3px rgba(0,0,0,.3));
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 400;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(4px) scale(0.9);
+  transform-origin: bottom center;
+  /* leave: no delay, quick — effectively instant */
+  transition: opacity 90ms ease, transform 90ms ease;
+}
+.info-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--md-sys-color-surface-container-high);
+}
+.info-tip:hover .info-bubble,
+.info-tip:focus-visible .info-bubble {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+  /* enter: wait ~0.4s, then a springy overshoot */
+  transition: opacity 260ms ease 400ms, transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 400ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .info-bubble { transition: opacity 120ms ease; transform: translateX(-50%); }
+  .info-tip:hover .info-bubble, .info-tip:focus-visible .info-bubble { transition: opacity 120ms ease 400ms; transform: translateX(-50%); }
+}
+
 /* Sticky app header — a translucent ground so scrolled content doesn't bleed
    through the title (Tailwind's token-alpha utilities can't build this from a
    var-based color, so it's set explicitly here). */
