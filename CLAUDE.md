@@ -29,7 +29,7 @@ npm run preview    # serve the production build (default port 4173)
 
 ### Portable single-file build
 
-`npm run build` emits **one self-contained `dist/index.html`** (~2.6 MB) via
+`npm run build` emits **one self-contained `dist/index.html`** (~2.4 MB) via
 `vite-plugin-singlefile` — all JS/CSS inlined, the sample report + images embedded as
 data URLs, and a subset of the Material Symbols icon font embedded too. It has **no runtime
 dependencies**: open it by double-click (`file://`), copy it to a USB stick, or host it
@@ -67,10 +67,13 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   write pictures, so after it writes the workbook the file (a zip) is re-opened with JSZip and
   drawings are injected per sheet — the before/after **photos** on Comments, and the rendered
   **chart images** on Overview (`embedDrawings` handles multiple sheets/drawings).
-- `src/lib/snapshot.js` — DOM→PNG via **html2canvas** (dynamically imported, bundled so it
-  stays offline). `snapshotNode` downloads a card / whole-Overview PNG; `nodeToImage` returns a
-  data URL, used to capture the dashboard charts for the Excel Overview sheet. Snapshot buttons
-  carry `data-nosnap` so they're excluded from their own capture.
+- `src/lib/snapshot.js` — DOM→PNG via **html-to-image** (foreignObject → SVG → canvas;
+  dynamically imported, bundled so it stays offline). It renders through the browser's own
+  layout engine, so flex alignment, padded badges and the Recharts SVG come out exactly as on
+  screen — html2canvas (a re-implemented rasteriser) mis-centred those, so don't switch back.
+  `snapshotNode` downloads a card / whole-Overview PNG; `nodeToImage` returns a data URL, used
+  to capture the dashboard charts for the Excel Overview sheet. Elements marked `data-nosnap`
+  (the snapshot buttons) are filtered out of the capture.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. `computeKpis` is the
   shared status aggregation. Persistence lives in `App.jsx` (autosave effect) + `lib/persist.js`.
 - `src/lib/persist.js` — session persistence: a tiny IndexedDB key/value for the autosaved
