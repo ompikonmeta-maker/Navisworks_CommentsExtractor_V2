@@ -34,7 +34,7 @@ function effectiveTheme() {
 }
 
 const EXPANDED = 300;
-const RAIL = 84;
+const RAIL = 96;
 
 export default function App() {
   const store = useStore();
@@ -236,7 +236,7 @@ export default function App() {
                       : 'text-on-surface-variant hover:bg-surface-high'
                   }`}
                 >
-                  <Icon name={item.icon} className="shrink-0 text-[22px]" />
+                  <span className="t-ico grid place-items-center"><Icon name={item.icon} className="shrink-0 text-[22px]" /></span>
                   <span className="t-lbl">{item.label}</span>
                 </button>
               );

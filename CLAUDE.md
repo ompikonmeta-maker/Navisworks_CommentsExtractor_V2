@@ -108,8 +108,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `src/lib/motion.js` — MD3 Expressive motion. `mdSpring(bounce)` returns the single-overshoot
   spring easing `cubic-bezier(0.38, bounce, 0.22, 1)` (bounce = p1y), matching the repo's MD3
   reference — not a multi-oscillation `linear()` curve. Used for the sidebar collapse (660ms,
-  overshoot 1.45; label fade + stagger choreographed by the `.t-shell`/`.t-navitem`/`.t-lbl`
-  rules in `index.css`), the staggered card reveal (`revealCards`: fade + scale 0.88→1 with
+  overshoot 1.45; choreographed by the `.t-shell`/`.t-navitem`/`.t-ico`/`.t-lbl` rules in
+  `index.css` — collapsed the nav becomes an **MD3 navigation rail** (icon over an
+  always-visible micro label, active state a pill around the icon via the `.t-ico` wrapper +
+  `[aria-current="page"]`); only the brand wordmark fades out), the staggered card reveal (`revealCards`: fade + scale 0.88→1 with
   overshoot 1.75, 700ms, 15ms stagger, via `components/Reveal.jsx`), and the two-stage circular
   theme transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
   a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
