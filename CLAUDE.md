@@ -111,8 +111,15 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   overshoot 1.45; choreographed by the `.t-shell`/`.t-navitem`/`.t-ico`/`.t-lbl` rules in
   `index.css` — collapsed the nav becomes an **MD3 navigation rail** (icon over an
   always-visible micro label, active state a pill around the icon via the `.t-ico` wrapper +
-  `[aria-current="page"]`); only the brand wordmark fades out), the staggered card reveal (`revealCards`: fade + scale 0.88→1 with
-  overshoot 1.75, 700ms, 15ms stagger, via `components/Reveal.jsx`), and the two-stage circular
+  `[aria-current="page"]`); only the brand wordmark fades out), the **"FINO directional"** staggered card reveal
+  (`revealCards`, via `components/Reveal.jsx`; modelled on
+  `docs/material-design-3-project/claude/card-reveal-FINO-directional.html`): fade + scale
+  0.94→1 + a 14px translateY on a settle spring `cubic-bezier(0.34, 1.73, 0.32, 1)`, 800ms,
+  10ms stagger. **Direction follows navigation** — a module-level `setRevealDir(±1)` is set
+  from nav clicks (sidebar route in `App.go`, Settings section rail) just before the cards
+  mount: +1 (nav to a lower item, or first load) resolves the group bottom→top entering from
+  above, −1 (nav up) top→bottom entering from below (`order`/`dy` flip). Each `Reveal` group
+  animates its own children in this direction. And the two-stage circular
   theme transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
   a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small

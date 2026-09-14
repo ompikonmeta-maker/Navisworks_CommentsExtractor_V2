@@ -21,12 +21,25 @@ export function mdSpring(bounce = 1.3) {
 
 // Spec tokens.
 export const SIDEBAR_SPRING = { duration: 660, easing: mdSpring(1.45) };
-export const CARD_REVEAL = { duration: 700, bounce: 1.75, stagger: 15 };
+// Card reveal — "FINO directional" (docs/material-design-3-project/claude/
+// card-reveal-FINO-directional.html): fade + scale 0.94→1 + a small
+// translateY, on a settle spring, staggered, with the order + entry
+// direction following navigation.
+export const CARD_REVEAL = { duration: 800, bounce: 1.73, stagger: 10, shift: 14 };
+
+// Direction the next reveal plays, set from navigation just before the cards
+// mount: +1 = navigated "down" (or first load) → cards resolve bottom→top,
+// entering from above; −1 = navigated "up" → top→bottom, entering from below.
+let revealDir = 1;
+export function setRevealDir(dir) {
+  revealDir = dir < 0 ? -1 : 1;
+}
 
 /**
- * Card reveal — MD3 "fade + spring": opacity 0→1 and scale 0.88→1 only
- * (no clip, no two-stage), on one duration with a per-index stagger.
- * Returns a cleanup that cancels in-flight animations.
+ * Card reveal — per-card fade + scale + directional slide with a settle
+ * spring `cubic-bezier(0.34, bounce, 0.32, 1)`, staggered. The stagger order
+ * and entry-offset sign follow the current `revealDir`. Returns a cleanup
+ * that cancels in-flight animations.
  */
 export function revealCards(elements) {
   if (!elements || !elements.length) return () => {};
@@ -34,16 +47,20 @@ export function revealCards(elements) {
     elements.forEach((el) => el && (el.style.opacity = '1'));
     return () => {};
   }
-  const easing = mdSpring(CARD_REVEAL.bounce);
+  const dir = revealDir;
+  const easing = `cubic-bezier(0.34, ${CARD_REVEAL.bounce}, 0.32, 1)`;
+  const dy = dir > 0 ? -CARD_REVEAL.shift : CARD_REVEAL.shift;
+  const n = elements.length;
   const anims = [];
   elements.forEach((el, i) => {
     if (!el) return;
+    const order = dir > 0 ? n - 1 - i : i;
     const a = el.animate(
       [
-        { opacity: 0, transform: 'scale(0.88)' },
-        { opacity: 1, transform: 'scale(1)' },
+        { opacity: 0, transform: `scale(0.94) translateY(${dy}px)` },
+        { opacity: 1, transform: 'none' },
       ],
-      { duration: CARD_REVEAL.duration, delay: i * CARD_REVEAL.stagger, easing, fill: 'both' }
+      { duration: CARD_REVEAL.duration, delay: order * CARD_REVEAL.stagger, easing, fill: 'both' }
     );
     anims.push(a);
   });

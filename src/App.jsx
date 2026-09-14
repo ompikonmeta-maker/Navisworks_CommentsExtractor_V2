@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from './store/store.jsx';
 import { useSettings, applyThemeMode } from './store/settings.jsx';
 import { loadSampleData } from './lib/sample.js';
-import { SIDEBAR_SPRING, animateThemeSwitch } from './lib/motion.js';
+import { SIDEBAR_SPRING, animateThemeSwitch, setRevealDir } from './lib/motion.js';
 import {
   FS_SUPPORTED,
   requestPersistentStorage,
@@ -184,7 +184,14 @@ export default function App() {
     setRoute('comments');
   }, []);
   const go = useCallback((id) => {
-    setRoute(id);
+    // Reveal direction follows nav order: moving to a lower menu item reveals
+    // bottom→top, moving up reveals top→bottom.
+    setRoute((cur) => {
+      const from = NAV.findIndex((n) => n.id === cur);
+      const to = NAV.findIndex((n) => n.id === id);
+      setRevealDir(to < from ? -1 : 1);
+      return id;
+    });
     setDetailId(null);
   }, []);
   // Jump to Viewpoints with a preset filter (from an Overview KPI/discipline).

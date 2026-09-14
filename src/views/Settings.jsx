@@ -5,6 +5,7 @@ import { DISCIPLINES } from '../lib/parser.js';
 import { Icon, Card, Button, SegmentedButtons, DisciplineBadge } from '../components/ui.jsx';
 import DetectionEditor from '../components/DetectionEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
+import { setRevealDir } from '../lib/motion.js';
 
 const APP_VERSION = '1.1.0';
 
@@ -58,7 +59,7 @@ export default function Settings() {
           return (
             <button
               key={s.id}
-              onClick={() => setSection(s.id)}
+              onClick={() => { setRevealDir(SECTIONS.findIndex((x) => x.id === s.id) < SECTIONS.findIndex((x) => x.id === section) ? -1 : 1); setSection(s.id); }}
               aria-current={on ? 'page' : undefined}
               className={`flex items-center gap-3 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 on ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'
