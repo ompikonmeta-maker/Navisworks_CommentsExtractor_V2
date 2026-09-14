@@ -45,17 +45,26 @@ export default function App() {
   const [commentsFilter, setCommentsFilter] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const themeBtnRef = useRef(null);
+  // The theme mode already reflected in the DOM. The animated toggle applies
+  // the new mode itself (inside the View Transition), so this lets the sync
+  // effect below skip re-applying it — a second applyThemeMode during the
+  // transition window collapses the old/new snapshots and kills the reveal.
+  const appliedMode = useRef(settings.themeMode);
 
   // Keep the toggle icon in sync with the saved theme mode (applied by the
-  // SettingsProvider on load; re-synced here on any mode change).
+  // SettingsProvider on load, or by the Settings page). Skips the mode the
+  // animated header toggle has already applied.
   useEffect(() => {
+    if (appliedMode.current === settings.themeMode) return;
     applyThemeMode(settings.themeMode);
+    appliedMode.current = settings.themeMode;
     setEffTheme(effectiveTheme());
   }, [settings.themeMode]);
 
   // Header toggle: flip light↔dark, persist the choice, animate the reveal.
   const toggleTheme = useCallback((origin) => {
     const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    appliedMode.current = next; // owned by the transition; keep the effect off it
     animateThemeSwitch(() => applyThemeMode(next), origin);
     setEffTheme(next);
     update({ themeMode: next });
