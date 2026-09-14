@@ -656,6 +656,23 @@
 .t-appbar {
   background: color-mix(in srgb, var(--md-sys-color-background) 82%, transparent);
 }
+/* On desktop the header floats at top:12px (md:top-3), leaving a 12px gutter
+   above it; without this, scrolled content bleeds sharply through that band.
+   Extend the same frosted ground up over the gutter so the whole top reads as
+   one translucent strip. */
+@media (min-width: 768px) {
+  .t-appbar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 0.75rem;
+    background: color-mix(in srgb, var(--md-sys-color-background) 82%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
 
 /* Inline Undo card — fills the emptied slot after a photo is removed. */
 .ba-undo {
