@@ -650,6 +650,32 @@
   .info-tip:hover .info-bubble, .info-tip:focus-visible .info-bubble { transition: opacity 120ms ease 400ms; transform: translateX(-50%); }
 }
 
+/* Floating sidebar drop shadow — a soft, wide "glass" shadow with an inset
+   top highlight, tuned per theme (intensity +10% over the base spec). Only on
+   desktop, where the panel actually floats. */
+@media (min-width: 768px) {
+  .t-panel {
+    box-shadow:
+      0 16px 40px rgba(16, 24, 40, 0.154),
+      0 4px 12px rgba(16, 24, 40, 0.088),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+  :root[data-theme="dark"] .t-panel {
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.605),
+      0 4px 14px rgba(0, 0, 0, 0.44),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+}
+@media (min-width: 768px) and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .t-panel {
+    box-shadow:
+      0 18px 50px rgba(0, 0, 0, 0.605),
+      0 4px 14px rgba(0, 0, 0, 0.44),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+}
+
 /* Sticky app header — a translucent ground so scrolled content doesn't bleed
    through the title (Tailwind's token-alpha utilities can't build this from a
    var-based color, so it's set explicitly here). */

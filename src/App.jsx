@@ -213,7 +213,7 @@ export default function App() {
       <aside
         data-rail
         style={railStyle}
-        className="t-panel shrink-0 border-b border-outline-variant/60 bg-surface-container md:sticky md:top-3 md:h-[calc(100vh_-_1.5rem)] md:overflow-hidden md:rounded-card md:border md:border-outline-variant/50 md:shadow-md-2"
+        className="t-panel shrink-0 border-b border-outline-variant/60 bg-surface-container md:sticky md:top-3 md:h-[calc(100vh_-_1.5rem)] md:overflow-hidden md:rounded-card md:border md:border-outline-variant/50"
       >
         <div className={`t-shell w-full ${collapsed ? 'collapsed' : ''}`}>
           <div className="t-brand flex items-center gap-3 px-4 py-4">
