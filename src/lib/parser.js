@@ -158,6 +158,9 @@ export function parseReportHtml(htmlString, sourceName = 'report.html') {
         imageRef,
         imageData: '', // "before" image, linked later from companion images
         afterImageData: '', // "after" photo, uploaded in the detail drawer
+        // Free-form extra attributes for template export (evidence, applicability,
+        // actionBy, remarks, …). Keyed by attribute id; edited in the drawer.
+        extra: {},
         source: sourceName,
       });
     });

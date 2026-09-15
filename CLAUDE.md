@@ -75,6 +75,23 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   write pictures, so after it writes the workbook the file (a zip) is re-opened with JSZip and
   drawings are injected per sheet — the before/after **photos** on Comments, and the rendered
   **chart images** on Overview (`embedDrawings` handles multiple sheets/drawings).
+- `src/lib/templateExcel.js` — **template-driven Excel export** (v1.1) via **zip/XML
+  surgery** (JSZip), deliberately **not ExcelJS** (ExcelJS re-writes the whole workbook and
+  stretches/loses the template's embedded logos). Opens a user-supplied `.xlsx`, edits ONLY the
+  parts it must, and leaves styles/drawings/media byte-for-byte. Two zones: the **log sheet** (a
+  repeating table — one record per row, columns located by a data-driven mapping: `by:'header'`
+  default / `by:'name'` Defined-Name / `by:'column'`, so a layout change is a mapping edit not a
+  code change) and **detail sheets** (one page per item, driven by the template's own
+  `VLOOKUP(N2)` — the engine only sets `N2` and injects the before/after photos into the marked
+  image cells as **oneCell** anchors at natural size, no stretch; extra items **clone a pattern
+  sheet verbatim** with all OOXML bookkeeping). Optional `vlookupAutoRepair` rewrites the detail
+  `VLOOKUP` column indexes to `MATCH(headerText,…)` so the sheet self-adjusts if log columns
+  move. `DEFAULT_TEMPLATE_MAPPING` targets the shipped "3D Model Log Sheet" template; the mapping
+  persists in `settings.templateExport`, the template bytes in IndexedDB
+  (`persist.saveTemplate`/`loadTemplate`), and the UI is `components/TemplateExportPanel.jsx`
+  under Settings › Export. Field namespaces in the mapping: plain = record field, `@x` = export
+  constant (Unit/Phase dialog), `x.y` = `record.extra[y]` (evidence/applicability/actionBy/
+  remarks, edited in the detail drawer). The pre-existing `lib/excel.js` quick export stays as-is.
 - `src/lib/snapshot.js` — DOM→PNG via **html-to-image** (foreignObject → SVG → canvas;
   dynamically imported, bundled so it stays offline). It renders through the browser's own
   layout engine, so flex alignment, padded badges and the Recharts SVG come out exactly as on

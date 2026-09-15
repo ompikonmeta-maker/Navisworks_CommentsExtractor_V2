@@ -6,6 +6,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { loadSettings, saveSettings } from '../lib/persist.js';
 import { DEFAULT_DETECT } from '../lib/detect.js';
+import { DEFAULT_TEMPLATE_MAPPING } from '../lib/templateExcel.js';
 
 const cloneDetect = (d) => ({
   commenter: { ...DEFAULT_DETECT.commenter, ...(d?.commenter || {}), rules: (d?.commenter?.rules || DEFAULT_DETECT.commenter.rules).map((r) => ({ ...r })) },
@@ -24,6 +25,8 @@ const DEFAULTS = {
   customCommenters: [],
   // User-editable extraction rules for commenter + discipline detection.
   detect: DEFAULT_DETECT,
+  // Template-driven Excel export mapping (constants + field → cell locators).
+  templateExport: DEFAULT_TEMPLATE_MAPPING,
 };
 
 const SettingsContext = createContext(null);
@@ -44,7 +47,7 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     (async () => {
       const saved = await loadSettings();
-      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect) });
+      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect), templateExport: { ...DEFAULT_TEMPLATE_MAPPING, ...(saved.templateExport || {}) } });
       applyThemeMode(saved?.themeMode || DEFAULTS.themeMode);
       loaded.current = true;
       setReady(true);
@@ -94,14 +97,17 @@ export function SettingsProvider({ children }) {
   const setDetect = useCallback((kind, config) => {
     setSettings((s) => ({ ...s, detect: { ...s.detect, [kind]: config } }));
   }, []);
+  const setTemplateExport = useCallback((patch) => {
+    setSettings((s) => ({ ...s, templateExport: typeof patch === 'function' ? patch(s.templateExport) : { ...s.templateExport, ...patch } }));
+  }, []);
   const resetSettings = useCallback(() => {
     applyThemeMode(DEFAULTS.themeMode);
     setSettings({ ...DEFAULTS, disciplineColors: {}, customCommenters: [], detect: cloneDetect() });
   }, []);
 
   const value = useMemo(
-    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, resetSettings }),
-    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, resetSettings]
+    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, resetSettings }),
+    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, resetSettings]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

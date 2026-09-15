@@ -15,6 +15,7 @@ const STORE = 'kv';
 const SESSION_KEY = 'session';
 const SETTINGS_KEY = 'settings';
 const HANDLE_KEY = 'folderHandle';
+const TEMPLATE_KEY = 'excelTemplate';
 const SESSION_FILE = 'tabelin-session.json';
 const SCHEMA_VERSION = 1;
 
@@ -57,6 +58,28 @@ async function idbDel(key) {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+// ---------- Excel template (bytes stored in IndexedDB so it survives reload) ----------
+export async function saveTemplate(name, bytes) {
+  try {
+    const buffer = bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    await idbSet(TEMPLATE_KEY, { name, buffer, savedAt: Date.now() });
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
+export async function loadTemplate() {
+  try {
+    const t = await idbGet(TEMPLATE_KEY);
+    if (!t) return null;
+    return { name: t.name, bytes: new Uint8Array(t.buffer), savedAt: t.savedAt };
+  } catch {
+    return null;
+  }
+}
+export async function clearTemplate() {
+  try { await idbDel(TEMPLATE_KEY); } catch { /* ignore */ }
 }
 
 // ---------- session object ----------

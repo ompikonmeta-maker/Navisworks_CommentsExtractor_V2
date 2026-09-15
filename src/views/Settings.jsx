@@ -4,6 +4,7 @@ import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
 import { Icon, Card, Button, SegmentedButtons, DisciplineBadge } from '../components/ui.jsx';
 import DetectionEditor from '../components/DetectionEditor.jsx';
+import TemplateExportPanel from '../components/TemplateExportPanel.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
 
@@ -21,7 +22,7 @@ const SECTIONS = [
   { id: 'appearance', label: 'Appearance', icon: 'dark_mode' },
   { id: 'labels', label: 'Labels', icon: 'table_view' },
   { id: 'detection', label: 'Detection', icon: 'search' },
-  { id: 'export', label: 'Export', icon: 'download', soon: true },
+  { id: 'export', label: 'Export', icon: 'download' },
   { id: 'about', label: 'About', icon: 'info' },
 ];
 
@@ -170,12 +171,8 @@ export default function Settings() {
 
         {section === 'export' && (
           <Card className="p-6">
-            <SectionTitle icon="download" title="Export" sub="Choose columns, sheets and images for the Excel export." />
-            <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <Icon name="download" className="text-[40px] text-outline" />
-              <div className="font-medium">Advanced export — coming next</div>
-              <p className="max-w-sm text-sm text-on-surface-variant">This is where the column / sheet / image picker will live. For now, export from the Overview or Viewpoints toolbar.</p>
-            </div>
+            <SectionTitle icon="download" title="Export" sub="Isi template Excel-mu dari data comment — log sheet + sheet detail per Tag View, dengan foto before/after. Style & logo template dipertahankan persis." />
+            <TemplateExportPanel />
           </Card>
         )}
 

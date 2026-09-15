@@ -351,6 +351,31 @@ export default function DetailPanel({ record, onClose }) {
                 className="mt-1 w-full resize-y rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
             </label>
+
+            {/* Extra attributes for the template export (log-sheet columns the
+                app doesn't originate). Blank falls back to a default at export. */}
+            <details className="rounded-control border border-outline-variant bg-surface-container/40">
+              <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-on-surface-variant">Log-sheet fields (template export)</summary>
+              <div className="space-y-3 px-3 pb-3">
+                {[
+                  ['evidence', 'Evidence / Data Required', '1. 3D snapshot\n2. Document', true],
+                  ['applicability', 'Comment Applicability', 'OFA', false],
+                  ['actionBy', 'Action By', '', false],
+                  ['remarks', 'Remarks', '', true],
+                ].map(([key, label, ph, area]) => (
+                  <label key={key} className="block text-xs font-medium text-on-surface-variant">
+                    {label}
+                    {area ? (
+                      <textarea rows={2} value={rec.extra?.[key] ?? ''} onChange={(e) => set({ extra: { ...(rec.extra || {}), [key]: e.target.value } })} placeholder={ph}
+                        className="mt-1 w-full resize-y rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                    ) : (
+                      <input value={rec.extra?.[key] ?? ''} onChange={(e) => set({ extra: { ...(rec.extra || {}), [key]: e.target.value } })} placeholder={ph}
+                        className="mt-1 w-full rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </details>
           </div>
         </>
       )}

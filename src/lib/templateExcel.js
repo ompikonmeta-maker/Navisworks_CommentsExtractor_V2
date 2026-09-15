@@ -1,0 +1,602 @@
+// =====================================================================
+// Template-driven Excel export (zip/XML surgery — NOT ExcelJS).
+//
+// A user-supplied .xlsx is a ZIP of XML. We open it, edit ONLY the parts we
+// need, and leave everything else (styles, drawings, embedded logos, media)
+// byte-for-byte — so the template's look is preserved exactly (ExcelJS
+// re-writes the whole book and mangles existing images, which is why we don't
+// use it here).
+//
+// Two zones in the template:
+//  • The LOG sheet — a repeating table. One record → one row. Columns are
+//    located by a data-driven mapping (by header text / defined name / fixed
+//    column), so a future layout change is a mapping edit, not a code change.
+//  • DETAIL sheets — one page per item, driven by VLOOKUP(N2) into the log
+//    sheet. We only set N2 and drop the before/after photos into the marked
+//    image cells; the formulas fill the rest. Extra items clone a pattern
+//    sheet verbatim. Optional "auto-repair" rewrites the detail VLOOKUP column
+//    indexes to header-matching MATCH() so the sheet self-adjusts if columns
+//    move.
+// =====================================================================
+
+async function getJSZip() {
+  const mod = await import('jszip');
+  return mod.default || mod;
+}
+
+// ---- small helpers ---------------------------------------------------
+const xmlEsc = (s) =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const colToLetter = (n) => {
+  let s = '';
+  let x = n;
+  while (x > 0) {
+    const m = (x - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    x = Math.floor((x - 1) / 26);
+  }
+  return s;
+};
+const letterToCol = (l) => {
+  let n = 0;
+  for (const ch of l) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+};
+const EMU = 9525;
+
+// Excel serial date (1900 system). Accepts Date | ISO string | serial number.
+function toSerial(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return v;
+  const d = v instanceof Date ? v : new Date(v);
+  if (Number.isNaN(d.getTime())) return null;
+  const utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.floor((utc - Date.UTC(1899, 11, 30)) / 86400000);
+}
+
+// Resolve a sheet name → worksheet part path (xl/worksheets/sheetN.xml).
+async function sheetPathMap(zip) {
+  const wb = await zip.file('xl/workbook.xml').async('string');
+  const rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+  const relMap = {};
+  for (const m of rels.matchAll(/Id="([^"]+)"[^>]*Target="([^"]+)"/g)) relMap[m[1]] = m[2];
+  const out = {}; // name → { path, rid, sheetId }
+  for (const m of wb.matchAll(/<sheet[^>]*name="([^"]+)"[^>]*sheetId="(\d+)"[^>]*r:id="([^"]+)"/g)) {
+    const target = relMap[m[3]] || '';
+    out[m[1]] = { path: 'xl/' + target.replace(/^\/?xl\//, ''), rid: m[3], sheetId: +m[2] };
+  }
+  return { map: out, wb, rels, relMap };
+}
+
+// Parse a worksheet's cells (ref → { raw, s, t, inner }). Cheap, regex-based.
+function readCells(sheetXml) {
+  const cells = {};
+  for (const m of sheetXml.matchAll(/<c r="([A-Z]+\d+)"([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    cells[m[1]] = { attrs: m[2] || '', inner: m[3] || '' };
+  }
+  return cells;
+}
+
+function cellText(cell, shared) {
+  if (!cell) return '';
+  const t = /t="([^"]+)"/.exec(cell.attrs)?.[1];
+  const v = /<v>([\s\S]*?)<\/v>/.exec(cell.inner)?.[1];
+  const is = /<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>/.exec(cell.inner)?.[1];
+  if (t === 's' && v != null) return (shared[+v] || '').trim();
+  if (is != null) return is.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+  if (v != null) return v.trim();
+  return '';
+}
+
+async function sharedStrings(zip) {
+  const f = zip.file('xl/sharedStrings.xml');
+  if (!f) return [];
+  const s = await f.async('string');
+  const out = [];
+  for (const m of s.matchAll(/<si>([\s\S]*?)<\/si>/g)) {
+    out.push([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join(''));
+  }
+  return out;
+}
+
+// Defined names → cell ref (single-cell names only).
+function definedNames(wbXml) {
+  const out = {};
+  for (const m of wbXml.matchAll(/<definedName name="([^"]+)"[^>]*>([^<]+)<\/definedName>/g)) {
+    const ref = m[2];
+    const cm = /'?([^'!]+)'?!\$?([A-Z]+)\$?(\d+)/.exec(ref);
+    if (cm) out[m[1]] = { sheet: cm[1], cell: `${cm[2]}${cm[3]}` };
+  }
+  return out;
+}
+
+// =====================================================================
+// Default mapping for the shipped "3D Model Log Sheet" template.
+// =====================================================================
+export const DEFAULT_TEMPLATE_MAPPING = {
+  logSheet: {
+    name: '3D Model Log Sheet',
+    headerRow: 9,
+    dataStartRow: 10,
+    itemColumn: { by: 'column', value: 'A' },
+    fields: [
+      { field: 'viewpoint', by: 'header', value: 'TAG VIEW NO.' },
+      { field: 'commentDate', by: 'header', value: 'DATE', format: 'date' },
+      { field: '@unit', by: 'header', value: 'UNIT' },
+      { field: '@phase', by: 'header', value: 'PHASE', format: 'number' },
+      { field: 'commentText', by: 'header', value: 'COMMENT RECORD' },
+      { field: 'x.evidence', by: 'header', value: 'Evidence / Data Required' },
+      { field: 'x.applicability', by: 'header', value: 'Comment Applicability' },
+      { field: 'commenter', by: 'header', value: 'COMMENT Originator' },
+      { field: 'discipline', by: 'header', value: 'CTR DISCIPLINE RESP' },
+      { field: 'resolution', by: 'header', value: 'RESOLUTION' },
+      { field: 'x.actionBy', by: 'header', value: 'ACTION BY' },
+      { field: 'status', by: 'header', value: 'CTR DISCIPLINE STATUS', map: { Open: 'OPEN', 'In Review': 'IN REVIEW', Closed: 'CLOSED' } },
+      { field: 'closedAt', by: 'header', value: 'CTR DISCIPLINE CLOSING DATE', format: 'date' },
+      { field: 'x.remarks', by: 'header', value: 'REMARKS' },
+    ],
+  },
+  detail: {
+    patternSheet: '1',
+    itemNumber: { by: 'cell', value: 'N2', name: 'ph_item' },
+    imageBefore: { by: 'cell', value: 'C25', name: 'ph_before' },
+    imageAfter: { by: 'cell', value: 'I25', name: 'ph_after' },
+    vlookupAutoRepair: false,
+  },
+  // Export constants (filled in the dialog); mapped via @-prefixed fields.
+  constants: { unit: '', phase: '' },
+  extraDefaults: { evidence: '1. 3D snapshot\n2. Document', applicability: 'OFA', actionBy: '', remarks: '' },
+};
+
+// ---- locator resolution ---------------------------------------------
+// Returns a column NUMBER (1-based) for log fields, or a cell ref for scalars.
+function resolveColumn(loc, ctx) {
+  if (!loc) return null;
+  if (loc.by === 'header') {
+    const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[:：]\s*$/, '').trim();
+    const want = norm(loc.value);
+    for (const [colLetter, text] of Object.entries(ctx.headers)) {
+      if (norm(text) === want) return letterToCol(colLetter);
+    }
+    return null;
+  }
+  if (loc.by === 'name') {
+    const dn = ctx.defined[loc.value];
+    if (dn) return letterToCol(/([A-Z]+)\d+/.exec(dn.cell)[1]);
+    return null;
+  }
+  if (loc.by === 'column') return letterToCol(String(loc.value).toUpperCase());
+  return null;
+}
+function resolveCell(loc, ctx) {
+  if (!loc) return null;
+  if (loc.by === 'name' && ctx.defined[loc.value]) return ctx.defined[loc.value].cell;
+  if (loc.by === 'cell') return String(loc.value).toUpperCase();
+  return null;
+}
+
+// =====================================================================
+// Inspect a template → structure for the mapping editor.
+// =====================================================================
+export async function inspectTemplate(bytes) {
+  const JSZip = await getJSZip();
+  const zip = await JSZip.loadAsync(bytes);
+  const { map, wb } = await sheetPathMap(zip);
+  const shared = await sharedStrings(zip);
+  const defined = definedNames(wb);
+  const logName = DEFAULT_TEMPLATE_MAPPING.logSheet.name;
+  const logInfo = map[logName];
+  const headers = {};
+  let detailSheets = [];
+  if (logInfo) {
+    const xml = await zip.file(logInfo.path).async('string');
+    const cells = readCells(xml);
+    const hr = DEFAULT_TEMPLATE_MAPPING.logSheet.headerRow;
+    for (const [ref, c] of Object.entries(cells)) {
+      const m = /^([A-Z]+)(\d+)$/.exec(ref);
+      if (m && +m[2] === hr) {
+        const t = cellText(c, shared);
+        if (t) headers[m[1]] = t;
+      }
+    }
+  }
+  // Detail sheets = numeric-named sheets (item pages).
+  detailSheets = Object.keys(map).filter((n) => /^\d+$/.test(n)).sort((a, b) => +a - +b);
+  return { sheetNames: Object.keys(map), logSheet: logName, headers, detailSheets, definedNames: Object.keys(defined) };
+}
+
+// Resolve the full mapping against a template → preview rows.
+export function resolveMapping(info, mapping) {
+  const ctx = { headers: info.headers, defined: {} };
+  // defined names available as a set → map name→approx (not needed for preview col)
+  const rows = [];
+  const itemCol = resolveColumn(mapping.logSheet.itemColumn, ctx);
+  rows.push({ field: 'ITEM (link)', col: itemCol ? colToLetter(itemCol) : null });
+  for (const f of mapping.logSheet.fields) {
+    const col = resolveColumn(f, ctx);
+    rows.push({ field: f.field, col: col ? colToLetter(col) : null });
+  }
+  return { itemCol, rows };
+}
+
+// ---- value encoding for a log cell -----------------------------------
+function encodeCell(ref, styleAttr, field, rec, constants, extraDefaults) {
+  const s = styleAttr ? ` s="${styleAttr}"` : '';
+  let raw = '';
+  let fmt = field.format;
+  if (field.field.startsWith('@')) raw = constants[field.field.slice(1)] ?? '';
+  else if (field.field.startsWith('x.')) {
+    const k = field.field.slice(2);
+    raw = rec.extra?.[k] ?? extraDefaults?.[k] ?? '';
+  } else raw = rec[field.field] ?? '';
+  if (field.map && raw in field.map) raw = field.map[raw];
+  if (raw === '' || raw == null) return `<c r="${ref}"${s}/>`;
+  if (fmt === 'date') {
+    const ser = toSerial(raw);
+    if (ser != null) return `<c r="${ref}"${s}><v>${ser}</v></c>`;
+    return `<c r="${ref}"${s}/>`;
+  }
+  if (fmt === 'number' || (typeof raw === 'number')) {
+    const num = typeof raw === 'number' ? raw : parseFloat(String(raw).replace('%', '')) / (String(raw).includes('%') ? 100 : 1);
+    if (!Number.isNaN(num)) return `<c r="${ref}"${s}><v>${num}</v></c>`;
+  }
+  return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(raw)}</t></is></c>`;
+}
+
+// Build one log data row from a style-template row's per-column styles.
+function buildRow(rowNum, rec, itemNo, colStyles, fieldByCol, itemCol, constants, extraDefaults) {
+  const cols = new Set([...Object.keys(colStyles).map(Number), ...fieldByCol.keys()]);
+  if (itemCol) cols.add(itemCol);
+  const ordered = [...cols].sort((a, b) => a - b);
+  let cells = '';
+  for (const c of ordered) {
+    const ref = `${colToLetter(c)}${rowNum}`;
+    const st = colStyles[c];
+    if (c === itemCol) {
+      cells += `<c r="${ref}"${st ? ` s="${st}"` : ''} t="inlineStr"><is><t>${itemNo}</t></is></c>`;
+    } else if (fieldByCol.has(c)) {
+      cells += encodeCell(ref, st, fieldByCol.get(c), rec, constants, extraDefaults);
+    } else if (st) {
+      cells += `<c r="${ref}" s="${st}"/>`;
+    }
+  }
+  return `<row r="${rowNum}">${cells}</row>`;
+}
+
+// Parse dataURL → { ext, base64, w, h } using PNG/JPEG header for size.
+function parseImg(dataUrl) {
+  const m = /^data:image\/(png|jpe?g);base64,(.+)$/i.exec(dataUrl || '');
+  if (!m) return null;
+  const ext = /jpe?g/i.test(m[1]) ? 'jpeg' : 'png';
+  const bin = atobBytes(m[2]);
+  let w = 300;
+  let h = 220;
+  if (ext === 'png' && bin.length > 24) {
+    w = (bin[16] << 24) | (bin[17] << 16) | (bin[18] << 8) | bin[19];
+    h = (bin[20] << 24) | (bin[21] << 16) | (bin[22] << 8) | bin[23];
+  } else if (ext === 'jpeg') {
+    const d = jpegSize(bin);
+    if (d) { w = d.w; h = d.h; }
+  }
+  return { ext, base64: m[2], w, h };
+}
+function atobBytes(b64) {
+  if (typeof atob === 'function') {
+    const s = atob(b64);
+    const a = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i += 1) a[i] = s.charCodeAt(i);
+    return a;
+  }
+  return Uint8Array.from(Buffer.from(b64, 'base64'));
+}
+function jpegSize(b) {
+  let i = 2;
+  while (i < b.length) {
+    if (b[i] !== 0xff) { i += 1; continue; }
+    const marker = b[i + 1];
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { h: (b[i + 5] << 8) | b[i + 6], w: (b[i + 7] << 8) | b[i + 8] };
+    }
+    i += 2 + ((b[i + 2] << 8) | b[i + 3]);
+  }
+  return null;
+}
+
+// one-cell anchored picture XML (no stretch), sized to fit `maxPx`.
+function picAnchor(colIdx0, rowIdx0, img, rid, id, maxPx = 330) {
+  const s = Math.min(1, maxPx / Math.max(img.w, img.h));
+  const cx = Math.round(img.w * s * EMU);
+  const cy = Math.round(img.h * s * EMU);
+  return (
+    `<xdr:oneCellAnchor><xdr:from><xdr:col>${colIdx0}</xdr:col><xdr:colOff>19050</xdr:colOff>` +
+    `<xdr:row>${rowIdx0}</xdr:row><xdr:rowOff>19050</xdr:rowOff></xdr:from>` +
+    `<xdr:ext cx="${cx}" cy="${cy}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="ba${id}"/>` +
+    `<xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill>` +
+    `<a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${rid}"/>` +
+    `<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>` +
+    `<xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`
+  );
+}
+
+// =====================================================================
+// Fill the template. Returns Uint8Array of the produced .xlsx.
+// =====================================================================
+export async function fillTemplate(bytes, records, mapping, constants = {}, extraDefaults = {}) {
+  const JSZip = await getJSZip();
+  const zip = await JSZip.loadAsync(bytes);
+  const { map, wb, rels } = await sheetPathMap(zip);
+  const shared = await sharedStrings(zip);
+  const wbXml = wb;
+  const defined = definedNames(wbXml);
+
+  const logCfg = mapping.logSheet;
+  const logInfo = map[logCfg.name];
+  if (!logInfo) throw new Error(`Sheet "${logCfg.name}" not found in template.`);
+
+  // --- resolve log columns ---
+  let logXml = await zip.file(logInfo.path).async('string');
+  const cells = readCells(logXml);
+  const headers = {};
+  for (const [ref, c] of Object.entries(cells)) {
+    const m = /^([A-Z]+)(\d+)$/.exec(ref);
+    if (m && +m[2] === logCfg.headerRow) { const t = cellText(c, shared); if (t) headers[m[1]] = t; }
+  }
+  const ctx = { headers, defined };
+  const itemCol = resolveColumn(logCfg.itemColumn, ctx);
+  const fieldByCol = new Map();
+  const headerTextByCol = {}; // col# → header text (for auto-repair)
+  for (const [letter, text] of Object.entries(headers)) headerTextByCol[letterToCol(letter)] = text;
+  for (const f of logCfg.fields) {
+    const col = resolveColumn(f, ctx);
+    if (col) fieldByCol.set(col, f);
+  }
+
+  // --- style-template from the first data row ---
+  const colStyles = {};
+  for (const [ref, c] of Object.entries(cells)) {
+    const m = /^([A-Z]+)(\d+)$/.exec(ref);
+    if (m && +m[2] === logCfg.dataStartRow) {
+      const st = /s="(\d+)"/.exec(c.attrs)?.[1];
+      if (st != null) colStyles[letterToCol(m[1])] = st;
+    }
+  }
+
+  // --- rebuild sheetData rows >= dataStartRow ---
+  const start = logCfg.dataStartRow;
+  const newRows = records.map((rec, i) => buildRow(start + i, rec, i + 1, colStyles, fieldByCol, itemCol, constants, extraDefaults)).join('');
+  logXml = logXml.replace(/<sheetData>([\s\S]*?)<\/sheetData>/, (whole, inner) => {
+    const kept = [...inner.matchAll(/<row r="(\d+)"[\s\S]*?<\/row>|<row r="(\d+)"[^>]*\/>/g)]
+      .filter((m) => +(m[1] || m[2]) < start)
+      .map((m) => m[0])
+      .join('');
+    return `<sheetData>${kept}${newRows}</sheetData>`;
+  });
+  // --- log hyperlinks: ITEM column → detail sheet ---
+  if (itemCol) {
+    const hl = records
+      .map((_, i) => `<hyperlink ref="${colToLetter(itemCol)}${start + i}" location="'${i + 1}'!A1" display="${i + 1}"/>`)
+      .join('');
+    if (/<hyperlinks>[\s\S]*?<\/hyperlinks>/.test(logXml)) logXml = logXml.replace(/<hyperlinks>[\s\S]*?<\/hyperlinks>/, `<hyperlinks>${hl}</hyperlinks>`);
+    else logXml = logXml.replace(/(<\/sheetData>)/, `$1<hyperlinks>${hl}</hyperlinks>`);
+  }
+  // --- dimension refresh ---
+  const lastRow = start + records.length - 1;
+  logXml = logXml.replace(/<dimension ref="([A-Z]+)\d+:([A-Z]+)\d+"\/>/, (m, a, b) => `<dimension ref="${a}1:${b}${Math.max(lastRow, logCfg.headerRow)}"/>`);
+  zip.file(logInfo.path, logXml);
+
+  // --- detail sheets: ensure one per record, set N2 + images ---
+  const existingDetails = Object.keys(map).filter((n) => /^\d+$/.test(n)).sort((a, b) => +a - +b);
+  const patternName = mapping.detail.patternSheet || existingDetails[0] || '1';
+  const patternInfo = map[patternName];
+  const stats = { logRows: records.length, detailSheets: 0, images: 0, cloned: 0 };
+
+  let mediaN = 1000;
+  for (let i = 0; i < records.length; i += 1) {
+    const itemNo = i + 1;
+    const name = String(itemNo);
+    let info = map[name];
+    if (!info) {
+      // clone the pattern verbatim
+      info = await cloneDetailSheet(zip, map, wbXml, rels, patternInfo, name, defined);
+      map[name] = info;
+      stats.cloned += 1;
+    }
+    stats.detailSheets += 1;
+    // set N2 (item number)
+    let dXml = await zip.file(info.path).async('string');
+    const n2 = resolveCell(mapping.detail.itemNumber, ctx) || 'N2';
+    dXml = setCellNumber(dXml, n2, itemNo);
+    // clear image placeholder text + collect image cells
+    const beforeCell = resolveCell(mapping.detail.imageBefore, ctx) || 'C25';
+    const afterCell = resolveCell(mapping.detail.imageAfter, ctx) || 'I25';
+    dXml = clearCellText(dXml, beforeCell);
+    dXml = clearCellText(dXml, afterCell);
+    // auto-repair VLOOKUP → MATCH by header text
+    if (mapping.detail.vlookupAutoRepair) dXml = autoRepairVlookup(dXml, logCfg.name, headerTextByCol, logCfg.headerRow);
+    zip.file(info.path, dXml);
+
+    // inject before/after images (append to this sheet's drawing)
+    const rec = records[i];
+    const imgs = [];
+    const b = parseImg(rec.imageData);
+    const a = parseImg(rec.afterImageData);
+    if (b) imgs.push({ img: b, cell: beforeCell });
+    if (a) imgs.push({ img: a, cell: afterCell });
+    if (imgs.length) {
+      for (const im of imgs) { mediaN += 1; im.mediaName = `imageT${mediaN}.${im.img.ext}`; }
+      await injectImages(zip, info, imgs);
+      stats.images += imgs.length;
+    }
+  }
+
+  // remove calcChain (Excel rebuilds; avoids stale refs after edits)
+  if (zip.file('xl/calcChain.xml')) {
+    zip.remove('xl/calcChain.xml');
+    let ct = await zip.file('[Content_Types].xml').async('string');
+    ct = ct.replace(/<Override PartName="\/xl\/calcChain\.xml"[^>]*\/>/, '');
+    zip.file('[Content_Types].xml', ct);
+  }
+  // force full recalc so VLOOKUP/formatting recompute on open
+  let wb2 = await zip.file('xl/workbook.xml').async('string');
+  if (/<calcPr /.test(wb2)) wb2 = wb2.replace(/<calcPr [^>]*\/>/, '<calcPr calcId="0" fullCalcOnLoad="1"/>');
+  zip.file('xl/workbook.xml', wb2);
+
+  const out = await zip.generateAsync({ type: typeof window === 'undefined' ? 'nodebuffer' : 'uint8array' });
+  return { bytes: out, stats };
+}
+
+// ---- cell mutations --------------------------------------------------
+function setCellNumber(xml, ref, num) {
+  const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+  if (re.test(xml)) {
+    return xml.replace(re, (m, attrs) => {
+      const s = /s="\d+"/.exec(attrs)?.[0] || '';
+      return `<c r="${ref}" ${s}><v>${num}</v></c>`.replace('  ', ' ');
+    });
+  }
+  return xml; // ref not present → leave (formulas may still reference)
+}
+function clearCellText(xml, ref) {
+  const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+  return xml.replace(re, (m, attrs) => {
+    const s = /s="\d+"/.exec(attrs)?.[0] || '';
+    return `<c r="${ref}" ${s}/>`.replace('  ', ' ');
+  });
+}
+// Rewrite VLOOKUP(...,'Log'!A:X, <n>, ...) → MATCH by the header text at col n.
+function autoRepairVlookup(xml, logName, headerTextByCol, headerRow) {
+  const esc = logName.replace(/'/g, "''");
+  const re = new RegExp(`(VLOOKUP\\([^,]+,\\s*'?${esc.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}'?![^,]+,\\s*)(\\d+)(\\s*,)`, 'g');
+  return xml.replace(re, (whole, pre, idx, post) => {
+    const text = headerTextByCol[+idx];
+    if (!text) return whole;
+    const match = `MATCH("${text.replace(/"/g, '""')}",'${esc}'!$A$${headerRow}:$XFD$${headerRow},0)`;
+    return `${pre}${match}${post}`;
+  });
+}
+
+// ---- detail-sheet clone (verbatim) ----------------------------------
+async function cloneDetailSheet(zip, map, wbXml, wbRels, patternInfo, newName, defined) {
+  // new file names
+  const usedSheet = [...wbXml.matchAll(/worksheets\/sheet(\d+)\.xml/g)].map((m) => +m[1]);
+  const nextSheet = Math.max(0, ...usedSheet) + 1 + map.__clones__ || 0;
+  const sheetNo = (Math.max(0, ...usedSheet) + 1) + (map.__cloneCount__ = (map.__cloneCount__ || 0) + 1) - 1;
+  const newSheetFile = `xl/worksheets/sheet${sheetNo}.xml`;
+  // copy sheet xml, patch N2 later by caller
+  let sx = await zip.file(patternInfo.path).async('string');
+  zip.file(newSheetFile, sx);
+
+  // sheet rels (drawing + hyperlink + printer): clone drawing too
+  const patRelsPath = patternInfo.path.replace(/worksheets\/(sheet\d+)\.xml/, 'worksheets/_rels/$1.xml.rels');
+  let newDrawingNo = null;
+  let relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+  const patRelsFile = zip.file(patRelsPath);
+  if (patRelsFile) {
+    const pr = await patRelsFile.async('string');
+    for (const m of pr.matchAll(/<Relationship Id="([^"]+)" Type="([^"]+)" Target="([^"]+)"([^>]*)\/>/g)) {
+      const [, id, type, target, extra] = m;
+      if (/\/drawing$/.test(type)) {
+        // clone the drawing part
+        const drawSrc = 'xl/' + target.replace(/^\.\.\//, '').replace(/^\/?xl\//, '');
+        const drNoMatch = /drawing(\d+)\.xml/.exec(target);
+        const allDraw = Object.keys(zip.files).map((f) => /xl\/drawings\/drawing(\d+)\.xml$/.exec(f)).filter(Boolean).map((x) => +x[1]);
+        newDrawingNo = Math.max(0, ...allDraw) + 1;
+        const drXml = await zip.file(drawSrc).async('string');
+        zip.file(`xl/drawings/drawing${newDrawingNo}.xml`, drXml);
+        // clone drawing rels (same media targets)
+        const drRelsSrc = drawSrc.replace(/drawings\/(drawing\d+)\.xml/, 'drawings/_rels/$1.xml.rels');
+        if (zip.file(drRelsSrc)) {
+          const drRels = await zip.file(drRelsSrc).async('string');
+          zip.file(`xl/drawings/_rels/drawing${newDrawingNo}.xml.rels`, drRels);
+        }
+        relsXml += `<Relationship Id="${id}" Type="${type}" Target="../drawings/drawing${newDrawingNo}.xml"/>`;
+      } else if (/\/printerSettings$/.test(type)) {
+        // skip printer settings (optional) to avoid dangling parts
+      } else {
+        relsXml += `<Relationship Id="${id}" Type="${type}" Target="${target}"${extra ? '' : ''}/>`;
+      }
+    }
+  }
+  relsXml += '</Relationships>';
+  const newRelsFile = newSheetFile.replace(/worksheets\/(sheet\d+)\.xml/, 'worksheets/_rels/$1.xml.rels');
+  zip.file(newRelsFile, relsXml);
+
+  // register in [Content_Types]
+  let ct = await zip.file('[Content_Types].xml').async('string');
+  if (!new RegExp(`/xl/worksheets/sheet${sheetNo}\\.xml"`).test(ct)) {
+    ct = ct.replace('</Types>', `<Override PartName="/${newSheetFile}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
+  }
+  if (newDrawingNo && !new RegExp(`/xl/drawings/drawing${newDrawingNo}\\.xml"`).test(ct)) {
+    ct = ct.replace('</Types>', `<Override PartName="/xl/drawings/drawing${newDrawingNo}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+  }
+  zip.file('[Content_Types].xml', ct);
+
+  // register in workbook rels + workbook.xml <sheets>
+  let rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+  const usedRid = [...rels.matchAll(/Id="rId(\d+)"/g)].map((m) => +m[1]);
+  const newRid = `rId${Math.max(0, ...usedRid) + 1}`;
+  rels = rels.replace('</Relationships>', `<Relationship Id="${newRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${sheetNo}.xml"/></Relationships>`);
+  zip.file('xl/_rels/workbook.xml.rels', rels);
+
+  let wx = await zip.file('xl/workbook.xml').async('string');
+  const usedSid = [...wx.matchAll(/sheetId="(\d+)"/g)].map((m) => +m[1]);
+  const newSid = Math.max(0, ...usedSid) + 1;
+  wx = wx.replace(/(<\/sheets>)/, `<sheet name="${newName}" sheetId="${newSid}" r:id="${newRid}"/>$1`);
+  zip.file('xl/workbook.xml', wx);
+
+  return { path: newSheetFile, rid: newRid, sheetId: newSid };
+}
+
+// ---- inject before/after images into a detail sheet's drawing --------
+async function injectImages(zip, sheetInfo, imgs) {
+  const relsPath = sheetInfo.path.replace(/worksheets\/(sheet\d+)\.xml/, 'worksheets/_rels/$1.xml.rels');
+  let sheetRels = zip.file(relsPath) ? await zip.file(relsPath).async('string') : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  // find (or create) this sheet's drawing part
+  let drawingNo;
+  const drRel = /Target="\.\.\/drawings\/drawing(\d+)\.xml"/.exec(sheetRels);
+  if (drRel) drawingNo = +drRel[1];
+  if (!drawingNo) {
+    const allDraw = Object.keys(zip.files).map((f) => /xl\/drawings\/drawing(\d+)\.xml$/.exec(f)).filter(Boolean).map((x) => +x[1]);
+    drawingNo = Math.max(0, ...allDraw) + 1;
+    zip.file(`xl/drawings/drawing${drawingNo}.xml`, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"></xdr:wsDr>');
+    zip.file(`xl/drawings/_rels/drawing${drawingNo}.xml.rels`, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+    // attach to sheet
+    const usedRid = [...sheetRels.matchAll(/Id="rId(\d+)"/g)].map((m) => +m[1]);
+    const rid = `rId${Math.max(0, ...usedRid) + 1}`;
+    sheetRels = sheetRels.replace('</Relationships>', `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing${drawingNo}.xml"/></Relationships>`);
+    zip.file(relsPath, sheetRels);
+    let sx = await zip.file(sheetInfo.path).async('string');
+    if (!/xmlns:r=/.test(sx)) sx = sx.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+    if (!/<drawing /.test(sx)) sx = sx.replace('</worksheet>', `<drawing r:id="${rid}"/></worksheet>`);
+    zip.file(sheetInfo.path, sx);
+  }
+  const drPath = `xl/drawings/drawing${drawingNo}.xml`;
+  const drRelsPath = `xl/drawings/_rels/drawing${drawingNo}.xml.rels`;
+  let dr = await zip.file(drPath).async('string');
+  let drRels = zip.file(drRelsPath) ? await zip.file(drRelsPath).async('string') : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  const usedRid = [...drRels.matchAll(/Id="rId(\d+)"/g)].map((m) => +m[1]);
+  let rid = Math.max(0, ...usedRid);
+  const usedPicId = [...dr.matchAll(/cNvPr id="(\d+)"/g)].map((m) => +m[1]);
+  let picId = Math.max(0, ...usedPicId, 1000);
+  let anchors = '';
+  let relAdds = '';
+  for (const im of imgs) {
+    rid += 1; picId += 1;
+    zip.file(`xl/media/${im.mediaName}`, im.img.base64, { base64: true });
+    relAdds += `<Relationship Id="rId${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${im.mediaName}"/>`;
+    const m = /^([A-Z]+)(\d+)$/.exec(im.cell);
+    const col0 = letterToCol(m[1]) - 1;
+    const row0 = +m[2] - 1;
+    anchors += picAnchor(col0, row0, im.img, `rId${rid}`, picId);
+  }
+  dr = dr.replace('</xdr:wsDr>', `${anchors}</xdr:wsDr>`);
+  drRels = drRels.replace('</Relationships>', `${relAdds}</Relationships>`);
+  zip.file(drPath, dr);
+  zip.file(drRelsPath, drRels);
+  // ensure content-types has image defaults + this drawing override
+  let ct = await zip.file('[Content_Types].xml').async('string');
+  if (!/Extension="png"/.test(ct)) ct = ct.replace('</Types>', '<Default Extension="png" ContentType="image/png"/></Types>');
+  if (!/Extension="jpeg"/.test(ct)) ct = ct.replace('</Types>', '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>');
+  if (!new RegExp(`/xl/drawings/drawing${drawingNo}\\.xml"`).test(ct)) ct = ct.replace('</Types>', `<Override PartName="/xl/drawings/drawing${drawingNo}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+  zip.file('[Content_Types].xml', ct);
+}
