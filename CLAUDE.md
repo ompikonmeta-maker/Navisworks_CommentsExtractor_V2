@@ -197,6 +197,19 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   `excel.js`. If you add or rename a record field, update **both**, plus any filters in
   `views/Comments.jsx`.
 - `vite.config.js` sets `base: './'` for subpath/static hosting (e.g. GitHub Pages).
+- **Follow the MD3 reference** (`docs/material-design-3-project/`) for every UI addition —
+  dropdowns (the `Select`/`.dd` component), segmented controls, buttons, tooltips (`InfoTip`),
+  shape/motion tokens. Don't hand-roll a control when a shared primitive exists.
+- **Keep buttons calm.** When a screen shows several controls in a row or a dense table, at most
+  one carries strong emphasis (filled/tonal); the rest are text/quiet or reveal on hover, and
+  fields in dense editors sit borderless until hover/focus (see the column-mapping and
+  custom-fields editors). Avoid a wall of boxed/outlined controls.
+- Comment **statuses** are configurable (`lib/status.js` + `settings.statuses`): an ordered
+  list of `{ label, color, role }` with a mandatory `open` (first) and `done` (last, stamps
+  `closedAt`) plus editable middles. Read colours/labels from the registry (never the old fixed
+  `status-open/review/closed` tokens) so a status looks the same in badges, drawer buttons,
+  charts and the Excel Overview. Custom (`cf_`) fields are typed — `text`/`multiline`/`select`/
+  `checkbox` via `attrType`; checkbox values are arrays joined by `joinAttrValue`.
 
 ## Reference material (not shipped in the build)
 

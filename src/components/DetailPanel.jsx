@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
-import { attrFields } from '../lib/templateExcel.js';
+import { attrFields, attrType } from '../lib/templateExcel.js';
 import { chipStyle, doneLabel as doneLabelOf } from '../lib/status.js';
 import { Icon, Select, StatusBadge, DisciplineBadge } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
@@ -386,16 +386,42 @@ export default function DetailPanel({ record, onClose }) {
                 <div className="space-y-3 px-3 pb-3">
                   {exportAttrs.map((a) => {
                     const key = a.source.key;
-                    const val = rec.extra?.[key] ?? '';
+                    const type = attrType(a);
+                    const val = rec.extra?.[key];
+                    const setExtra = (v) => set({ extra: { ...(rec.extra || {}), [key]: v } });
+                    const inputCls = 'mt-1 w-full rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+                    if (type === 'checkbox') {
+                      const arr = Array.isArray(val) ? val : [];
+                      const toggle = (opt) => setExtra(arr.includes(opt) ? arr.filter((x) => x !== opt) : [...arr, opt]);
+                      return (
+                        <div key={a.id} className="text-xs font-medium text-on-surface-variant">
+                          {a.label}
+                          <div className="mt-1 flex flex-col gap-1.5">
+                            {(a.options || []).length ? a.options.map((opt) => (
+                              <label key={opt} className="flex items-center gap-2 font-normal text-on-surface">
+                                <input type="checkbox" checked={arr.includes(opt)} onChange={() => toggle(opt)} /> {opt}
+                              </label>
+                            )) : <span className="font-normal italic">No options set.</span>}
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (type === 'select') {
+                      return (
+                        <div key={a.id} className="text-xs font-medium text-on-surface-variant">
+                          {a.label}
+                          <Select className="mt-1 w-full" aria-label={a.label} value={val ?? ''} onChange={setExtra}
+                            options={[{ value: '', label: '— none —' }, ...(a.options || []).map((o) => ({ value: o, label: o }))]} />
+                        </div>
+                      );
+                    }
                     return (
                       <label key={a.id} className="block text-xs font-medium text-on-surface-variant">
                         {a.label}
-                        {a.multiline ? (
-                          <textarea rows={2} value={val} onChange={(e) => set({ extra: { ...(rec.extra || {}), [key]: e.target.value } })} placeholder={a.default || ''}
-                            className="mt-1 w-full resize-y rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                        {type === 'multiline' ? (
+                          <textarea rows={2} value={val ?? ''} onChange={(e) => setExtra(e.target.value)} placeholder={a.default || ''} className={`${inputCls} resize-y`} />
                         ) : (
-                          <input value={val} onChange={(e) => set({ extra: { ...(rec.extra || {}), [key]: e.target.value } })} placeholder={a.default || ''}
-                            className="mt-1 w-full rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                          <input value={val ?? ''} onChange={(e) => setExtra(e.target.value)} placeholder={a.default || ''} className={inputCls} />
                         )}
                       </label>
                     );

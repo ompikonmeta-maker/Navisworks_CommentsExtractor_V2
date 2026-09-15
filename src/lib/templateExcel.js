@@ -199,6 +199,17 @@ export function migrateMapping(m) {
   return { ...rest, logSheet: { ...m.logSheet, fields } };
 }
 
+// A custom field's input type. Falls back to the old `multiline` flag so
+// sessions saved before typed fields keep working.
+export const attrType = (f) => f.ftype || (f.multiline ? 'multiline' : 'text');
+// Render a stored custom value for a cell: checkbox fields hold an array, which
+// joins either as "A, B" or as a numbered list down the cell.
+export function joinAttrValue(value, join) {
+  if (!Array.isArray(value)) return value;
+  if (!value.length) return '';
+  return join === 'list' ? value.map((v, i) => `${i + 1}. ${v}`).join('\n') : value.join(', ');
+}
+
 // The attribute registry = the attr-kind field rows (drives the drawer).
 export function attrFields(mapping) {
   return (mapping?.logSheet?.fields || []).map(normalizeField).filter((x) => x.source.kind === 'attr');
@@ -386,8 +397,14 @@ function encodeCell(ref, styleAttr, field, rec, constants) {
   let raw = '';
   const fmt = fld.format;
   if (src.kind === 'const') raw = constants[src.key] ?? '';
-  else if (src.kind === 'attr') raw = rec.extra?.[src.key] ?? fld.default ?? '';
-  else raw = rec[src.key] ?? '';
+  else if (src.kind === 'attr') {
+    raw = rec.extra?.[src.key] ?? fld.default ?? '';
+    if (Array.isArray(raw)) raw = joinAttrValue(raw, fld.join);
+  } else raw = rec[src.key] ?? '';
+  if (typeof raw === 'string' && raw.includes('\n')) {
+    // numbered-list checkbox output → keep the in-cell line breaks visible.
+    return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(raw)}</t></is></c>`;
+  }
   if (fld.map && raw in fld.map) raw = fld.map[raw];
   if (raw === '' || raw == null) return `<c r="${ref}"${s}/>`;
   if (fmt === 'date') {
