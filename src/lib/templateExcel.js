@@ -113,6 +113,28 @@ function definedNames(wbXml) {
 // =====================================================================
 // Default mapping for the shipped "3D Model Log Sheet" template.
 // =====================================================================
+// Record fields a mapping row can bind to (source kind 'record'). Label first.
+export const RECORD_FIELDS = [
+  ['viewpoint', 'Viewpoint / Tag view'],
+  ['commentText', 'Comment text (cleaned)'],
+  ['commentRaw', 'Comment text (raw)'],
+  ['commenter', 'Commenter'],
+  ['discipline', 'Discipline'],
+  ['resolution', 'Resolution'],
+  ['status', 'Status'],
+  ['closedAt', 'Closed at'],
+  ['commentDate', 'Comment date'],
+  ['authorCode', 'Author code (Navisworks User)'],
+  ['cameraPosition', 'Camera position'],
+  ['commentId', 'Comment ID'],
+  ['imageRef', 'Image ref'],
+  ['source', 'Source file'],
+];
+
+// A field row: { id, label, source:{kind:'record'|'const'|'attr', key}, by,
+// value, format?, map?, and for attr: default?, multiline? }.
+const f = (id, label, kind, key, by, value, extra = {}) => ({ id, label, source: { kind, key }, by, value, ...extra });
+
 export const DEFAULT_TEMPLATE_MAPPING = {
   logSheet: {
     name: '3D Model Log Sheet',
@@ -120,20 +142,20 @@ export const DEFAULT_TEMPLATE_MAPPING = {
     dataStartRow: 10,
     itemColumn: { by: 'column', value: 'A' },
     fields: [
-      { field: 'viewpoint', by: 'header', value: 'TAG VIEW NO.' },
-      { field: 'commentDate', by: 'header', value: 'DATE', format: 'date' },
-      { field: '@unit', by: 'header', value: 'UNIT' },
-      { field: '@phase', by: 'header', value: 'PHASE', format: 'number' },
-      { field: 'commentText', by: 'header', value: 'COMMENT RECORD' },
-      { field: 'x.evidence', by: 'header', value: 'Evidence / Data Required' },
-      { field: 'x.applicability', by: 'header', value: 'Comment Applicability' },
-      { field: 'commenter', by: 'header', value: 'COMMENT Originator' },
-      { field: 'discipline', by: 'header', value: 'CTR DISCIPLINE RESP' },
-      { field: 'resolution', by: 'header', value: 'RESOLUTION' },
-      { field: 'x.actionBy', by: 'header', value: 'ACTION BY' },
-      { field: 'status', by: 'header', value: 'CTR DISCIPLINE STATUS', map: { Open: 'OPEN', 'In Review': 'IN REVIEW', Closed: 'CLOSED' } },
-      { field: 'closedAt', by: 'header', value: 'CTR DISCIPLINE CLOSING DATE', format: 'date' },
-      { field: 'x.remarks', by: 'header', value: 'REMARKS' },
+      f('viewpoint', 'Tag view', 'record', 'viewpoint', 'header', 'TAG VIEW NO.'),
+      f('commentDate', 'Date', 'record', 'commentDate', 'header', 'DATE', { format: 'date' }),
+      f('unit', 'Unit', 'const', 'unit', 'header', 'UNIT'),
+      f('phase', 'Phase', 'const', 'phase', 'header', 'PHASE', { format: 'number' }),
+      f('commentText', 'Comment record', 'record', 'commentText', 'header', 'COMMENT RECORD'),
+      f('evidence', 'Evidence / Data Required', 'attr', 'evidence', 'header', 'Evidence / Data Required', { default: '1. 3D snapshot\n2. Document', multiline: true }),
+      f('applicability', 'Comment Applicability', 'attr', 'applicability', 'header', 'Comment Applicability', { default: 'OFA' }),
+      f('commenter', 'Commenter', 'record', 'commenter', 'header', 'COMMENT Originator'),
+      f('discipline', 'Discipline', 'record', 'discipline', 'header', 'CTR DISCIPLINE RESP'),
+      f('resolution', 'Resolution', 'record', 'resolution', 'header', 'RESOLUTION'),
+      f('actionBy', 'Action By', 'attr', 'actionBy', 'header', 'ACTION BY'),
+      f('status', 'Status', 'record', 'status', 'header', 'CTR DISCIPLINE STATUS', { map: { Open: 'OPEN', 'In Review': 'IN REVIEW', Closed: 'CLOSED' } }),
+      f('closedAt', 'Closing date', 'record', 'closedAt', 'header', 'CTR DISCIPLINE CLOSING DATE', { format: 'date' }),
+      f('remarks', 'Remarks', 'attr', 'remarks', 'header', 'REMARKS', { multiline: true }),
     ],
   },
   detail: {
@@ -143,10 +165,44 @@ export const DEFAULT_TEMPLATE_MAPPING = {
     imageAfter: { by: 'cell', value: 'I25', name: 'ph_after' },
     vlookupAutoRepair: false,
   },
-  // Export constants (filled in the dialog); mapped via @-prefixed fields.
+  // Export constants (filled in the dialog); referenced by const-kind fields.
   constants: { unit: '', phase: '' },
-  extraDefaults: { evidence: '1. 3D snapshot\n2. Document', applicability: 'OFA', actionBy: '', remarks: '' },
 };
+
+// Normalise a field row from the legacy `{ field: '@x' | 'x.y' | 'plain' }`
+// shape to the new `{ source:{kind,key} }` shape (idempotent).
+function normalizeField(fld, i = 0) {
+  if (fld.source) return { id: fld.id || `f${i}`, label: fld.label || fld.source.key, ...fld };
+  const raw = fld.field || '';
+  let source;
+  if (raw.startsWith('@')) source = { kind: 'const', key: raw.slice(1) };
+  else if (raw.startsWith('x.')) source = { kind: 'attr', key: raw.slice(2) };
+  else source = { kind: 'record', key: raw };
+  const out = { id: fld.id || source.key || `f${i}`, label: fld.label || source.key, source, by: fld.by, value: fld.value };
+  if (fld.format) out.format = fld.format;
+  if (fld.map) out.map = fld.map;
+  return out;
+}
+
+// Migrate a whole mapping to the new model (safe on already-new mappings).
+export function migrateMapping(m) {
+  if (!m || !m.logSheet) return m;
+  const oldDefaults = m.extraDefaults || {};
+  const fields = (m.logSheet.fields || []).map((fld, i) => {
+    const nf = normalizeField(fld, i);
+    if (nf.source.kind === 'attr' && nf.default === undefined && oldDefaults[nf.source.key] !== undefined) {
+      nf.default = oldDefaults[nf.source.key];
+    }
+    return nf;
+  });
+  const { extraDefaults, ...rest } = m;
+  return { ...rest, logSheet: { ...m.logSheet, fields } };
+}
+
+// The attribute registry = the attr-kind field rows (drives the drawer).
+export function attrFields(mapping) {
+  return (mapping?.logSheet?.fields || []).map(normalizeField).filter((x) => x.source.kind === 'attr');
+}
 
 // ---- locator resolution ---------------------------------------------
 // Returns a column NUMBER (1-based) for log fields, or a cell ref for scalars.
@@ -262,24 +318,24 @@ export function resolveMapping(info, mapping) {
   const rows = [];
   const itemCol = resolveColumn(mapping.logSheet.itemColumn, ctx);
   rows.push({ field: 'ITEM (link)', col: itemCol ? colToLetter(itemCol) : null });
-  for (const f of mapping.logSheet.fields) {
-    const col = resolveColumn(f, ctx);
-    rows.push({ field: f.field, col: col ? colToLetter(col) : null });
+  for (const fld of mapping.logSheet.fields) {
+    const col = resolveColumn(fld, ctx);
+    rows.push({ field: fld.label || fld.source?.key || fld.field, col: col ? colToLetter(col) : null });
   }
   return { itemCol, rows };
 }
 
 // ---- value encoding for a log cell -----------------------------------
-function encodeCell(ref, styleAttr, field, rec, constants, extraDefaults) {
+function encodeCell(ref, styleAttr, field, rec, constants) {
   const s = styleAttr ? ` s="${styleAttr}"` : '';
+  const fld = field.source ? field : normalizeField(field);
+  const src = fld.source;
   let raw = '';
-  let fmt = field.format;
-  if (field.field.startsWith('@')) raw = constants[field.field.slice(1)] ?? '';
-  else if (field.field.startsWith('x.')) {
-    const k = field.field.slice(2);
-    raw = rec.extra?.[k] ?? extraDefaults?.[k] ?? '';
-  } else raw = rec[field.field] ?? '';
-  if (field.map && raw in field.map) raw = field.map[raw];
+  const fmt = fld.format;
+  if (src.kind === 'const') raw = constants[src.key] ?? '';
+  else if (src.kind === 'attr') raw = rec.extra?.[src.key] ?? fld.default ?? '';
+  else raw = rec[src.key] ?? '';
+  if (fld.map && raw in fld.map) raw = fld.map[raw];
   if (raw === '' || raw == null) return `<c r="${ref}"${s}/>`;
   if (fmt === 'date') {
     const ser = toSerial(raw);
@@ -294,7 +350,7 @@ function encodeCell(ref, styleAttr, field, rec, constants, extraDefaults) {
 }
 
 // Build one log data row from a style-template row's per-column styles.
-function buildRow(rowNum, rec, itemNo, colStyles, fieldByCol, itemCol, constants, extraDefaults) {
+function buildRow(rowNum, rec, itemNo, colStyles, fieldByCol, itemCol, constants) {
   const cols = new Set([...Object.keys(colStyles).map(Number), ...fieldByCol.keys()]);
   if (itemCol) cols.add(itemCol);
   const ordered = [...cols].sort((a, b) => a - b);
@@ -305,7 +361,7 @@ function buildRow(rowNum, rec, itemNo, colStyles, fieldByCol, itemCol, constants
     if (c === itemCol) {
       cells += `<c r="${ref}"${st ? ` s="${st}"` : ''} t="inlineStr"><is><t>${itemNo}</t></is></c>`;
     } else if (fieldByCol.has(c)) {
-      cells += encodeCell(ref, st, fieldByCol.get(c), rec, constants, extraDefaults);
+      cells += encodeCell(ref, st, fieldByCol.get(c), rec, constants);
     } else if (st) {
       cells += `<c r="${ref}" s="${st}"/>`;
     }
@@ -371,7 +427,8 @@ function picAnchor(colIdx0, rowIdx0, img, rid, id, maxPx = 330) {
 // =====================================================================
 // Fill the template. Returns Uint8Array of the produced .xlsx.
 // =====================================================================
-export async function fillTemplate(bytes, records, mapping, constants = {}, extraDefaults = {}) {
+export async function fillTemplate(bytes, records, rawMapping, constants = {}) {
+  const mapping = migrateMapping(rawMapping);
   const JSZip = await getJSZip();
   const zip = await JSZip.loadAsync(bytes);
   const { map, wb, rels } = await sheetPathMap(zip);
@@ -411,7 +468,7 @@ export async function fillTemplate(bytes, records, mapping, constants = {}, extr
 
   // --- rebuild sheetData rows >= dataStartRow ---
   const start = logCfg.dataStartRow;
-  const newRows = records.map((rec, i) => buildRow(start + i, rec, i + 1, colStyles, fieldByCol, itemCol, constants, extraDefaults)).join('');
+  const newRows = records.map((rec, i) => buildRow(start + i, rec, i + 1, colStyles, fieldByCol, itemCol, constants)).join('');
   logXml = logXml.replace(/<sheetData>([\s\S]*?)<\/sheetData>/, (whole, inner) => {
     const kept = [...inner.matchAll(/<row r="(\d+)"[\s\S]*?<\/row>|<row r="(\d+)"[^>]*\/>/g)]
       .filter((m) => +(m[1] || m[2]) < start)
@@ -525,10 +582,14 @@ function autoRepairVlookup(xml, logName, headerTextByCol, headerRow) {
 
 // ---- detail-sheet clone (verbatim) ----------------------------------
 async function cloneDetailSheet(zip, map, wbXml, wbRels, patternInfo, newName, defined) {
-  // new file names
-  const usedSheet = [...wbXml.matchAll(/worksheets\/sheet(\d+)\.xml/g)].map((m) => +m[1]);
-  const nextSheet = Math.max(0, ...usedSheet) + 1 + map.__clones__ || 0;
-  const sheetNo = (Math.max(0, ...usedSheet) + 1) + (map.__cloneCount__ = (map.__cloneCount__ || 0) + 1) - 1;
+  // Pick a worksheet-part number not already present in the zip (workbook.xml
+  // does NOT list part paths, so derive from the actual files to avoid
+  // clobbering existing sheets).
+  const usedSheet = Object.keys(zip.files)
+    .map((p) => /xl\/worksheets\/sheet(\d+)\.xml$/.exec(p))
+    .filter(Boolean)
+    .map((m) => +m[1]);
+  const sheetNo = Math.max(0, ...usedSheet) + 1;
   const newSheetFile = `xl/worksheets/sheet${sheetNo}.xml`;
   // copy sheet xml, patch N2 later by caller
   let sx = await zip.file(patternInfo.path).async('string');

@@ -6,7 +6,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { loadSettings, saveSettings } from '../lib/persist.js';
 import { DEFAULT_DETECT } from '../lib/detect.js';
-import { DEFAULT_TEMPLATE_MAPPING } from '../lib/templateExcel.js';
+import { DEFAULT_TEMPLATE_MAPPING, migrateMapping } from '../lib/templateExcel.js';
 
 const cloneDetect = (d) => ({
   commenter: { ...DEFAULT_DETECT.commenter, ...(d?.commenter || {}), rules: (d?.commenter?.rules || DEFAULT_DETECT.commenter.rules).map((r) => ({ ...r })) },
@@ -48,7 +48,7 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     (async () => {
       const saved = await loadSettings();
-      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect), templateExport: { ...DEFAULT_TEMPLATE_MAPPING, ...(saved.templateExport || {}) } });
+      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect), templateExport: migrateMapping({ ...DEFAULT_TEMPLATE_MAPPING, ...(saved.templateExport || {}) }) });
       applyThemeMode(saved?.themeMode || DEFAULTS.themeMode);
       loaded.current = true;
       setReady(true);

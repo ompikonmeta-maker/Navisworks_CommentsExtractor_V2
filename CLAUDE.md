@@ -95,9 +95,21 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   move. `DEFAULT_TEMPLATE_MAPPING` targets the shipped "3D Model Log Sheet" template; the mapping
   persists in `settings.templateExport`, the template bytes in IndexedDB
   (`persist.saveTemplate`/`loadTemplate`), and the UI is `components/TemplateExportPanel.jsx`
-  under Settings › Export. Field namespaces in the mapping: plain = record field, `@x` = export
-  constant (Unit/Phase dialog), `x.y` = `record.extra[y]` (evidence/applicability/actionBy/
-  remarks, edited in the detail drawer). The pre-existing `lib/excel.js` quick export stays as-is.
+  under Settings › Export — a **fully configurable field editor** (all MD3 `Select`): add /
+  remove / rename / reorder rows, plus header-row, data-start-row, item-column, detail-cell
+  locators, import/export mapping JSON, and "+ add unmapped headers". Each field row is
+  `{ id, label, source:{kind:'record'|'const'|'attr', key}, by, value, format?, map?, and for
+  attr: default?, multiline? }` — **record** = a `parser` field (`RECORD_FIELDS`), **const** =
+  an export constant (value in the Konstanta section, keyed by `cfg.constants`), **attr** = a
+  custom per-comment attribute in `record.extra[key]`. The attr-kind rows ARE the custom
+  attribute registry: `attrFields(mapping)` drives the detail drawer's "Custom fields" inputs
+  (label / default / multiline), so one definition serves both the export column and the
+  editor. Renaming an attr key migrates `record.extra` across records via the store's
+  `RENAME_ATTR` action. `migrateMapping` upgrades the old `field:'@x'|'x.y'|'plain'` strings to
+  the source model (run in `settings` load + on JSON import). Detail sheets are cloned by
+  picking a worksheet-part number from the actual zip files (never from `workbook.xml`, which
+  lists no part paths) so clones never clobber existing sheets. The pre-existing `lib/excel.js`
+  quick export stays as-is.
 - `src/lib/snapshot.js` — DOM→PNG via **html-to-image** (foreignObject → SVG → canvas;
   dynamically imported, bundled so it stays offline). It renders through the browser's own
   layout engine, so flex alignment, padded badges and the Recharts SVG come out exactly as on

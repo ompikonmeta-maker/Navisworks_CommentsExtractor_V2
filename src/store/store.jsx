@@ -80,6 +80,22 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'RENAME_ATTR': {
+      // Move record.extra[from] → [to] across all records (template custom
+      // attribute renamed in the Export mapping).
+      const { from, to } = action;
+      if (!from || !to || from === to) return state;
+      return {
+        ...state,
+        records: state.records.map((r) => {
+          if (!r.extra || !(from in r.extra)) return r;
+          const extra = { ...r.extra };
+          extra[to] = extra[from];
+          delete extra[from];
+          return { ...r, extra };
+        }),
+      };
+    }
     case 'TOAST':
       return { ...state, toast: action.toast };
     case 'CLEAR_TOAST':
@@ -106,6 +122,7 @@ export function StoreProvider({ children }) {
     (field, config, allowed, mode) => dispatch({ type: 'APPLY_DETECT', field, config, allowed, mode }),
     []
   );
+  const renameAttr = useCallback((from, to) => dispatch({ type: 'RENAME_ATTR', from, to }), []);
   // Named `notify` (not `toast`) so it doesn't collide with `state.toast`,
   // the current toast payload the provider also exposes.
   // `action` (optional): { label, onClick } renders a button in the toast —
@@ -118,8 +135,8 @@ export function StoreProvider({ children }) {
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);
 
   const value = useMemo(
-    () => ({ ...state, setLoading, setError, setData, updateRecord, applyDetect, notify, clearToast }),
-    [state, setLoading, setError, setData, updateRecord, applyDetect, notify, clearToast]
+    () => ({ ...state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, notify, clearToast }),
+    [state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, notify, clearToast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
