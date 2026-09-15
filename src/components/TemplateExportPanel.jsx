@@ -2,7 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { Icon, Button } from './ui.jsx';
-import { inspectTemplate, resolveMapping, fillTemplate } from '../lib/templateExcel.js';
+import { inspectTemplate, resolveMapping, fillTemplate, DEFAULT_TEMPLATE_MAPPING } from '../lib/templateExcel.js';
+
+const BY_OPTIONS = [
+  ['header', 'By header'],
+  ['name', 'By name'],
+  ['column', 'By column'],
+];
+const CELL_BY = [
+  ['cell', 'By cell'],
+  ['name', 'By name'],
+];
 import { saveTemplate, loadTemplate, clearTemplate } from '../lib/persist.js';
 
 const inputCls =
@@ -43,6 +53,15 @@ export default function TemplateExportPanel() {
 
   const preview = useMemo(() => (info ? resolveMapping(info, cfg) : null), [info, cfg]);
   const resolvedCount = preview ? preview.rows.filter((r) => r.col).length : 0;
+
+  // Re-inspect when the header row changes so the preview reads the right row.
+  useEffect(() => {
+    if (!tpl) return;
+    (async () => {
+      try { setInfo(await inspectTemplate(tpl.bytes, cfg.logSheet.headerRow)); } catch (e) { setErr(e.message); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg.logSheet.headerRow]);
 
   // Once a template is inspected, pin the mapping's log sheet to the detected
   // one (unless the user already chose a valid sheet), so the picker + fill
@@ -85,6 +104,12 @@ export default function TemplateExportPanel() {
 
   const setConst = (k, v) => setTemplateExport((c) => ({ ...c, constants: { ...c.constants, [k]: v } }));
   const setDetailFlag = (k, v) => setTemplateExport((c) => ({ ...c, detail: { ...c.detail, [k]: v } }));
+  const setLog = (patch) => setTemplateExport((c) => ({ ...c, logSheet: { ...c.logSheet, ...patch } }));
+  const setItemCol = (patch) => setTemplateExport((c) => ({ ...c, logSheet: { ...c.logSheet, itemColumn: { ...c.logSheet.itemColumn, ...patch } } }));
+  const setField = (i, patch) =>
+    setTemplateExport((c) => ({ ...c, logSheet: { ...c.logSheet, fields: c.logSheet.fields.map((f, j) => (j === i ? { ...f, ...patch } : f)) } }));
+  const setDetailLoc = (key, patch) => setTemplateExport((c) => ({ ...c, detail: { ...c.detail, [key]: { ...c.detail[key], ...patch } } }));
+  const resetMapping = () => setTemplateExport(() => JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_MAPPING)));
 
   const doExport = async () => {
     if (!tpl) return;
@@ -159,16 +184,45 @@ export default function TemplateExportPanel() {
 
       {info && (
         <>
-          {/* resolve preview */}
+          {/* structure — everything auto-detected is editable here */}
           <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-            <div className="mb-2 text-sm font-semibold">Field → kolom (mapping by header)</div>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold">Struktur log sheet</div>
+              <button onClick={resetMapping} className="text-xs font-medium text-primary hover:underline">Reset ke default</button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-xs font-medium text-on-surface-variant">
+                Baris header
+                <input type="number" min={1} className={`${inputCls} mt-1 block w-full`} value={cfg.logSheet.headerRow} onChange={(e) => setLog({ headerRow: parseInt(e.target.value, 10) || 1 })} />
+              </label>
+              <label className="text-xs font-medium text-on-surface-variant">
+                Baris data mulai
+                <input type="number" min={1} className={`${inputCls} mt-1 block w-full`} value={cfg.logSheet.dataStartRow} onChange={(e) => setLog({ dataStartRow: parseInt(e.target.value, 10) || 1 })} />
+              </label>
+              <div className="text-xs font-medium text-on-surface-variant">
+                Kolom ITEM (link)
+                <div className="mt-1 flex gap-1">
+                  <select className={`${inputCls} w-[92px]`} value={cfg.logSheet.itemColumn.by} onChange={(e) => setItemCol({ by: e.target.value })}>
+                    {BY_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <input className={`${inputCls} min-w-0 flex-1`} value={cfg.logSheet.itemColumn.value} onChange={(e) => setItemCol({ value: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* editable field mapping */}
+          <div className="rounded-2xl border border-outline-variant bg-surface p-4">
+            <div className="mb-2 text-sm font-semibold">Field → lokasi kolom</div>
+            <p className="mb-3 text-xs text-on-surface-variant">Tiap field dicari <b>by header</b> (teks header, tahan geser kolom), <b>by name</b> (Defined Name), atau <b>by column</b> (huruf kolom tetap). Ubah bila layout template berbeda.</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-left text-[10.5px] uppercase tracking-wide text-on-surface-variant">
-                    <th className="pb-1.5 pr-3 font-semibold">Field</th>
-                    <th className="pb-1.5 pr-3 font-semibold">Header di template</th>
-                    <th className="pb-1.5 font-semibold">Kolom</th>
+                    <th className="pb-1.5 pr-2 font-semibold">Field</th>
+                    <th className="pb-1.5 pr-2 font-semibold">Cara</th>
+                    <th className="pb-1.5 pr-2 font-semibold">Nilai (header / name / kolom)</th>
+                    <th className="pb-1.5 font-semibold">→</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -176,13 +230,20 @@ export default function TemplateExportPanel() {
                     const row = preview.rows[i + 1];
                     return (
                       <tr key={f.field} className="border-t border-outline-variant/50">
-                        <td className="py-1.5 pr-3 font-semibold">{f.field}</td>
-                        <td className="py-1.5 pr-3 font-mono text-on-surface-variant">{f.value}</td>
-                        <td className="py-1.5">
+                        <td className="py-1 pr-2 font-semibold">{f.field}</td>
+                        <td className="py-1 pr-2">
+                          <select className={`${inputCls} py-1`} value={f.by} onChange={(e) => setField(i, { by: e.target.value })}>
+                            {BY_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                        </td>
+                        <td className="py-1 pr-2">
+                          <input className={`${inputCls} w-full py-1 font-mono`} value={f.value} onChange={(e) => setField(i, { value: e.target.value })} />
+                        </td>
+                        <td className="py-1">
                           {row?.col ? (
                             <span className="rounded bg-secondary-container px-1.5 py-0.5 font-bold text-on-secondary-container">{row.col}</span>
                           ) : (
-                            <span className="italic text-status-open">tak ketemu</span>
+                            <span className="italic text-status-open">—</span>
                           )}
                         </td>
                       </tr>
@@ -193,9 +254,35 @@ export default function TemplateExportPanel() {
             </div>
           </div>
 
-          {/* constants + options */}
+          {/* detail-sheet cell locators */}
           <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-            <div className="mb-3 text-sm font-semibold">Konstanta &amp; opsi</div>
+            <div className="mb-3 text-sm font-semibold">Sheet detail — sel yang diisi tool</div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ['itemNumber', 'Nomor item (N2)'],
+                ['imageBefore', 'Gambar Before'],
+                ['imageAfter', 'Gambar After'],
+              ].map(([key, label]) => (
+                <div key={key} className="text-xs font-medium text-on-surface-variant">
+                  {label}
+                  <div className="mt-1 flex gap-1">
+                    <select className={`${inputCls} w-[86px]`} value={cfg.detail[key].by} onChange={(e) => setDetailLoc(key, { by: e.target.value })}>
+                      {CELL_BY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                    <input className={`${inputCls} min-w-0 flex-1 font-mono`} value={cfg.detail[key].value} onChange={(e) => setDetailLoc(key, { value: e.target.value })} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <label className="mt-3 inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!cfg.detail?.vlookupAutoRepair} onChange={(e) => setDetailFlag('vlookupAutoRepair', e.target.checked)} />
+              Auto-repair VLOOKUP (jadikan formula detail mengikuti header — tahan pindah kolom)
+            </label>
+          </div>
+
+          {/* constants */}
+          <div className="rounded-2xl border border-outline-variant bg-surface p-4">
+            <div className="mb-3 text-sm font-semibold">Konstanta (diisi ke kolom @unit / @phase)</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-medium text-on-surface-variant">
                 Unit
@@ -206,10 +293,6 @@ export default function TemplateExportPanel() {
                 <input className={`${inputCls} mt-1 block w-full`} value={cfg.constants?.phase ?? ''} onChange={(e) => setConst('phase', e.target.value)} placeholder="0.9 atau 90%" />
               </label>
             </div>
-            <label className="mt-3 inline-flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={!!cfg.detail?.vlookupAutoRepair} onChange={(e) => setDetailFlag('vlookupAutoRepair', e.target.checked)} />
-              Auto-repair VLOOKUP (jadikan formula detail mengikuti header — tahan pindah kolom)
-            </label>
           </div>
 
           {/* export */}

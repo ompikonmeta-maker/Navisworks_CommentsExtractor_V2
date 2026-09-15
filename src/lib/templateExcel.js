@@ -222,13 +222,13 @@ async function resolveLog(zip, map, mapping, shared) {
 // =====================================================================
 // Inspect a template → structure for the mapping editor.
 // =====================================================================
-export async function inspectTemplate(bytes) {
+export async function inspectTemplate(bytes, headerRow) {
   const JSZip = await getJSZip();
   const zip = await JSZip.loadAsync(bytes);
   const { map, wb } = await sheetPathMap(zip);
   const shared = await sharedStrings(zip);
   const defined = definedNames(wb);
-  const hr = DEFAULT_TEMPLATE_MAPPING.logSheet.headerRow;
+  const hr = headerRow || DEFAULT_TEMPLATE_MAPPING.logSheet.headerRow;
 
   // Candidate log sheets = non-numeric, non-hidden-meta sheets; read each
   // one's header row so the picker can switch without re-inspecting.
