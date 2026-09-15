@@ -3,9 +3,17 @@ import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES, STATUSES } from '../lib/parser.js';
 import { attrFields } from '../lib/templateExcel.js';
-import { Icon, Select, SegmentedButtons, StatusBadge, DisciplineBadge } from './ui.jsx';
+import { Icon, Select, StatusBadge, DisciplineBadge } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Lightbox from './Lightbox.jsx';
+
+// Selected-status colours — same status tokens as the Viewpoints list badges,
+// so a status looks the same in the drawer buttons and in the table.
+const STATUS_ACTIVE = {
+  Open: 'border-status-open/40 bg-status-open/10 text-status-open',
+  'In Review': 'border-status-review/40 bg-status-review/10 text-status-review',
+  Closed: 'border-status-closed/40 bg-status-closed/10 text-status-closed',
+};
 
 // ISO ⇄ <input type="datetime-local"> (which works in the viewer's local time).
 function toLocalInput(iso) {
@@ -217,7 +225,7 @@ export default function DetailPanel({ record, onClose }) {
       aria-label="Viewpoint detail"
       aria-hidden={!open}
       style={style}
-      className={`fixed bottom-3 right-3 top-3 z-40 flex w-[min(420px,92vw)] flex-col overflow-hidden rounded-card border border-outline-variant/60 bg-surface shadow-md-3 ${
+      className={`fixed bottom-3 right-3 top-3 z-40 flex w-[min(483px,92vw)] flex-col overflow-hidden rounded-card border border-outline-variant/60 bg-surface shadow-md-3 ${
         open ? '' : 'pointer-events-none'
       }`}
     >
@@ -316,19 +324,38 @@ export default function DetailPanel({ record, onClose }) {
               </div>
             )}
 
-            <label className="block text-xs font-medium text-on-surface-variant">
-              Discipline
-              <Select className="mt-1 w-full" aria-label="Change discipline" value={rec.discipline} onChange={(v) => set({ discipline: v })} options={DISCIPLINES} />
-            </label>
-
-            <label className="block text-xs font-medium text-on-surface-variant">
-              Commenter
-              <Select className="mt-1 w-full" aria-label="Change commenter" value={rec.commenter || ''} onChange={(v) => set({ commenter: v })} options={commenterOptions} />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
+                Discipline
+                <Select className="mt-1 w-full" aria-label="Change discipline" value={rec.discipline} onChange={(v) => set({ discipline: v })} options={DISCIPLINES} />
+              </label>
+              <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
+                Commenter
+                <Select className="mt-1 w-full" aria-label="Change commenter" value={rec.commenter || ''} onChange={(v) => set({ commenter: v })} options={commenterOptions} />
+              </label>
+            </div>
 
             <div>
               <div className="mb-1 text-xs font-medium text-on-surface-variant">Status</div>
-              <SegmentedButtons aria-label="Change status" value={rec.status} onChange={(v) => set({ status: v })} options={STATUSES} />
+              <div className="flex flex-wrap gap-2">
+                {STATUSES.map((s) => {
+                  const on = rec.status === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => set({ status: s })}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        on ? STATUS_ACTIVE[s] : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'
+                      }`}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {rec.status === 'Closed' && (
