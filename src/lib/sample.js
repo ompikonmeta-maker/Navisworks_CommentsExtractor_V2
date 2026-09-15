@@ -25,9 +25,18 @@ const SAMPLE_IMAGES = {
   'vp0030.jpg': vp0030,
 };
 
+// The bundled report holds hundreds of comments; the seed dataset keeps only
+// a small, representative slice so the app (and the template export) stays
+// light to try. Comments that carry a companion image are kept first so the
+// before/after demo still works.
+const SAMPLE_LIMIT = 10;
+
 export async function loadSampleData() {
   resetIdCounter();
-  const { records } = parseReportHtml(reportHtml, '2500_UBA-2026.08.26.html');
+  const parsed = parseReportHtml(reportHtml, '2500_UBA-2026.08.26.html');
+  const withImg = parsed.records.filter((r) => r.imageRef && SAMPLE_IMAGES[String(r.imageRef).toLowerCase()]);
+  const rest = parsed.records.filter((r) => !withImg.includes(r));
+  const records = [...withImg, ...rest].slice(0, SAMPLE_LIMIT);
 
   const imagesByName = {};
   for (const [name, url] of Object.entries(SAMPLE_IMAGES)) {
