@@ -6,6 +6,7 @@ import { Icon, Card, Button, SegmentedButtons, DisciplineBadge } from '../compon
 import DetectionEditor from '../components/DetectionEditor.jsx';
 import TemplateExportPanel from '../components/TemplateExportPanel.jsx';
 import CustomFieldsEditor from '../components/CustomFieldsEditor.jsx';
+import StatusEditor from '../components/StatusEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
 
@@ -94,13 +95,15 @@ export default function Settings() {
           <Card className="p-6">
             <SectionTitle icon="table_view" title="Labels" sub="Your taxonomy — disciplines (with colours), the people who comment, and custom fields for export." />
             <div className="mb-4 inline-flex overflow-hidden rounded-full border border-outline text-sm">
-              {[['disciplines', 'Disciplines'], ['commenters', 'Commenters'], ['custom', 'Custom fields']].map(([k, label]) => (
+              {[['disciplines', 'Disciplines'], ['commenters', 'Commenters'], ['status', 'Status'], ['custom', 'Custom fields']].map(([k, label]) => (
                 <button key={k} onClick={() => setLabelTab(k)} className={`px-4 py-1.5 font-medium ${labelTab === k ? 'bg-primary text-on-primary' : 'text-on-surface hover:bg-surface-container'}`}>{label}</button>
               ))}
             </div>
 
             <div key={labelTab} className="drawer-swap">
-              {labelTab === 'custom' ? (
+              {labelTab === 'status' ? (
+                <StatusEditor />
+              ) : labelTab === 'custom' ? (
                 <CustomFieldsEditor />
               ) : labelTab === 'disciplines' ? (
                 <>

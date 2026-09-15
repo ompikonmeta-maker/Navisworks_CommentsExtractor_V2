@@ -6,18 +6,14 @@ import {
   AreaChart, Area, LineChart, Line,
 } from 'recharts';
 import { useStore, computeKpis } from '../store/store.jsx';
-import { STATUSES } from '../lib/parser.js';
+import { useSettings } from '../store/settings.jsx';
+import { statusLabels, openLabel, doneLabel } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
 import { Icon, Button, Card, StatusBadge, DisciplineBadge, InfoTip } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 
-const KPI_META = [
-  { key: 'total', label: 'Total', icon: 'forum', accent: 'text-primary', status: 'all' },
-  { key: 'Open', label: 'Open', icon: 'radio_button_unchecked', accent: 'text-status-open', status: 'Open' },
-  { key: 'In Review', label: 'In Review', icon: 'hourglass_top', accent: 'text-status-review', status: 'In Review' },
-  { key: 'Closed', label: 'Closed', icon: 'check_circle', accent: 'text-status-closed', status: 'Closed' },
-];
+const roleIcon = (role) => (role === 'open' ? 'radio_button_unchecked' : role === 'done' ? 'check_circle' : 'hourglass_top');
 
 // Read MD3 tokens at render time so charts follow the active theme.
 function cssVar(name, fallback) {
@@ -40,6 +36,11 @@ function parseTs(dateStr) {
 
 export default function Dashboard({ openDetail, goComments }) {
   const { status, records, meta, notify, setData } = useStore();
+  const { settings } = useSettings();
+  const statuses = settings.statuses;
+  const labels = statusLabels(statuses);
+  const openL = openLabel(statuses);
+  const doneL = doneLabel(statuses);
   const loading = status === 'loading';
   const fileInputRef = useRef(null);
   // Refs for snapshots (per-card + whole overview) and Excel chart capture.
@@ -89,20 +90,22 @@ export default function Dashboard({ openDetail, goComments }) {
     }
   };
 
-  const kpis = useMemo(() => computeKpis(records), [records]);
+  const kpis = useMemo(() => computeKpis(records, labels), [records, labels]);
   const total = kpis.total || 0;
+  const zeroByLabel = () => Object.fromEntries(labels.map((l) => [l, 0]));
 
   // Per-discipline status breakdown, richest first — feeds both the stacked
   // bar and the numeric table.
   const byDiscipline = useMemo(() => {
     const m = {};
     for (const r of records) {
-      const row = m[r.discipline] || (m[r.discipline] = { name: r.discipline, Open: 0, 'In Review': 0, Closed: 0, total: 0 });
+      const row = m[r.discipline] || (m[r.discipline] = { name: r.discipline, ...zeroByLabel(), total: 0 });
       row[r.status] = (row[r.status] || 0) + 1;
       row.total += 1;
     }
     return Object.values(m).sort((a, b) => b.total - a.total);
-  }, [records]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records, labels.join('|')]);
 
   // Monthly intake split by current status — over-time area + KPI sparklines.
   const trend = useMemo(() => {
@@ -110,14 +113,15 @@ export default function Dashboard({ openDetail, goComments }) {
     for (const r of records) {
       const key = toMonth(r.commentDate);
       if (key === 'Unknown') continue;
-      const row = m[key] || (m[key] = { month: key, Open: 0, 'In Review': 0, Closed: 0 });
+      const row = m[key] || (m[key] = { month: key, ...zeroByLabel() });
       row[r.status] = (row[r.status] || 0) + 1;
     }
     const rows = Object.values(m).sort((a, b) => a.month.localeCompare(b.month));
     const series = {};
-    for (const s of STATUSES) series[s] = rows.map((row) => row[s]);
+    for (const s of labels) series[s] = rows.map((row) => row[s] || 0);
     return { rows, series };
-  }, [records]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records, labels.join('|')]);
 
   // Real burndown: cumulative opened (by comment date) vs closed (by close-out
   // time). Closes recorded before v1.1 have no close-out time, so they don't
@@ -149,21 +153,21 @@ export default function Dashboard({ openDetail, goComments }) {
   // After-photo coverage: of the closed comments, how many carry an after
   // photo (i.e. the fix is documented).
   const coverage = useMemo(() => {
-    const closed = records.filter((r) => r.status === 'Closed');
+    const closed = records.filter((r) => r.status === doneL);
     const withPhoto = closed.filter((r) => r.afterImageData).length;
     return { closed: closed.length, withPhoto, pct: closed.length ? Math.round((withPhoto / closed.length) * 100) : 0 };
-  }, [records]);
+  }, [records, doneL]);
 
   // Needs attention: the oldest still-open comments (by comment date — the
   // export has no close date, so age is measured from when it was raised).
   const needsAttention = useMemo(() => {
     return records
-      .filter((r) => r.status === 'Open')
+      .filter((r) => r.status === openL)
       .map((r) => ({ r, ts: parseTs(r.commentDate) }))
       .sort((a, b) => a.ts - b.ts)
       .slice(0, 5)
       .map(({ r, ts }) => ({ ...r, ageDays: ts ? Math.floor((Date.now() - ts) / 86400000) : null }));
-  }, [records]);
+  }, [records, openL]);
 
   const handleExport = async () => {
     if (!records.length) return;
@@ -178,6 +182,8 @@ export default function Dashboard({ openDetail, goComments }) {
       const overview = {
         generatedAt: new Date().toLocaleString(),
         total,
+        statuses: labels,
+        doneLabel: doneL,
         kpis,
         closedPct,
         coverage,
@@ -205,15 +211,13 @@ export default function Dashboard({ openDetail, goComments }) {
   const surface = cssVar('--md-sys-color-surface-container-high', '#e7e7f6');
   const surfaceVar = cssVar('--md-sys-color-surface-variant', '#e1e2ec');
   const onSurface = cssVar('--md-sys-color-on-surface', '#191b23');
-  const STATUS_COLORS = {
-    Open: cssVar('--tabelin-status-open', '#bf0031'),
-    'In Review': cssVar('--tabelin-status-review', '#9a6800'),
-    Closed: cssVar('--tabelin-status-closed', '#1f7a4d'),
-  };
+  // Colours come straight from the configurable status registry.
+  const STATUS_COLORS = Object.fromEntries(statuses.map((s) => [s.label, s.color]));
+  const midColor = (statuses.find((s) => s.role === 'middle') || {}).color || axis;
   const tooltipStyle = { background: surface, border: `1px solid ${grid}`, borderRadius: 12, color: onSurface, fontSize: 12 };
-  const closedFrac = total ? kpis.Closed / total : 0; // exact fraction for the ring
+  const closedFrac = total ? (kpis[doneL] || 0) / total : 0; // exact fraction for the ring
   const closedPct = Math.round(closedFrac * 100); // rounded, used in the Excel Overview
-  const pctColor = (p) => (p >= 60 ? STATUS_COLORS.Closed : p >= 35 ? STATUS_COLORS['In Review'] : STATUS_COLORS.Open);
+  const pctColor = (p) => (p >= 60 ? STATUS_COLORS[doneL] : p >= 35 ? midColor : STATUS_COLORS[openL]);
 
   return (
     <div ref={overviewRef} className="canvas-w space-y-6">
@@ -239,7 +243,8 @@ export default function Dashboard({ openDetail, goComments }) {
 
       {/* KPI — clickable → Viewpoints filtered; share + sparkline */}
       <Reveal className="grid grid-cols-2 gap-4 lg:grid-cols-4" deps={[status]}>
-        {KPI_META.map((k) => {
+        {[{ key: 'total', label: 'Total', icon: 'forum', color: primary, status: 'all' },
+          ...statuses.map((s) => ({ key: s.label, label: s.label, icon: roleIcon(s.role), color: s.color, status: s.label }))].map((k) => {
           const value = kpis[k.key] ?? 0;
           const pct = k.key === 'total' || !total ? null : Math.round((value / total) * 100);
           const spark = k.key === 'total' ? null : trend.series[k.key];
@@ -254,8 +259,8 @@ export default function Dashboard({ openDetail, goComments }) {
                   title={k.key === 'total' ? 'View all comments' : `Filter Viewpoints: ${k.label}`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-on-surface-variant">{k.label}</span>
-                    <Icon name={k.icon} className={`text-[20px] ${k.accent}`} />
+                    <span className="truncate text-xs font-medium text-on-surface-variant">{k.label}</span>
+                    <Icon name={k.icon} className="shrink-0 text-[20px]" style={{ color: k.color }} />
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-2">
                     <div>
@@ -265,7 +270,7 @@ export default function Dashboard({ openDetail, goComments }) {
                         <span className="hidden font-semibold text-primary group-hover:inline">{k.key === 'total' ? 'View all →' : 'Filter →'}</span>
                       </div>
                     </div>
-                    {spark && <Sparkline values={spark} color={STATUS_COLORS[k.key]} />}
+                    {spark && <Sparkline values={spark} color={k.color} />}
                   </div>
                 </button>
               )}
@@ -284,13 +289,13 @@ export default function Dashboard({ openDetail, goComments }) {
           ) : (
             <div className="flex flex-1 flex-col justify-center gap-5">
               <div className="flex items-center gap-6">
-                <Ring pct={closedFrac} color={STATUS_COLORS.Closed} track={surfaceVar} size={176} />
+                <Ring pct={closedFrac} color={STATUS_COLORS[doneL]} track={surfaceVar} size={176} />
                 <ul className="space-y-2.5 text-sm">
-                  {[['Closed', kpis.Closed], ['In Review', kpis['In Review']], ['Open', kpis.Open]].map(([s, n]) => (
-                    <li key={s} className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_COLORS[s] }} />
-                      <span className="text-on-surface-variant">{s}</span>
-                      <span className="ml-3 font-semibold tabular-nums">{n || 0}</span>
+                  {[...statuses].reverse().map((s) => (
+                    <li key={s.key} className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} />
+                      <span className="text-on-surface-variant">{s.label}</span>
+                      <span className="ml-3 font-semibold tabular-nums">{kpis[s.label] || 0}</span>
                     </li>
                   ))}
                 </ul>
@@ -304,7 +309,7 @@ export default function Dashboard({ openDetail, goComments }) {
                   <span className="text-on-surface-variant tabular-nums">{coverage.withPhoto} of {coverage.closed} closed · {coverage.pct}%</span>
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-variant">
-                  <div className="h-full rounded-full" style={{ width: `${coverage.pct}%`, background: STATUS_COLORS.Closed }} />
+                  <div className="h-full rounded-full" style={{ width: `${coverage.pct}%`, background: STATUS_COLORS[doneL] }} />
                 </div>
               </div>
             </div>
@@ -340,7 +345,7 @@ export default function Dashboard({ openDetail, goComments }) {
                   <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
-                  {STATUSES.map((s) => (
+                  {labels.map((s) => (
                     <Area key={s} type="monotone" dataKey={s} stackId="1" stroke={STATUS_COLORS[s]} fill={STATUS_COLORS[s]} fillOpacity={0.22} strokeWidth={2} />
                   ))}
                 </AreaChart>
@@ -358,8 +363,8 @@ export default function Dashboard({ openDetail, goComments }) {
                   <Tooltip contentStyle={tooltipStyle} />
                   <Legend wrapperStyle={{ fontSize: 12, color: axis }} />
                   <Line type="monotone" dataKey="Opened" name="Opened" stroke={axis} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="Closed" name="Closed" stroke={STATUS_COLORS.Closed} strokeWidth={2.5} dot={false} />
-                  <Line type="monotone" dataKey="Open" name="Open (backlog)" stroke={STATUS_COLORS.Open} strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="Closed" name={`${doneL} (cumulative)`} stroke={STATUS_COLORS[doneL]} strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="Open" name="Backlog" stroke={STATUS_COLORS[openL]} strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
               {coverage.closed > 0 && !records.some((r) => r.closedAt) && (
@@ -382,9 +387,9 @@ export default function Dashboard({ openDetail, goComments }) {
           ) : (
             <>
               <div className="mb-3 flex flex-wrap gap-4 text-xs">
-                {STATUSES.map((s) => (
-                  <span key={s} className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_COLORS[s] }} /> {s}
+                {statuses.map((s) => (
+                  <span key={s.key} className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} /> {s.label}
                   </span>
                 ))}
               </div>
@@ -397,10 +402,10 @@ export default function Dashboard({ openDetail, goComments }) {
                     <XAxis dataKey="name" tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={{ stroke: grid }} interval={0} />
                     <YAxis allowDecimals={false} tick={{ fill: axis, fontSize: 12 }} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={tooltipStyle} cursor={{ fill: `${primary}22` }} />
-                    {STATUSES.map((s, i) => (
-                      <Bar key={s} dataKey={s} stackId="status" fill={STATUS_COLORS[s]} radius={i === STATUSES.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]} maxBarSize={48}>
+                    {labels.map((s, i) => (
+                      <Bar key={s} dataKey={s} stackId="status" fill={STATUS_COLORS[s]} radius={i === labels.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]} maxBarSize={48}>
                         {/* Total sits above each stacked bar (on the topmost segment). */}
-                        {i === STATUSES.length - 1 && (
+                        {i === labels.length - 1 && (
                           <LabelList dataKey="total" position="top" fill={axis} fontSize={11} fontWeight={600} />
                         )}
                       </Bar>
@@ -413,16 +418,14 @@ export default function Dashboard({ openDetail, goComments }) {
                   <thead>
                     <tr className="text-[10.5px] font-semibold uppercase tracking-wide text-on-surface-variant">
                       <th className="pb-2 pr-2 text-left">Discipline</th>
-                      <th className="pb-2 text-center">Open</th>
-                      <th className="pb-2 text-center">In Review</th>
-                      <th className="pb-2 text-center">Closed</th>
+                      {statuses.map((s) => <th key={s.key} className="pb-2 text-center">{s.label}</th>)}
                       <th className="pb-2 text-center">Total</th>
-                      <th className="pb-2 text-center">% Closed</th>
+                      <th className="pb-2 text-center">% {doneL}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {byDiscipline.map((d) => {
-                      const pct = d.total ? Math.round((d.Closed / d.total) * 100) : 0;
+                      const pct = d.total ? Math.round(((d[doneL] || 0) / d.total) * 100) : 0;
                       return (
                         <tr
                           key={d.name}
@@ -431,9 +434,7 @@ export default function Dashboard({ openDetail, goComments }) {
                           title={`Filter Viewpoints: ${d.name}`}
                         >
                           <td className="py-2 pr-2"><DisciplineBadge discipline={d.name} /></td>
-                          <td className="py-2 text-center font-medium tabular-nums text-status-open">{d.Open}</td>
-                          <td className="py-2 text-center font-medium tabular-nums text-status-review">{d['In Review']}</td>
-                          <td className="py-2 text-center font-medium tabular-nums text-status-closed">{d.Closed}</td>
+                          {statuses.map((s) => <td key={s.key} className="py-2 text-center font-medium tabular-nums" style={{ color: s.color }}>{d[s.label] || 0}</td>)}
                           <td className="py-2 text-center font-semibold tabular-nums">{d.total}</td>
                           <td className="py-2 text-center font-bold tabular-nums" style={{ color: pctColor(pct) }}>{pct}%</td>
                         </tr>
@@ -469,7 +470,7 @@ export default function Dashboard({ openDetail, goComments }) {
                       <span className="text-xs text-on-surface-variant">{r.viewpoint} · {r.commentDate}</span>
                     </span>
                     {r.ageDays != null && (
-                      <span className="shrink-0 rounded-full bg-status-open/10 px-2 py-0.5 text-xs font-medium tabular-nums text-status-open">{r.ageDays}d</span>
+                      <span className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums" style={{ color: STATUS_COLORS[openL], background: `color-mix(in srgb, ${STATUS_COLORS[openL]} 10%, transparent)` }}>{r.ageDays}d</span>
                     )}
                   </button>
                 </li>

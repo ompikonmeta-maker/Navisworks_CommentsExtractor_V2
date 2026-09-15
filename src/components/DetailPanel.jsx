@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
-import { DISCIPLINES, STATUSES } from '../lib/parser.js';
+import { DISCIPLINES } from '../lib/parser.js';
 import { attrFields } from '../lib/templateExcel.js';
+import { chipStyle, doneLabel as doneLabelOf } from '../lib/status.js';
 import { Icon, Select, StatusBadge, DisciplineBadge } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Lightbox from './Lightbox.jsx';
-
-// Selected-status colours — same status tokens as the Viewpoints list badges,
-// so a status looks the same in the drawer buttons and in the table.
-const STATUS_ACTIVE = {
-  Open: 'border-status-open/40 bg-status-open/10 text-status-open',
-  'In Review': 'border-status-review/40 bg-status-review/10 text-status-review',
-  Closed: 'border-status-closed/40 bg-status-closed/10 text-status-closed',
-};
 
 // ISO ⇄ <input type="datetime-local"> (which works in the viewer's local time).
 function toLocalInput(iso) {
@@ -81,6 +74,7 @@ const TrashIcon = () => (
 export default function DetailPanel({ record, onClose }) {
   const { updateRecord, records } = useStore();
   const { settings } = useSettings();
+  const doneLabel = doneLabelOf(settings.statuses);
   // Commenter dropdown options: everyone found in the data plus any names
   // added in Settings, sorted; "" is the unassigned choice.
   const commenterOptions = useMemo(() => {
@@ -166,7 +160,7 @@ export default function DetailPanel({ record, onClose }) {
     if (rec) {
       // A cropped after photo implies the issue is resolved → Closed.
       const patch = crop.target === 'after'
-        ? { afterImageData: dataUrl, status: 'Closed' }
+        ? { afterImageData: dataUrl, status: doneLabel }
         : { imageData: dataUrl };
       updateRecord(rec.ID, patch);
     }
@@ -338,27 +332,28 @@ export default function DetailPanel({ record, onClose }) {
             <div>
               <div className="mb-1 text-xs font-medium text-on-surface-variant">Status</div>
               <div className="flex flex-wrap gap-2">
-                {STATUSES.map((s) => {
-                  const on = rec.status === s;
+                {settings.statuses.map((s) => {
+                  const on = rec.status === s.label;
                   return (
                     <button
-                      key={s}
+                      key={s.key}
                       type="button"
                       aria-pressed={on}
-                      onClick={() => set({ status: s })}
+                      onClick={() => set({ status: s.label })}
+                      style={on ? chipStyle(s.color) : undefined}
                       className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        on ? STATUS_ACTIVE[s] : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'
+                        on ? '' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'
                       }`}
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {s}
+                      {s.label}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {rec.status === 'Closed' && (
+            {rec.status === doneLabel && (
               <label className="block text-xs font-medium text-on-surface-variant">
                 Closed at
                 <input

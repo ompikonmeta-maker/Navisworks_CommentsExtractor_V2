@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store/store.jsx';
-import { DISCIPLINES, STATUSES } from '../lib/parser.js';
+import { useSettings } from '../store/settings.jsx';
+import { statusLabels } from '../lib/status.js';
+import { DISCIPLINES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
 
 export default function Comments({ detailId, setDetailId, initialFilter }) {
   const { status, records, notify } = useStore();
+  const { settings } = useSettings();
   const loading = status === 'loading';
 
   const [query, setQuery] = useState('');
@@ -79,7 +82,7 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
               aria-label="Filter by status"
               value={statusFilter}
               onChange={setStatusFilter}
-              options={[{ value: 'all', label: 'All statuses' }, ...STATUSES.map((s) => ({ value: s, label: s }))]}
+              options={[{ value: 'all', label: 'All statuses' }, ...statusLabels(settings.statuses).map((s) => ({ value: s, label: s }))]}
             />
             {hasFilters && (
               <Button variant="text" icon="filter_alt_off" onClick={resetFilters}>

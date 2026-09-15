@@ -7,6 +7,9 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, useCal
 import { loadSettings, saveSettings } from '../lib/persist.js';
 import { DEFAULT_DETECT } from '../lib/detect.js';
 import { DEFAULT_TEMPLATE_MAPPING, migrateMapping } from '../lib/templateExcel.js';
+import { DEFAULT_STATUSES, normalizeStatuses } from '../lib/status.js';
+
+const slugKey = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'status';
 
 const cloneDetect = (d) => ({
   commenter: { ...DEFAULT_DETECT.commenter, ...(d?.commenter || {}), rules: (d?.commenter?.rules || DEFAULT_DETECT.commenter.rules).map((r) => ({ ...r })) },
@@ -28,6 +31,9 @@ const DEFAULTS = {
   detect: DEFAULT_DETECT,
   // Template-driven Excel export mapping (constants + field → cell locators).
   templateExport: DEFAULT_TEMPLATE_MAPPING,
+  // Configurable comment statuses (label + colour + role). Open and Closed
+  // are mandatory; the middle ones are editable. See lib/status.js.
+  statuses: DEFAULT_STATUSES,
 };
 
 const SettingsContext = createContext(null);
@@ -48,7 +54,7 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     (async () => {
       const saved = await loadSettings();
-      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect), templateExport: migrateMapping({ ...DEFAULT_TEMPLATE_MAPPING, ...(saved.templateExport || {}) }) });
+      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect), templateExport: migrateMapping({ ...DEFAULT_TEMPLATE_MAPPING, ...(saved.templateExport || {}) }), statuses: normalizeStatuses(saved.statuses) });
       applyThemeMode(saved?.themeMode || DEFAULTS.themeMode);
       loaded.current = true;
       setReady(true);
@@ -101,14 +107,51 @@ export function SettingsProvider({ children }) {
   const setTemplateExport = useCallback((patch) => {
     setSettings((s) => ({ ...s, templateExport: typeof patch === 'function' ? patch(s.templateExport) : { ...s.templateExport, ...patch } }));
   }, []);
+  // ---- statuses (Open/Closed mandatory; middles editable) ----
+  const addStatus = useCallback((label) => {
+    const clean = String(label || '').trim() || 'New status';
+    setSettings((s) => {
+      const list = s.statuses;
+      const keys = new Set(list.map((x) => x.key));
+      let key = slugKey(clean);
+      while (keys.has(key)) key += '_1';
+      const doneIdx = list.findIndex((x) => x.role === 'done');
+      const at = doneIdx < 0 ? list.length : doneIdx;
+      const next = [...list];
+      next.splice(at, 0, { key, label: clean, color: '#5b5f77', role: 'middle' });
+      return { ...s, statuses: next };
+    });
+  }, []);
+  const updateStatus = useCallback((key, patch) => {
+    setSettings((s) => ({ ...s, statuses: s.statuses.map((x) => (x.key === key ? { ...x, ...patch } : x)) }));
+  }, []);
+  const removeStatus = useCallback((key) => {
+    setSettings((s) => {
+      const t = s.statuses.find((x) => x.key === key);
+      if (!t || t.role !== 'middle') return s; // never remove Open/Closed
+      return { ...s, statuses: s.statuses.filter((x) => x.key !== key) };
+    });
+  }, []);
+  const moveStatus = useCallback((key, dir) => {
+    setSettings((s) => {
+      const list = s.statuses;
+      const i = list.findIndex((x) => x.key === key);
+      const j = i + dir;
+      // Only middles reorder, and they stay between Open (0) and Closed (last).
+      if (i < 1 || j < 1 || j > list.length - 2) return s;
+      const next = [...list];
+      [next[i], next[j]] = [next[j], next[i]];
+      return { ...s, statuses: next };
+    });
+  }, []);
   const resetSettings = useCallback(() => {
     applyThemeMode(DEFAULTS.themeMode);
-    setSettings({ ...DEFAULTS, disciplineColors: {}, customCommenters: [], detect: cloneDetect() });
+    setSettings({ ...DEFAULTS, disciplineColors: {}, customCommenters: [], detect: cloneDetect(), statuses: DEFAULT_STATUSES.map((x) => ({ ...x })) });
   }, []);
 
   const value = useMemo(
-    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, resetSettings }),
-    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, resetSettings]
+    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, addStatus, updateStatus, removeStatus, moveStatus, resetSettings }),
+    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, addStatus, updateStatus, removeStatus, moveStatus, resetSettings]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

@@ -6,6 +6,8 @@
 import { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
 import { detectCommenter } from '../lib/parser.js';
 import { extract } from '../lib/detect.js';
+import { useSettings } from './settings.jsx';
+import { doneLabel as doneLabelOf, resolveStatus } from '../lib/status.js';
 
 const StoreContext = createContext(null);
 
@@ -34,26 +36,32 @@ function reducer(state, action) {
       return { ...state, status: 'loading', error: null };
     case 'LOAD_ERROR':
       return { ...state, status: 'error', error: action.error };
-    case 'SET_DATA':
+    case 'SET_DATA': {
+      const list = action.statuses;
+      const records = withCommenters(action.records).map((r) =>
+        (list && list.length ? { ...r, status: resolveStatus(r.status, list) } : r));
       return {
         ...state,
         status: 'ready',
         error: null,
-        records: withCommenters(action.records),
+        records,
         meta: { source: action.source, stats: action.stats },
       };
+    }
     case 'UPDATE_RECORD':
       return {
         ...state,
         records: state.records.map((r) => {
           if (r.ID !== action.id) return r;
           const next = { ...r, ...action.patch };
-          // Auto-stamp the close-out time when a comment moves into Closed, and
-          // clear it when it leaves — unless the patch sets closedAt explicitly
-          // (a manual edit in the detail drawer).
+          // Auto-stamp the close-out time when a comment moves into the "done"
+          // status, and clear it when it leaves — unless the patch sets closedAt
+          // explicitly (a manual edit in the detail drawer). The done label is
+          // configurable, so it comes in on the action.
           if ('status' in action.patch && !('closedAt' in action.patch)) {
-            const wasClosed = r.status === 'Closed';
-            const nowClosed = next.status === 'Closed';
+            const done = action.doneLabel || 'Closed';
+            const wasClosed = r.status === done;
+            const nowClosed = next.status === done;
             if (nowClosed && !wasClosed) next.closedAt = new Date().toISOString();
             else if (!nowClosed && wasClosed) next.closedAt = null;
           }
@@ -78,6 +86,16 @@ function reducer(state, action) {
           if (mode === 'fill' && r[field] && !(field === 'discipline' && r[field] === 'OTHER')) return r;
           return { ...r, [field]: extract(src, config, allowed).val };
         }),
+      };
+    }
+    case 'REMAP_STATUS': {
+      // Move every record whose status === from to `to` (a status was renamed,
+      // or a middle status was deleted and its comments reassigned to Open).
+      const { from, to } = action;
+      if (!from || !to || from === to) return state;
+      return {
+        ...state,
+        records: state.records.map((r) => (r.status === from ? { ...r, status: to } : r)),
       };
     }
     case 'RENAME_ATTR': {
@@ -107,22 +125,25 @@ function reducer(state, action) {
 
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const { settings } = useSettings();
+  const doneLabel = doneLabelOf(settings.statuses);
 
   const setLoading = useCallback(() => dispatch({ type: 'LOADING' }), []);
   const setError = useCallback((error) => dispatch({ type: 'LOAD_ERROR', error }), []);
   const setData = useCallback(
-    (records, source, stats) => dispatch({ type: 'SET_DATA', records, source, stats }),
-    []
+    (records, source, stats) => dispatch({ type: 'SET_DATA', records, source, stats, statuses: settings.statuses }),
+    [settings.statuses]
   );
   const updateRecord = useCallback(
-    (id, patch) => dispatch({ type: 'UPDATE_RECORD', id, patch }),
-    []
+    (id, patch) => dispatch({ type: 'UPDATE_RECORD', id, patch, doneLabel }),
+    [doneLabel]
   );
   const applyDetect = useCallback(
     (field, config, allowed, mode) => dispatch({ type: 'APPLY_DETECT', field, config, allowed, mode }),
     []
   );
   const renameAttr = useCallback((from, to) => dispatch({ type: 'RENAME_ATTR', from, to }), []);
+  const remapStatus = useCallback((from, to) => dispatch({ type: 'REMAP_STATUS', from, to }), []);
   // Named `notify` (not `toast`) so it doesn't collide with `state.toast`,
   // the current toast payload the provider also exposes.
   // `action` (optional): { label, onClick } renders a button in the toast —
@@ -135,8 +156,8 @@ export function StoreProvider({ children }) {
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);
 
   const value = useMemo(
-    () => ({ ...state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, notify, clearToast }),
-    [state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, notify, clearToast]
+    () => ({ ...state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, remapStatus, notify, clearToast }),
+    [state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, remapStatus, notify, clearToast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -148,9 +169,11 @@ export function useStore() {
   return ctx;
 }
 
-// Derived KPI aggregation, memo-friendly pure helper.
-export function computeKpis(records) {
-  const kpi = { total: records.length, Open: 0, 'In Review': 0, Closed: 0 };
+// Derived KPI aggregation, memo-friendly pure helper. `labels` seeds the known
+// statuses so each shows a 0 even when no comment uses it yet.
+export function computeKpis(records, labels = []) {
+  const kpi = { total: records.length };
+  for (const l of labels) kpi[l] = 0;
   for (const r of records) kpi[r.status] = (kpi[r.status] || 0) + 1;
   return kpi;
 }

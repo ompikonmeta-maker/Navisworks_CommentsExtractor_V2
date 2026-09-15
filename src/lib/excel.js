@@ -64,32 +64,35 @@ function buildCommentsSheet(X, records) {
 
 function buildOverviewSheet(X, ov) {
   const pct = (n, d) => (d ? `${Math.round((n / d) * 100)}%` : '0%');
+  // Status labels are configurable, so the KPI rows and status columns follow
+  // whatever statuses the overview was built with (falling back to the classic
+  // three for older callers).
+  const labels = ov.statuses && ov.statuses.length ? ov.statuses : ['Open', 'In Review', 'Closed'];
+  const doneL = ov.doneLabel || 'Closed';
   const aoa = [
     ['Tabelin — Overview'],
     ['Generated', ov.generatedAt],
     [],
     ['KPI', 'Count', 'Share'],
     ['Total', ov.total, ''],
-    ['Open', ov.kpis.Open || 0, pct(ov.kpis.Open || 0, ov.total)],
-    ['In Review', ov.kpis['In Review'] || 0, pct(ov.kpis['In Review'] || 0, ov.total)],
-    ['Closed', ov.kpis.Closed || 0, pct(ov.kpis.Closed || 0, ov.total)],
-    ['Closed rate', `${ov.closedPct}%`, ''],
-    ['Photo evidence', `${ov.coverage.withPhoto} of ${ov.coverage.closed} closed`, `${ov.coverage.pct}%`],
+    ...labels.map((l) => [l, ov.kpis[l] || 0, pct(ov.kpis[l] || 0, ov.total)]),
+    [`${doneL} rate`, `${ov.closedPct}%`, ''],
+    ['Photo evidence', `${ov.coverage.withPhoto} of ${ov.coverage.closed} ${doneL.toLowerCase()}`, `${ov.coverage.pct}%`],
     [],
     ['By discipline'],
-    ['Discipline', 'Open', 'In Review', 'Closed', 'Total', '% Closed'],
-    ...ov.byDiscipline.map((d) => [d.name, d.Open, d['In Review'], d.Closed, d.total, pct(d.Closed, d.total)]),
+    ['Discipline', ...labels, 'Total', `% ${doneL}`],
+    ...ov.byDiscipline.map((d) => [d.name, ...labels.map((l) => d[l] || 0), d.total, pct(d[doneL] || 0, d.total)]),
     [],
     ['Over time (by current status)'],
-    ['Month', 'Open', 'In Review', 'Closed'],
-    ...ov.trend.map((t) => [t.month, t.Open, t['In Review'], t.Closed]),
+    ['Month', ...labels],
+    ...ov.trend.map((t) => [t.month, ...labels.map((l) => t[l] || 0)]),
     [],
     ['Needs attention (oldest open)'],
     ['Viewpoint', 'Discipline', 'Date', 'Age (days)', 'Comment'],
     ...ov.needsAttention.map((r) => [r.viewpoint, r.discipline, r.commentDate, r.ageDays ?? '', r.commentText]),
   ];
   const ws = X.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 26 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 60 }];
+  ws['!cols'] = [{ wch: 26 }, ...labels.map(() => ({ wch: 12 })), { wch: 10 }, { wch: 10 }, { wch: 60 }];
   // Reserve width to the right where the chart images float.
   ws['!ref'] = X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length + 90, c: 14 } });
   return ws;

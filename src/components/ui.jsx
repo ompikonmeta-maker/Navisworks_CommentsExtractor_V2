@@ -1,6 +1,7 @@
 // Small Material-flavored UI primitives shared across views.
 import { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
 import { useSettings } from '../store/settings.jsx';
+import { statusColor, chipStyle } from '../lib/status.js';
 
 // Icons not in the embedded Material Symbols subset render as inline SVG so we
 // don't have to re-subset the font. Sized in `em` to follow the text size set
@@ -94,16 +95,13 @@ export const Button = forwardRef(function Button(
   );
 });
 
-const STATUS_STYLES = {
-  Open: 'text-status-open border-status-open/40 bg-status-open/10',
-  'In Review': 'text-status-review border-status-review/40 bg-status-review/10',
-  Closed: 'text-status-closed border-status-closed/40 bg-status-closed/10',
-};
-
 export function StatusBadge({ status }) {
+  const { settings } = useSettings();
+  const color = statusColor(settings.statuses, status);
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${STATUS_STYLES[status] || 'text-on-surface-variant border-outline-variant bg-surface-variant'}`}
+      style={chipStyle(color)}
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {status}
