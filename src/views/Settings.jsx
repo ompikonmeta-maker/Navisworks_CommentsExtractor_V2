@@ -5,6 +5,7 @@ import { DISCIPLINES } from '../lib/parser.js';
 import { Icon, Card, Button, SegmentedButtons, DisciplineBadge } from '../components/ui.jsx';
 import DetectionEditor from '../components/DetectionEditor.jsx';
 import TemplateExportPanel from '../components/TemplateExportPanel.jsx';
+import CustomFieldsEditor from '../components/CustomFieldsEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
 
@@ -18,18 +19,20 @@ const THEME_OPTIONS = [
 const SWATCHES = ['#1768f7', '#1f7a4d', '#a9730a', '#b3261e', '#7b3fe4', '#0e7490', '#c026d3', '#475569'];
 
 // Category rail — one focused panel each, so the page never scrolls endlessly.
+// Ordered along the data journey: pick a Template → define Labels & fields →
+// tune Detection → Appearance → About.
 const SECTIONS = [
-  { id: 'appearance', label: 'Appearance', icon: 'dark_mode' },
+  { id: 'template', label: 'Template', icon: 'download' },
   { id: 'labels', label: 'Labels', icon: 'table_view' },
   { id: 'detection', label: 'Detection', icon: 'search' },
-  { id: 'export', label: 'Export', icon: 'download' },
+  { id: 'appearance', label: 'Appearance', icon: 'dark_mode' },
   { id: 'about', label: 'About', icon: 'info' },
 ];
 
 export default function Settings() {
   const { records } = useStore();
   const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings } = useSettings();
-  const [section, setSection] = useState('appearance');
+  const [section, setSection] = useState('template');
   const [labelTab, setLabelTab] = useState('disciplines');
   const [newDisc, setNewDisc] = useState('');
   const [newComm, setNewComm] = useState('');
@@ -89,15 +92,17 @@ export default function Settings() {
 
         {section === 'labels' && (
           <Card className="p-6">
-            <SectionTitle icon="table_view" title="Labels" sub="Your taxonomy — disciplines (with colours) and the people who comment." />
+            <SectionTitle icon="table_view" title="Labels" sub="Your taxonomy — disciplines (with colours), the people who comment, and custom fields for export." />
             <div className="mb-4 inline-flex overflow-hidden rounded-full border border-outline text-sm">
-              {[['disciplines', 'Disciplines'], ['commenters', 'Commenters']].map(([k, label]) => (
+              {[['disciplines', 'Disciplines'], ['commenters', 'Commenters'], ['custom', 'Custom fields']].map(([k, label]) => (
                 <button key={k} onClick={() => setLabelTab(k)} className={`px-4 py-1.5 font-medium ${labelTab === k ? 'bg-primary text-on-primary' : 'text-on-surface hover:bg-surface-container'}`}>{label}</button>
               ))}
             </div>
 
             <div key={labelTab} className="drawer-swap">
-              {labelTab === 'disciplines' ? (
+              {labelTab === 'custom' ? (
+                <CustomFieldsEditor />
+              ) : labelTab === 'disciplines' ? (
                 <>
                   <div className="mb-4 flex flex-wrap items-end gap-2">
                     <label className="text-xs font-medium text-on-surface-variant">
@@ -169,9 +174,9 @@ export default function Settings() {
           </Card>
         )}
 
-        {section === 'export' && (
+        {section === 'template' && (
           <Card className="p-6">
-            <SectionTitle icon="download" title="Export" sub="Isi template Excel-mu dari data comment — log sheet + sheet detail per Tag View, dengan foto before/after. Style & logo template dipertahankan persis." />
+            <SectionTitle icon="download" title="Template" sub="Fill your Excel template from the comment data — a log sheet plus one detail sheet per Tag View, with before/after photos. The template’s layout, logos and styling stay exactly as they are." />
             <TemplateExportPanel />
           </Card>
         )}

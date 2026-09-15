@@ -389,45 +389,22 @@ export default function TemplateExportPanel() {
             </label>
           </div>
 
-          {/* field values — custom fields + constants in one place */}
-          {(attrList.length > 0 || constFields.length > 0) && (
+          {/* constants — custom (cf_) fields now live in Settings › Labels */}
+          {constFields.length > 0 && (
             <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-              <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Field values <InfoTip label="About field values">Set defaults for Custom (cf_) fields and the value for each Constant column.</InfoTip></div>
-
-              {attrList.length > 0 && (
-                <div className="mb-4">
-                  <div className="mb-1 text-xs font-semibold text-on-surface-variant">Custom fields <span className="font-normal">— also shown in the comment drawer</span></div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead><tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant"><th className="pb-1.5 pr-3 font-semibold">Key</th><th className="pb-1.5 pr-3 font-semibold">Default</th><th className="pb-1.5 font-semibold">Multi-line</th></tr></thead>
-                      <tbody>
-                        {attrList.map(({ f, i }) => (
-                          <tr key={f.id} className="border-t border-outline-variant/50">
-                            <td className="py-1.5 pr-3 font-mono text-on-surface-variant">{f.source.key}</td>
-                            <td className="py-1.5 pr-3"><input className={`${inputCls} w-full py-1`} value={f.default || ''} onChange={(e) => setField(i, { default: e.target.value })} placeholder="(empty)" /></td>
-                            <td className="py-1.5"><input type="checkbox" checked={!!f.multiline} onChange={(e) => setField(i, { multiline: e.target.checked })} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {constFields.length > 0 && (
-                <div>
-                  <div className="mb-1 text-xs font-semibold text-on-surface-variant">Constants <span className="font-normal">— one value used for every row</span></div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {constFields.map((f) => (
-                      <label key={f.id} className="text-xs font-medium text-on-surface-variant">
-                        {f.label} <span className="font-mono text-[10px] text-outline">({f.source.key})</span>
-                        <input className={`${inputCls} mt-1 block w-full`} value={cfg.constants?.[f.source.key] ?? ''} onChange={(e) => setConst(f.source.key, e.target.value)} placeholder="—" />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Constants <InfoTip label="About constants">One value used for every row — filled into the columns you set to “Constant”.</InfoTip></div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {constFields.map((f) => (
+                  <label key={f.id} className="text-xs font-medium text-on-surface-variant">
+                    {f.label} <span className="font-mono text-[10px] text-outline">({f.source.key})</span>
+                    <input className={`${inputCls} mt-1 block w-full`} value={cfg.constants?.[f.source.key] ?? ''} onChange={(e) => setConst(f.source.key, e.target.value)} placeholder="—" />
+                  </label>
+                ))}
+              </div>
             </div>
+          )}
+          {attrList.length > 0 && (
+            <p className="px-1 text-[11px] text-on-surface-variant">Custom (cf_) field defaults are set in <span className="font-medium">Settings › Labels › Custom fields</span>.</p>
           )}
           <div className="flex">{nextBtn(3, 'Continue to Export')}</div>
         </>
