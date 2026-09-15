@@ -280,3 +280,19 @@ export function EmptyState({ icon = 'inbox', title, children, action }) {
     </div>
   );
 }
+
+// Small "i" affordance that reveals a tooltip bubble on hover/focus. Styling
+// lives in index.css (`.info-tip` / `.info-bubble`), with the ~0.4s hover
+// delay. Use it to keep long explanations out of the way.
+export function InfoTip({ children, label = 'More info' }) {
+  return (
+    <span className="info-tip" tabIndex={0} role="button" aria-label={label}>
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+        <circle cx="12" cy="8" r="1.3" fill="currentColor" />
+        <path d="M12 11v6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      <span className="info-bubble" role="tooltip">{children}</span>
+    </span>
+  );
+}

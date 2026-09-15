@@ -106,7 +106,14 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   (label / default / multiline), so one definition serves both the export column and the
   editor. Renaming an attr key migrates `record.extra` across records via the store's
   `RENAME_ATTR` action. `migrateMapping` upgrades the old `field:'@x'|'x.y'|'plain'` strings to
-  the source model (run in `settings` load + on JSON import). Detail sheets are cloned by
+  the source model (run in `settings` load + on JSON import). The editor is **column-first**:
+  on template load `buildFieldsFromHeaders` reads the log header row and makes one row per
+  column, `autoMatchHeader` (exact, normalized) binds known headers to a parser field/constant,
+  and unmatched columns become **`blank`** rows (skipped on export, template cell untouched)
+  carrying a suggested `cf_`-prefixed key you can one-click "Define" into a custom field. The
+  four source kinds are record / const / attr / blank. Long help uses the shared `InfoTip`
+  (`components/ui.jsx`, styled by `.info-tip`/`.info-bubble`); dense in-table `Select`s use the
+  `.dd-compact` variant so they don't overflow their column. Detail sheets are cloned by
   picking a worksheet-part number from the actual zip files (never from `workbook.xml`, which
   lists no part paths) so clones never clobber existing sheets. The pre-existing `lib/excel.js`
   quick export stays as-is.

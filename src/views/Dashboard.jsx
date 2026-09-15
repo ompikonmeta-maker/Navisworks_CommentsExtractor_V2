@@ -9,7 +9,7 @@ import { useStore, computeKpis } from '../store/store.jsx';
 import { STATUSES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
-import { Icon, Button, Card, StatusBadge, DisciplineBadge } from '../components/ui.jsx';
+import { Icon, Button, Card, StatusBadge, DisciplineBadge, InfoTip } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 
 const KPI_META = [
@@ -567,19 +567,6 @@ function SnapButton({ onClick }) {
 }
 
 // Info "i" that reveals a tooltip on hover/focus (CSS-driven delay + spring).
-function InfoTip({ children, label = 'More info' }) {
-  return (
-    <span className="info-tip" tabIndex={0} role="button" aria-label={label}>
-      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
-        <circle cx="12" cy="8" r="1.3" fill="currentColor" />
-        <path d="M12 11v6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-      <span className="info-bubble" role="tooltip">{children}</span>
-    </span>
-  );
-}
-
 function ChartTitle({ icon, title, sub }) {
   return (
     <div className="mb-4">

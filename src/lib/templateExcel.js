@@ -204,6 +204,58 @@ export function attrFields(mapping) {
   return (mapping?.logSheet?.fields || []).map(normalizeField).filter((x) => x.source.kind === 'attr');
 }
 
+// ---- column-first auto-mapping --------------------------------------
+// Prefix for auto-defined custom fields, so they read apart from the parser
+// keys (viewpoint, commentText, …).
+export const CUSTOM_PREFIX = 'cf_';
+const STATUS_MAP = { Open: 'OPEN', 'In Review': 'IN REVIEW', Closed: 'CLOSED' };
+// Known template headers → the parser field / constant they should pull from.
+const SYNONYMS = [
+  [['tag view no', 'tag view', 'viewpoint', 'tag'], { kind: 'record', key: 'viewpoint' }],
+  [['date', 'comment date'], { kind: 'record', key: 'commentDate', format: 'date' }],
+  [['unit'], { kind: 'const', key: 'unit' }],
+  [['phase'], { kind: 'const', key: 'phase', format: 'number' }],
+  [['comment record', 'comment text', 'comment'], { kind: 'record', key: 'commentText' }],
+  [['comment originator', 'originator', 'commenter'], { kind: 'record', key: 'commenter' }],
+  [['ctr discipline resp', 'discipline resp', 'discipline'], { kind: 'record', key: 'discipline' }],
+  [['resolution'], { kind: 'record', key: 'resolution' }],
+  [['ctr discipline status', 'discipline status', 'status'], { kind: 'record', key: 'status', map: STATUS_MAP }],
+  [['ctr discipline closing date', 'closing date', 'closed at'], { kind: 'record', key: 'closedAt', format: 'date' }],
+  [['author', 'user'], { kind: 'record', key: 'authorCode' }],
+];
+const normH = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[\s:：.\-,]+$/, '').trim();
+const slugKey = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'field';
+
+// Guess which parser field / constant a template header should pull from.
+// Exact (normalized) match only — a loose "contains" match wrongly grabs the
+// many workflow columns ("SUBMISSION DATE TO CPY", "COMMENT ORIGINATOR REPLY",
+// …) that share a generic word, so those are left blank instead.
+export function autoMatchHeader(text) {
+  const t = normH(text);
+  if (!t) return null;
+  for (const [names, target] of SYNONYMS) if (names.includes(t)) return target;
+  return null;
+}
+
+// Build column-first field rows from the log header row (in column order).
+// Matched headers bind to their field; unmatched ones become 'blank' rows
+// (left untouched on export) carrying a suggested cf_ key for one-click define.
+export function buildFieldsFromHeaders(headers) {
+  return Object.entries(headers || {})
+    .sort((a, b) => letterToCol(a[0]) - letterToCol(b[0]))
+    .map(([col, text], i) => {
+      const m = autoMatchHeader(text);
+      const base = { id: `h_${col}_${i}`, label: text, by: 'header', value: text };
+      if (m) {
+        const out = { ...base, source: { kind: m.kind, key: m.key } };
+        if (m.format) out.format = m.format;
+        if (m.map) out.map = m.map;
+        return out;
+      }
+      return { ...base, source: { kind: 'blank', key: '' }, suggestKey: CUSTOM_PREFIX + slugKey(text) };
+    });
+}
+
 // ---- locator resolution ---------------------------------------------
 // Returns a column NUMBER (1-based) for log fields, or a cell ref for scalars.
 function resolveColumn(loc, ctx) {
@@ -330,6 +382,7 @@ function encodeCell(ref, styleAttr, field, rec, constants) {
   const s = styleAttr ? ` s="${styleAttr}"` : '';
   const fld = field.source ? field : normalizeField(field);
   const src = fld.source;
+  if (src.kind === 'blank') return `<c r="${ref}"${s}/>`;
   let raw = '';
   const fmt = fld.format;
   if (src.kind === 'const') raw = constants[src.key] ?? '';
@@ -452,6 +505,7 @@ export async function fillTemplate(bytes, records, rawMapping, constants = {}) {
   const headerTextByCol = {}; // col# → header text (for auto-repair)
   for (const [letter, text] of Object.entries(headers)) headerTextByCol[letterToCol(letter)] = text;
   for (const f of logCfg.fields) {
+    if (f.source?.kind === 'blank') continue; // leave the template cell untouched
     const col = resolveColumn(f, ctx);
     if (col) fieldByCol.set(col, f);
   }

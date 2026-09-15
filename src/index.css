@@ -426,6 +426,12 @@
   position: relative;
   display: inline-block;
 }
+/* Compact variant for dense tables — drop the wide min-width so the trigger
+   respects a narrow width utility and doesn't overlap the next column. */
+.dd-compact .dd-trigger {
+  min-width: 0;
+  padding: 0 8px 0 10px;
+}
 .dd-trigger {
   width: 100%;
   min-width: 8.5rem;
