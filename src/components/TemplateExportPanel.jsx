@@ -38,7 +38,21 @@ const RECORD_OPTS = RECORD_FIELDS.map(([value, label]) => ({ value, label }));
 
 const inputCls =
   'rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+// Quiet field for the dense mapping table — no resting border/fill; frames up
+// only on hover / focus so the table reads as data, not a wall of boxes.
+const quietInput =
+  'w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-xs text-on-surface transition-colors hover:bg-surface-container focus:border-primary focus:bg-surface focus:outline-none';
 const slug = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'field';
+
+const STEPS = [
+  { key: 'template', label: 'Template' },
+  { key: 'columns', label: 'Columns' },
+  { key: 'detail', label: 'Detail' },
+  { key: 'export', label: 'Export' },
+];
+const Check = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" /></svg>
+);
 
 function download(bytes, name, type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
   const blob = new Blob([bytes], { type });
@@ -61,6 +75,7 @@ export default function TemplateExportPanel() {
   const [info, setInfo] = useState(null); // inspect result
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [step, setStep] = useState(0); // 0 Template · 1 Columns · 2 Detail · 3 Export
   const fileRef = useRef(null);
   const jsonRef = useRef(null);
 
@@ -172,167 +187,189 @@ export default function TemplateExportPanel() {
     e.target.value = '';
   };
 
-  const statusBadge = (f, col) => {
-    const k = f.source.kind;
-    if (k === 'blank') return <span className="rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-bold text-on-surface-variant">Blank</span>;
-    if (k === 'const') return <span className="rounded bg-status-review/15 px-1.5 py-0.5 text-[10px] font-bold text-status-review">Constant</span>;
-    if (k === 'attr') return <span className="rounded bg-status-closed/15 px-1.5 py-0.5 text-[10px] font-bold text-status-closed">Custom</span>;
-    return <span className="rounded bg-secondary-container px-1.5 py-0.5 text-[10px] font-bold text-on-secondary-container">From data</span>;
+  // One calm pill per row — carries the resolved column letter, so the extra
+  // "Col" column is gone. New = a template column with no data yet.
+  const statusPill = (f, col) => {
+    const dot = <span className="h-1.5 w-1.5 rounded-full bg-current" />;
+    if (f.source.kind === 'blank')
+      return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-review/15 px-2 py-0.5 text-[11px] font-bold text-status-review">{dot}New{col && <span className="font-mono opacity-70">{col}</span>}</span>;
+    if (col)
+      return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-closed/15 px-2 py-0.5 text-[11px] font-bold text-status-closed">{dot}Mapped<span className="font-mono opacity-70">{col}</span></span>;
+    return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-open/15 px-2 py-0.5 text-[11px] font-bold text-status-open">{dot}No column</span>;
   };
 
+  const stepper = (
+    <div className="mx-auto flex w-full max-w-xl gap-1 rounded-full border border-outline-variant bg-surface-low p-1">
+      {STEPS.map((s, i) => {
+        const on = i === step;
+        const done = i < step && (i === 0 ? !!tpl : !!info);
+        const locked = i > 0 && !info;
+        return (
+          <button
+            key={s.key}
+            type="button"
+            disabled={locked}
+            onClick={() => setStep(i)}
+            aria-current={on ? 'step' : undefined}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-full px-2 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${on ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}
+          >
+            <span className={`grid h-5 w-5 place-items-center rounded-full text-[11px] font-bold ${on ? 'bg-white/25 text-on-primary' : done ? 'bg-status-closed text-white' : 'bg-surface-high text-on-surface-variant'}`}>
+              {done ? <Check /> : i + 1}
+            </span>
+            <span className="hidden sm:inline">{s.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const nextBtn = (to, label) => (
+    <button onClick={() => setStep(to)} className="ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-primary hover:bg-surface-container">
+      {label} <Icon name="chevron_right" className="text-[16px]" />
+    </button>
+  );
+
   return (
-    <div className="space-y-5">
-      {/* template loader */}
-      <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={onPick} />
-          <Button variant="tonal" icon="upload_file" onClick={() => fileRef.current?.click()}>{tpl ? 'Replace template…' : 'Choose template .xlsx…'}</Button>
-          {tpl && <span className="text-sm font-medium">{tpl.name}</span>}
-          {info && <span className="rounded-full bg-surface-container px-2.5 py-0.5 text-[11px] font-bold text-on-surface-variant">{Object.keys(headersFor(cfg.logSheet.name)).length} columns read</span>}
-          <span className="flex-1" />
-          {tpl && <button onClick={removeTpl} className="rounded-full p-1.5 text-on-surface-variant hover:text-error" title="Remove template"><Icon name="close" className="text-[18px]" /></button>}
-        </div>
-        {info && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-on-surface-variant">
-              Log sheet
-              <Select className="mt-1 w-full" aria-label="Log sheet" value={cfg.logSheet?.name || info.logSheet} onChange={setLogSheet} options={(info.candidateLogSheets || []).map((n) => ({ value: n, label: n === info.logSheet ? `${n} (auto)` : n }))} />
-            </label>
-            <label className="text-xs font-medium text-on-surface-variant">
-              Detail sheet
-              <Select className="mt-1 w-full" aria-label="Detail sheet" value={cfg.detail?.patternSheet || info.detailSheets[0] || ''} onChange={setPattern} options={(info.detailSheets || []).map((n) => ({ value: n, label: n }))} />
-            </label>
-            <p className="text-[11px] text-on-surface-variant sm:col-span-2">Pick which sheet holds the comment table and which one is the per-item detail page. Saved in this browser.</p>
-          </div>
-        )}
-        {err && <p className="mt-2 text-xs text-error">{err}</p>}
-      </div>
+    <div className="space-y-5 pb-4">
+      {stepper}
 
-      {!tpl && (
-        <div className="flex flex-col items-center gap-2 py-10 text-center">
-          <Icon name="download" className="text-[40px] text-outline" />
-          <div className="font-medium">Export into your Excel template</div>
-          <p className="max-w-sm text-sm text-on-surface-variant">Choose a template .xlsx. The comment data fills the log sheet; each Tag View becomes a detail sheet with before/after photos. The template’s layout, logos and styling stay exactly as they are.</p>
-        </div>
-      )}
-
-      {info && (
+      {/* ---------- STEP 1 · TEMPLATE & SHEETS ---------- */}
+      {step === 0 && (
         <>
-          {/* structure */}
           <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold">Log sheet layout</div>
-              <button onClick={resetMapping} className="text-xs font-medium text-primary hover:underline">Reset to default</button>
+            <div className="flex flex-wrap items-center gap-3">
+              <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={onPick} />
+              <Button variant="tonal" icon="upload_file" onClick={() => fileRef.current?.click()}>{tpl ? 'Replace template…' : 'Choose template .xlsx…'}</Button>
+              {tpl && <span className="text-sm font-medium">{tpl.name}</span>}
+              {info && <span className="rounded-full bg-surface-container px-2.5 py-0.5 text-[11px] font-bold text-on-surface-variant">{Object.keys(headersFor(cfg.logSheet.name)).length} columns read</span>}
+              <span className="flex-1" />
+              {tpl && <button onClick={removeTpl} className="rounded-full p-1.5 text-on-surface-variant hover:text-error" title="Remove template"><Icon name="close" className="text-[18px]" /></button>}
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-xs font-medium text-on-surface-variant">
-                Header row
-                <input type="number" min={1} className={`${inputCls} mt-1 block w-full`} value={cfg.logSheet.headerRow} onChange={(e) => setLog({ headerRow: parseInt(e.target.value, 10) || 1 })} />
-              </label>
-              <label className="text-xs font-medium text-on-surface-variant">
-                First data row
-                <input type="number" min={1} className={`${inputCls} mt-1 block w-full`} value={cfg.logSheet.dataStartRow} onChange={(e) => setLog({ dataStartRow: parseInt(e.target.value, 10) || 1 })} />
-              </label>
-              <div className="text-xs font-medium text-on-surface-variant">
-                <span className="inline-flex items-center gap-1">Item column <InfoTip label="About the item column">The column whose cells link to each detail sheet. Usually the first column.</InfoTip></span>
-                <div className="mt-1 flex gap-1">
-                  <Select className="w-[120px]" aria-label="Item column locator" value={cfg.logSheet.itemColumn.by} onChange={(v) => setItemCol({ by: v })} options={BY_OPTS} />
-                  <input className={`${inputCls} min-w-0 flex-1`} value={cfg.logSheet.itemColumn.value} onChange={(e) => setItemCol({ value: e.target.value })} />
-                </div>
+            {info && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-medium text-on-surface-variant">
+                  Log sheet
+                  <Select className="mt-1 w-full" aria-label="Log sheet" value={cfg.logSheet?.name || info.logSheet} onChange={setLogSheet} options={(info.candidateLogSheets || []).map((n) => ({ value: n, label: n === info.logSheet ? `${n} (auto)` : n }))} />
+                </label>
+                <label className="text-xs font-medium text-on-surface-variant">
+                  Detail sheet
+                  <Select className="mt-1 w-full" aria-label="Detail sheet" value={cfg.detail?.patternSheet || info.detailSheets[0] || ''} onChange={setPattern} options={(info.detailSheets || []).map((n) => ({ value: n, label: n }))} />
+                </label>
+                <p className="text-[11px] text-on-surface-variant sm:col-span-2">Pick which sheet holds the comment table and which one is the per-item detail page. Saved in this browser.</p>
               </div>
-            </div>
+            )}
+            {err && <p className="mt-2 text-xs text-error">{err}</p>}
           </div>
 
-          {/* column mapping */}
-          <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                Column mapping
-                <InfoTip label="About column mapping">Each row is a column from your template. Matched columns pull from your data; unmatched ones are new — define them to fill a value per comment. New keys get a “cf_” prefix.</InfoTip>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {newCount > 0 && <button onClick={defineAllNew} className="rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-surface-high">Define all new ({newCount})</button>}
-                <button onClick={rebuildFromHeaders} className="rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-surface-high">Rebuild from headers</button>
-                <button onClick={addField} className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary"><Icon name="upload_file" className="text-[15px]" /> Add field</button>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-xs">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant">
-                    <th className="pb-1.5 pr-2 font-semibold">Label</th>
-                    <th className="pb-1.5 pr-2 font-semibold">Source</th>
-                    <th className="pb-1.5 pr-2 font-semibold">Field / key</th>
-                    <th className="pb-1.5 pr-2 font-semibold">Find by</th>
-                    <th className="pb-1.5 pr-2 font-semibold">Value</th>
-                    <th className="pb-1.5 pr-2 font-semibold">Fmt</th>
-                    <th className="pb-1.5 pr-2 font-semibold">Col</th>
-                    <th className="pb-1.5 pr-2 font-semibold">Status</th>
-                    <th className="pb-1.5 font-semibold" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {fields.map((f, i) => {
-                    const row = preview.rows[i + 1];
-                    const kind = f.source.kind;
-                    return (
-                      <tr key={f.id} className={`border-t border-outline-variant/50 align-middle ${kind === 'blank' ? 'bg-status-review/5' : ''}`}>
-                        <td className="py-1 pr-2"><input className={`${inputCls} w-[128px] py-1`} value={f.label} onChange={(e) => setField(i, { label: e.target.value })} /></td>
-                        <td className="py-1 pr-2"><Select className="dd-compact w-[116px]" aria-label="Source" value={kind} onChange={(v) => changeKind(i, v)} options={KIND_OPTS} /></td>
-                        <td className="py-1 pr-2">
-                          {kind === 'record' ? (
-                            <Select className="dd-compact w-[150px]" aria-label="Data field" value={f.source.key} onChange={(v) => setFieldSource(i, { key: v })} options={RECORD_OPTS} />
-                          ) : kind === 'blank' ? (
-                            <button onClick={() => defineBlank(i)} className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15">Define as {f.suggestKey || `${CUSTOM_PREFIX}${slug(f.label)}`}</button>
-                          ) : (
-                            <input key={f.id + kind} className={`${inputCls} w-[120px] py-1 font-mono`} defaultValue={f.source.key} onBlur={(e) => commitKey(i, f.source.key, e.target.value)} />
-                          )}
-                        </td>
-                        <td className="py-1 pr-2"><Select className="dd-compact w-[116px]" aria-label="Find by" value={f.by} onChange={(v) => setField(i, { by: v })} options={BY_OPTS} /></td>
-                        <td className="py-1 pr-2"><input className={`${inputCls} w-[150px] py-1 font-mono`} value={f.value} onChange={(e) => setField(i, { value: e.target.value })} /></td>
-                        <td className="py-1 pr-2"><Select className="dd-compact w-[92px]" aria-label="Format" value={f.format || 'text'} onChange={(v) => setField(i, { format: v === 'text' ? undefined : v })} options={FMT_OPTS} /></td>
-                        <td className="py-1 pr-2">{row?.col ? <span className="rounded bg-secondary-container px-1.5 py-0.5 font-bold text-on-secondary-container">{row.col}</span> : <span className="italic text-status-open">—</span>}</td>
-                        <td className="py-1 pr-2">{statusBadge(f, row?.col)}</td>
-                        <td className="py-1 pl-1">
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => moveField(i, -1)} disabled={i === 0} className="grid h-6 w-6 place-items-center rounded text-on-surface-variant hover:bg-surface-container disabled:opacity-30" title="Move up"><Icon name="chevron_right" className="-rotate-90 text-[16px]" /></button>
-                            <button onClick={() => moveField(i, 1)} disabled={i === fields.length - 1} className="grid h-6 w-6 place-items-center rounded text-on-surface-variant hover:bg-surface-container disabled:opacity-30" title="Move down"><Icon name="chevron_right" className="rotate-90 text-[16px]" /></button>
-                            <button onClick={() => removeField(i)} className="grid h-6 w-6 place-items-center rounded text-on-surface-variant hover:bg-error/10 hover:text-error" title="Remove"><Icon name="close" className="text-[16px]" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-2 text-[11px] text-on-surface-variant">
-              <b>From data</b> pulls from your comments · <b>Constant</b> is one value for the whole file · <b>Custom</b> is a field you fill per comment (key gets <span className="font-mono">cf_</span>, shown in the comment drawer) · <b>Leave blank</b> keeps the column empty.
-            </p>
-          </div>
-
-          {/* custom fields (drives the drawer) */}
-          {attrList.length > 0 && (
-            <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-              <div className="mb-1 inline-flex items-center gap-1.5 text-sm font-semibold">Custom fields <InfoTip label="About custom fields">These show up in the comment drawer so you can fill them. Set a default and whether it’s multi-line.</InfoTip></div>
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead><tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant"><th className="pb-1.5 pr-3 font-semibold">Key</th><th className="pb-1.5 pr-3 font-semibold">Default</th><th className="pb-1.5 font-semibold">Multi-line</th></tr></thead>
-                  <tbody>
-                    {attrList.map(({ f, i }) => (
-                      <tr key={f.id} className="border-t border-outline-variant/50">
-                        <td className="py-1.5 pr-3 font-mono text-on-surface-variant">{f.source.key}</td>
-                        <td className="py-1.5 pr-3"><input className={`${inputCls} w-full py-1`} value={f.default || ''} onChange={(e) => setField(i, { default: e.target.value })} placeholder="(empty)" /></td>
-                        <td className="py-1.5"><input type="checkbox" checked={!!f.multiline} onChange={(e) => setField(i, { multiline: e.target.checked })} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {!tpl && (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <Icon name="download" className="text-[40px] text-outline" />
+              <div className="font-medium">Export into your Excel template</div>
+              <p className="max-w-sm text-sm text-on-surface-variant">Choose a template .xlsx. The comment data fills the log sheet; each Tag View becomes a detail sheet with before/after photos. The template’s layout, logos and styling stay exactly as they are.</p>
             </div>
           )}
 
-          {/* detail cells */}
+          {info && (
+            <div className="rounded-2xl border border-outline-variant bg-surface p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="inline-flex items-center gap-1.5 text-sm font-semibold">Log sheet structure <InfoTip label="About log sheet structure">Which rows and column the comment table uses. Set these once for your template.</InfoTip></div>
+                <button onClick={resetMapping} className="text-xs font-medium text-primary hover:underline">Reset to default</button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="text-xs font-medium text-on-surface-variant">
+                  Header row
+                  <input type="number" min={1} className={`${inputCls} mt-1 block w-full`} value={cfg.logSheet.headerRow} onChange={(e) => setLog({ headerRow: parseInt(e.target.value, 10) || 1 })} />
+                </label>
+                <label className="text-xs font-medium text-on-surface-variant">
+                  First data row
+                  <input type="number" min={1} className={`${inputCls} mt-1 block w-full`} value={cfg.logSheet.dataStartRow} onChange={(e) => setLog({ dataStartRow: parseInt(e.target.value, 10) || 1 })} />
+                </label>
+                <div className="text-xs font-medium text-on-surface-variant">
+                  <span className="inline-flex items-center gap-1">Item column <InfoTip label="About the item column">The column whose cells link to each detail sheet. Usually the first column.</InfoTip></span>
+                  <div className="mt-1 flex gap-1">
+                    <Select className="dd-compact w-[120px]" aria-label="Item column locator" value={cfg.logSheet.itemColumn.by} onChange={(v) => setItemCol({ by: v })} options={BY_OPTS} />
+                    <input className={`${inputCls} min-w-0 flex-1`} value={cfg.logSheet.itemColumn.value} onChange={(e) => setItemCol({ value: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex">{nextBtn(1, 'Continue to Columns')}</div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ---------- STEP 2 · COLUMN MAPPING ---------- */}
+      {step === 1 && info && (
+        <div className="rounded-2xl border border-outline-variant bg-surface p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex items-center gap-1.5 text-sm font-semibold">
+              Column mapping
+              <InfoTip label="About column mapping">Each row is a column from your template. Matched columns pull from your data; unmatched ones are new — define them to fill a value per comment. New keys get a “cf_” prefix.</InfoTip>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {newCount > 0 && <button onClick={defineAllNew} className="rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-surface-high">Define all new ({newCount})</button>}
+              <button onClick={rebuildFromHeaders} className="rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-surface-high">Rebuild from headers</button>
+              <button onClick={addField} className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary"><Icon name="upload_file" className="text-[15px]" /> Add field</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px] text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant">
+                  <th className="pb-1.5 pr-2 font-semibold">Label</th>
+                  <th className="pb-1.5 pr-2 font-semibold">Source</th>
+                  <th className="pb-1.5 pr-2 font-semibold">Field / key</th>
+                  <th className="pb-1.5 pr-2 font-semibold">Find by</th>
+                  <th className="pb-1.5 pr-2 font-semibold">Value</th>
+                  <th className="pb-1.5 pr-2 font-semibold">Fmt</th>
+                  <th className="pb-1.5 pr-2 font-semibold">Status</th>
+                  <th className="pb-1.5 font-semibold" />
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((f, i) => {
+                  const row = preview.rows[i + 1];
+                  const kind = f.source.kind;
+                  return (
+                    <tr key={f.id} className={`group border-t border-outline-variant/50 align-middle ${kind === 'blank' ? 'bg-status-review/5' : ''} hover:bg-surface-low`}>
+                      <td className="py-0.5 pr-2"><input className={`${quietInput} w-[130px]`} value={f.label} onChange={(e) => setField(i, { label: e.target.value })} /></td>
+                      <td className="py-0.5 pr-2"><Select className="dd-quiet dd-compact w-[116px]" aria-label="Source" value={kind} onChange={(v) => changeKind(i, v)} options={KIND_OPTS} /></td>
+                      <td className="py-0.5 pr-2">
+                        {kind === 'record' ? (
+                          <Select className="dd-quiet dd-compact w-[150px]" aria-label="Data field" value={f.source.key} onChange={(v) => setFieldSource(i, { key: v })} options={RECORD_OPTS} />
+                        ) : kind === 'blank' ? (
+                          <button onClick={() => defineBlank(i)} className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15">Define as {f.suggestKey || `${CUSTOM_PREFIX}${slug(f.label)}`}</button>
+                        ) : (
+                          <input key={f.id + kind} className={`${quietInput} w-[130px] font-mono`} defaultValue={f.source.key} onBlur={(e) => commitKey(i, f.source.key, e.target.value)} />
+                        )}
+                      </td>
+                      <td className="py-0.5 pr-2"><Select className="dd-quiet dd-compact w-[116px]" aria-label="Find by" value={f.by} onChange={(v) => setField(i, { by: v })} options={BY_OPTS} /></td>
+                      <td className="py-0.5 pr-2"><input className={`${quietInput} w-[150px] font-mono`} value={f.value} onChange={(e) => setField(i, { value: e.target.value })} /></td>
+                      <td className="py-0.5 pr-2"><Select className="dd-quiet dd-compact w-[92px]" aria-label="Format" value={f.format || 'text'} onChange={(v) => setField(i, { format: v === 'text' ? undefined : v })} options={FMT_OPTS} /></td>
+                      <td className="py-0.5 pr-2">{statusPill(f, row?.col)}</td>
+                      <td className="py-0.5 pl-1">
+                        <div className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                          <button onClick={() => moveField(i, -1)} disabled={i === 0} className="grid h-6 w-6 place-items-center rounded text-on-surface-variant hover:bg-surface-container disabled:opacity-30" title="Move up"><Icon name="chevron_right" className="-rotate-90 text-[16px]" /></button>
+                          <button onClick={() => moveField(i, 1)} disabled={i === fields.length - 1} className="grid h-6 w-6 place-items-center rounded text-on-surface-variant hover:bg-surface-container disabled:opacity-30" title="Move down"><Icon name="chevron_right" className="rotate-90 text-[16px]" /></button>
+                          <button onClick={() => removeField(i)} className="grid h-6 w-6 place-items-center rounded text-on-surface-variant hover:bg-error/10 hover:text-error" title="Remove"><Icon name="close" className="text-[16px]" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-on-surface-variant">
+            <span className="font-bold text-status-closed">Mapped</span> pulls from your comments (its column letter is shown) · <span className="font-bold text-status-review">New</span> column isn’t in your data — Define it (key gets <span className="font-mono">cf_</span>) to fill it per comment · <span className="font-bold text-status-open">No column</span> means the header wasn’t found.
+          </p>
+          <div className="mt-3 flex">{nextBtn(2, 'Continue to Detail')}</div>
+        </div>
+      )}
+
+      {/* ---------- STEP 3 · DETAIL & VALUES ---------- */}
+      {step === 2 && info && (
+        <>
           <div className="rounded-2xl border border-outline-variant bg-surface p-4">
             <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Detail sheet cells <InfoTip label="About detail cells">On each detail sheet the tool sets the item number and drops the before/after photos into these cells. Everything else fills itself from the template’s formulas.</InfoTip></div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -352,31 +389,76 @@ export default function TemplateExportPanel() {
             </label>
           </div>
 
-          {/* constants */}
-          {constFields.length > 0 && (
+          {/* field values — custom fields + constants in one place */}
+          {(attrList.length > 0 || constFields.length > 0) && (
             <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-              <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Constants <InfoTip label="About constants">One value used for every row — filled into the columns you set to “Constant”.</InfoTip></div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {constFields.map((f) => (
-                  <label key={f.id} className="text-xs font-medium text-on-surface-variant">
-                    {f.label} <span className="font-mono text-[10px] text-outline">({f.source.key})</span>
-                    <input className={`${inputCls} mt-1 block w-full`} value={cfg.constants?.[f.source.key] ?? ''} onChange={(e) => setConst(f.source.key, e.target.value)} placeholder="—" />
-                  </label>
-                ))}
-              </div>
+              <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Field values <InfoTip label="About field values">Set defaults for Custom (cf_) fields and the value for each Constant column.</InfoTip></div>
+
+              {attrList.length > 0 && (
+                <div className="mb-4">
+                  <div className="mb-1 text-xs font-semibold text-on-surface-variant">Custom fields <span className="font-normal">— also shown in the comment drawer</span></div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead><tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant"><th className="pb-1.5 pr-3 font-semibold">Key</th><th className="pb-1.5 pr-3 font-semibold">Default</th><th className="pb-1.5 font-semibold">Multi-line</th></tr></thead>
+                      <tbody>
+                        {attrList.map(({ f, i }) => (
+                          <tr key={f.id} className="border-t border-outline-variant/50">
+                            <td className="py-1.5 pr-3 font-mono text-on-surface-variant">{f.source.key}</td>
+                            <td className="py-1.5 pr-3"><input className={`${inputCls} w-full py-1`} value={f.default || ''} onChange={(e) => setField(i, { default: e.target.value })} placeholder="(empty)" /></td>
+                            <td className="py-1.5"><input type="checkbox" checked={!!f.multiline} onChange={(e) => setField(i, { multiline: e.target.checked })} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {constFields.length > 0 && (
+                <div>
+                  <div className="mb-1 text-xs font-semibold text-on-surface-variant">Constants <span className="font-normal">— one value used for every row</span></div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {constFields.map((f) => (
+                      <label key={f.id} className="text-xs font-medium text-on-surface-variant">
+                        {f.label} <span className="font-mono text-[10px] text-outline">({f.source.key})</span>
+                        <input className={`${inputCls} mt-1 block w-full`} value={cfg.constants?.[f.source.key] ?? ''} onChange={(e) => setConst(f.source.key, e.target.value)} placeholder="—" />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
+          <div className="flex">{nextBtn(3, 'Continue to Export')}</div>
+        </>
+      )}
 
-          {/* export + mapping io */}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button icon="download" onClick={doExport} disabled={busy || !records.length}>{busy ? 'Working…' : 'Export using template'}</Button>
+      {/* ---------- STEP 4 · EXPORT ---------- */}
+      {step === 3 && info && (
+        <div className="rounded-2xl border border-outline-variant bg-surface p-4">
+          <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Export <InfoTip label="About export">Fills the log sheet and one detail sheet per comment, then downloads the .xlsx. Save the field mapping as JSON to reuse it next time.</InfoTip></div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-medium text-on-surface-variant">{records.length} comments → {records.length} log rows + {records.length} detail sheets · {activeFields.length} columns filled</span>
+          </div>
+          {records.length > 150 && <p className="mt-2 text-xs text-status-review">{records.length} comments will create {records.length} detail sheets — a large, slow file. For a quick test, reduce the data first.</p>}
+          {!records.length && <p className="mt-2 text-xs text-status-review">No comments loaded yet — import a report first.</p>}
+          {err && <p className="mt-2 text-xs text-error">{err}</p>}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <input ref={jsonRef} type="file" accept=".json" className="sr-only" onChange={importMapping} />
             <Button variant="text" icon="folder_open" onClick={() => jsonRef.current?.click()}>Import mapping</Button>
             <Button variant="text" icon="upload_file" onClick={exportMapping}>Export mapping</Button>
-            <span className="w-full text-xs text-on-surface-variant">{records.length} comments → {records.length} log rows + {records.length} detail sheets · {activeFields.length} columns filled.</span>
-            {records.length > 150 && <span className="w-full text-xs text-status-review">{records.length} comments will create {records.length} detail sheets — a large, slow file. For a quick test, reduce the data first.</span>}
           </div>
-        </>
+        </div>
+      )}
+
+      {/* Sticky export action bar — solid so it reads as a pinned bar, not a
+          translucent overlay, and stays reachable while configuring. */}
+      {info && (
+        <div className="sticky bottom-2 z-10 flex flex-wrap items-center gap-3 rounded-full border border-outline-variant bg-surface px-4 py-2 shadow-md-2">
+          <span className="pl-1 text-xs text-on-surface-variant">{records.length} comments → {records.length} rows + {records.length} sheets</span>
+          <span className="flex-1" />
+          <Button icon="download" onClick={doExport} disabled={busy || !records.length}>{busy ? 'Working…' : 'Export using template'}</Button>
+        </div>
       )}
     </div>
   );

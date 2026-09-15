@@ -432,6 +432,21 @@
   min-width: 0;
   padding: 0 8px 0 10px;
 }
+/* Quiet variant for dense tables — no resting border or fill; the trigger
+   frames up only on hover / open, so the mapping table reads as data instead
+   of a wall of boxes. Pair with .dd-compact for a narrow width. */
+.dd-quiet .dd-trigger {
+  height: 34px;
+  border-color: transparent;
+  background: transparent;
+}
+.dd-quiet .dd-trigger:hover {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container) 70%, transparent);
+}
+.dd-quiet .dd-trigger[aria-expanded='true'] {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-surface);
+}
 .dd-trigger {
   width: 100%;
   min-width: 8.5rem;
