@@ -104,6 +104,12 @@ export function inferDiscipline(text) {
   return extract(text, DEFAULT_DETECT.discipline, DISCIPLINES).val || 'OTHER';
 }
 
+/** Clean the comment body — strip the leading commenter prefix if present,
+ *  else keep the original text unchanged. */
+export function cleanComment(text) {
+  return extract(text, DEFAULT_DETECT.comment).val || (text || '').trim();
+}
+
 /** Normalize a raw Navisworks status string to a workspace status. */
 export function normalizeStatus(raw) {
   if (!raw) return 'Open';
@@ -136,16 +142,20 @@ export function parseReportHtml(htmlString, sourceName = 'report.html') {
       const commentId = c.querySelector(':scope > h4')?.textContent.replace(/comment/i, '').trim() || '';
       const rawStatus = readNameValue(c, 'Status');
       const authorCode = readNameValue(c, 'User');
-      const commentText = readNameValue(c, 'Text');
-      if (!commentText) return; // spec: viewpoint text is required
+      const rawText = readNameValue(c, 'Text');
+      if (!rawText) return; // spec: viewpoint text is required
 
       records.push({
         ID: ++idCounter,
         commentId,
         viewpoint: name,
-        discipline: inferDiscipline(commentText),
-        commenter: detectCommenter(commentText), // person who wrote it (from text)
-        commentText,
+        discipline: inferDiscipline(rawText),
+        commenter: detectCommenter(rawText), // person who wrote it (from text)
+        // Raw source text (keeps the "Name:" prefix) — kept so commenter /
+        // discipline / comment detection can be re-run; not shown/exported.
+        commentRaw: rawText,
+        // Cleaned comment body (prefix stripped) — the value shown & exported.
+        commentText: cleanComment(rawText),
         resolution: '',
         status: normalizeStatus(rawStatus),
         rawStatus: rawStatus || 'New',

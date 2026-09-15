@@ -9,10 +9,15 @@ import { extract } from '../lib/detect.js';
 
 const StoreContext = createContext(null);
 
-// Backfill the commenter field for records loaded from an older session (or
-// any that predate the field), without overriding a value that already exists.
+// Backfill fields for records loaded from an older session: the raw comment
+// source (`commentRaw`, kept so detection can re-run against the un-cleaned
+// text) and the auto-detected commenter. Neither overrides an existing value.
 function withCommenters(records) {
-  return records.map((r) => (r.commenter === undefined ? { ...r, commenter: detectCommenter(r.commentText) } : r));
+  return records.map((r) => {
+    const commentRaw = r.commentRaw ?? r.commentText;
+    const commenter = r.commenter === undefined ? detectCommenter(commentRaw) : r.commenter;
+    return { ...r, commentRaw, commenter };
+  });
 }
 
 const initialState = {
@@ -56,15 +61,22 @@ function reducer(state, action) {
         }),
       };
     case 'APPLY_DETECT': {
-      // Re-run extraction for `field` ('commenter'|'discipline') across all
-      // records. mode 'fill' keeps existing non-empty values; 'overwrite'
-      // replaces every one.
+      // Re-run extraction for `field` ('commenter' | 'discipline' | 'comment')
+      // across all records, always reading the RAW source text. mode 'fill'
+      // keeps existing values; 'overwrite' replaces every one.
       const { field, config, allowed, mode } = action;
       return {
         ...state,
         records: state.records.map((r) => {
+          const src = r.commentRaw ?? r.commentText;
+          if (field === 'comment') {
+            // Result targets commentText; empty extraction → keep the original.
+            const cleaned = extract(src, config, allowed).val || src;
+            if (mode === 'fill' && r.commentText && r.commentText !== src) return r; // already cleaned
+            return { ...r, commentText: cleaned };
+          }
           if (mode === 'fill' && r[field] && !(field === 'discipline' && r[field] === 'OTHER')) return r;
-          return { ...r, [field]: extract(r.commentText, config, allowed).val };
+          return { ...r, [field]: extract(src, config, allowed).val };
         }),
       };
     }

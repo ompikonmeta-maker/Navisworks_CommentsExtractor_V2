@@ -11,6 +11,7 @@ import { DEFAULT_TEMPLATE_MAPPING } from '../lib/templateExcel.js';
 const cloneDetect = (d) => ({
   commenter: { ...DEFAULT_DETECT.commenter, ...(d?.commenter || {}), rules: (d?.commenter?.rules || DEFAULT_DETECT.commenter.rules).map((r) => ({ ...r })) },
   discipline: { ...DEFAULT_DETECT.discipline, ...(d?.discipline || {}), rules: (d?.discipline?.rules || DEFAULT_DETECT.discipline.rules).map((r) => ({ ...r })) },
+  comment: { ...DEFAULT_DETECT.comment, ...(d?.comment || {}), rules: (d?.comment?.rules || DEFAULT_DETECT.comment.rules).map((r) => ({ ...r })) },
 });
 
 const DEFAULTS = {

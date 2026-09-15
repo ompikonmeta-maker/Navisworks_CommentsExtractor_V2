@@ -8,6 +8,7 @@
 
 export const RULE_MODES = [
   { mode: 'delimiter', label: 'Text before delimiter' },
+  { mode: 'after', label: 'Text after delimiter (rest)' },
   { mode: 'brackets', label: 'Text inside brackets' },
   { mode: 'keyword', label: 'Text after keyword' },
   { mode: 'word', label: 'Nth word' },
@@ -24,6 +25,9 @@ export const BRACKETS = [['[]', '[ ]'], ['()', '( )'], ['<>', '< >']];
 export const DEFAULT_DETECT = {
   commenter: { rules: [{ mode: 'delimiter', delim: ':' }], strip: true, case: 'none', constrain: false },
   discipline: { rules: [{ mode: 'delimiter', delim: ':' }, { mode: 'list' }], strip: true, case: 'upper', constrain: true },
+  // Comment body: everything AFTER the leading "Name:" prefix. Empty result
+  // (no name-like prefix) means "keep the original text" — callers fall back.
+  comment: { rules: [{ mode: 'after', delim: ':' }], strip: false, case: 'none', constrain: false },
 };
 
 const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -37,6 +41,16 @@ function applyRule(text, r, allowed) {
       const v = text.slice(0, i);
       // A long multi-word head before the delimiter is a sentence, not a tag.
       return v.trim().includes(' ') && v.length > 24 ? '' : v;
+    }
+    if (r.mode === 'after') {
+      // The remainder after the delimiter — but only when the head before it
+      // looks like a name/tag (same guard as `delimiter`), so a sentence that
+      // merely contains the delimiter is left whole.
+      const i = text.indexOf(r.delim);
+      if (i <= 0) return '';
+      const head = text.slice(0, i).trim();
+      if (head.includes(' ') && head.length > 24) return '';
+      return text.slice(i + r.delim.length).trim();
     }
     if (r.mode === 'brackets') {
       const o = r.br?.[0];

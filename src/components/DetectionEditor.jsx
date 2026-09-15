@@ -10,7 +10,7 @@ const inputCls = 'rounded-control border border-outline bg-surface-container px-
 
 // Fresh params when switching a rule to a given mode.
 function blankRule(mode) {
-  if (mode === 'delimiter') return { mode, delim: ':' };
+  if (mode === 'delimiter' || mode === 'after') return { mode, delim: ':' };
   if (mode === 'brackets') return { mode, br: '[]' };
   if (mode === 'keyword') return { mode, kw: 'By' };
   if (mode === 'word') return { mode, idx: 1 };
@@ -21,8 +21,9 @@ function blankRule(mode) {
 export default function DetectionEditor() {
   const { records, applyDetect, notify } = useStore();
   const { settings, setDetect } = useSettings();
-  const [kind, setKind] = useState('commenter'); // 'commenter' | 'discipline'
+  const [kind, setKind] = useState('commenter'); // 'commenter' | 'discipline' | 'comment'
   const isDisc = kind === 'discipline';
+  const isComment = kind === 'comment';
   const cfg = settings.detect[kind];
 
   const allowed = useMemo(
@@ -31,18 +32,22 @@ export default function DetectionEditor() {
   );
 
   // Preview + coverage over the whole dataset (examples show the first rows).
+  // Detection always reads the RAW source text (before any cleaning).
   const preview = useMemo(() => {
     let hit = 0;
     const examples = [];
     for (const r of records) {
-      const { val, via } = extract(r.commentText, cfg, allowed);
+      const src = r.commentRaw ?? r.commentText;
+      const { val, via } = extract(src, cfg, allowed);
       const detected = val && val !== 'OTHER';
       if (detected) hit += 1;
-      if (examples.length < 8) examples.push({ text: r.commentText, val, via });
+      // For comment cleaning, show the resulting body (empty → unchanged text).
+      const shown = isComment ? (val || src) : val;
+      if (examples.length < 8) examples.push({ text: src, val: shown, via });
     }
     const total = records.length || 1;
     return { hit, total, pct: Math.round((hit / total) * 100), examples };
-  }, [records, cfg, allowed]);
+  }, [records, cfg, allowed, isComment]);
 
   const write = (next) => setDetect(kind, next);
   const patchRule = (i, patch) => write({ ...cfg, rules: cfg.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
@@ -58,9 +63,10 @@ export default function DetectionEditor() {
   };
   const setNorm = (patch) => write({ ...cfg, ...patch });
 
+  const LABELS = { commenter: 'Commenter', discipline: 'Discipline', comment: 'Comment text' };
   const apply = (mode) => {
     applyDetect(kind, cfg, allowed, mode);
-    notify(`${kind === 'commenter' ? 'Commenter' : 'Discipline'} detection applied (${mode === 'fill' ? 'filled empty' : 'overwrote all'}).`, 'success');
+    notify(`${LABELS[kind]} detection applied (${mode === 'fill' ? 'filled empty' : 'overwrote all'}).`, 'success');
   };
 
   const barColor = preview.pct >= 75 ? 'bg-status-closed' : preview.pct >= 40 ? 'bg-status-review' : 'bg-status-open';
@@ -69,7 +75,7 @@ export default function DetectionEditor() {
     <div>
       {/* tabs */}
       <div className="mb-4 inline-flex overflow-hidden rounded-full border border-outline text-sm">
-        {[['commenter', 'Commenter'], ['discipline', 'Discipline']].map(([k, label]) => (
+        {[['commenter', 'Commenter'], ['discipline', 'Discipline'], ['comment', 'Comment text']].map(([k, label]) => (
           <button
             key={k}
             onClick={() => setKind(k)}
@@ -81,9 +87,11 @@ export default function DetectionEditor() {
       </div>
 
       <p className="mb-3 text-xs text-on-surface-variant">
-        {isDisc
-          ? 'The engineering discipline. Rules are tried in order; results are then constrained to the discipline list (else OTHER).'
-          : 'The person who wrote the comment. Rules are tried top-to-bottom until one captures a value.'}
+        {isComment
+          ? 'The comment body — strips the leading commenter prefix (e.g. “CPY_Dito: …” → “…”). Use “Text after delimiter (rest)”. When nothing is stripped the original text is kept. Applying overwrites commentText everywhere (list, drawer, Excel & template export); the raw text is preserved internally for the other detectors.'
+          : isDisc
+            ? 'The engineering discipline. Rules are tried in order; results are then constrained to the discipline list (else OTHER).'
+            : 'The person who wrote the comment. Rules are tried top-to-bottom until one captures a value.'}
       </p>
 
       {/* rules */}
@@ -94,7 +102,7 @@ export default function DetectionEditor() {
               <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary-container text-[11px] font-bold text-on-secondary-container">{i + 1}</span>
               <Select value={r.mode} onChange={(v) => setMode(i, v)} aria-label="Rule mode" options={RULE_MODES.map((m) => ({ value: m.mode, label: m.label }))} />
 
-              {r.mode === 'delimiter' && (
+              {(r.mode === 'delimiter' || r.mode === 'after') && (
                 <Select value={r.delim} onChange={(v) => patchRule(i, { delim: v })} aria-label="Delimiter" options={DELIMITERS.map(([v, l]) => ({ value: v, label: l }))} />
               )}
               {r.mode === 'brackets' && (

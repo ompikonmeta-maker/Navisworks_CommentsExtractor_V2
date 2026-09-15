@@ -52,15 +52,21 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   plus a trailing text node with the date. Only viewpoints **with** comments become records.
   Discipline is not a field in the source — it is extracted from the comment text.
   Raw statuses (e.g. `New`) are normalized to `Open` / `In Review` / `Closed`.
-- `src/lib/detect.js` — the shared, data-driven **extraction engine** (v1.1) behind both
-  commenter and discipline detection. A config is an ordered list of `rules` (modes:
-  `delimiter`, `brackets`, `keyword`, `word`, `list` (scan a set), `regex`) tried first-non-
-  empty-wins, plus normalization (`strip`, `case`) and an optional `constrain` to an allowed
-  list (→ `OTHER`). `DEFAULT_DETECT` reproduces the pre-v1.1 behaviour exactly, so
-  `parser.detectCommenter` / `inferDiscipline` are now thin wrappers over `extract`. The
-  Settings "Detection rules" editor (`components/DetectionEditor.jsx`) edits these live (with a
-  coverage preview) and the store's `APPLY_DETECT` action re-runs extraction across records
-  (fill-empty or overwrite). The config persists in `settings.detect`.
+- `src/lib/detect.js` — the shared, data-driven **extraction engine** (v1.1) behind
+  commenter, discipline **and comment-body** detection. A config is an ordered list of `rules`
+  (modes: `delimiter` (text before), `after` (the rest after a delimiter), `brackets`,
+  `keyword`, `word`, `list` (scan a set), `regex`) tried first-non-empty-wins, plus
+  normalization (`strip`, `case`) and an optional `constrain` to an allowed list (→ `OTHER`).
+  `DEFAULT_DETECT` has three configs: `commenter`, `discipline`, and `comment` (default
+  `after` `:` — strips the leading `Name:` prefix). `parser.detectCommenter` / `inferDiscipline`
+  / `cleanComment` are thin wrappers over `extract`. **Records keep the raw source text as
+  `commentRaw`** (with the prefix) so all three detectors can re-run against it, while
+  `commentText` holds the **cleaned** body shown & exported everywhere; `parser` sets both at
+  import and `store.withCommenters` backfills `commentRaw` for older sessions. The Settings
+  "Detection rules" editor (`components/DetectionEditor.jsx`, three tabs) edits these live (with
+  a coverage preview reading `commentRaw`) and the store's `APPLY_DETECT` action re-runs
+  extraction across records (fill-empty or overwrite) — for the `comment` config it writes
+  `commentText` (empty extraction keeps the original). The configs persist in `settings.detect`.
 - `src/lib/ingest.js` — turns a user file selection into records: loose `.html` + images, or
   a `.zip` (via JSZip). Images are read to data URLs and linked to `imageRef`
   case-insensitively. Unsupported formats are ignored; a corrupt ZIP or a comment-less HTML
