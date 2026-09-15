@@ -175,6 +175,50 @@ function resolveCell(loc, ctx) {
   return null;
 }
 
+// Read a sheet's header-row cells → { colLetter: text }.
+async function readHeaderRow(zip, info, headerRow, shared) {
+  const xml = await zip.file(info.path).async('string');
+  const cells = readCells(xml);
+  const headers = {};
+  for (const [ref, c] of Object.entries(cells)) {
+    const m = /^([A-Z]+)(\d+)$/.exec(ref);
+    if (m && +m[2] === headerRow) { const t = cellText(c, shared); if (t) headers[m[1]] = t; }
+  }
+  return headers;
+}
+
+// Auto-detect the log sheet: the sheet whose header row best matches the
+// mapping's field header labels. Falls back to a /log/i name, then the
+// configured name. Makes the export tolerant of a renamed sheet.
+async function detectLogSheet(zip, map, mapping, shared) {
+  const wantNames = mapping.logSheet.fields.map((f) => String(f.value || '').toLowerCase().replace(/[:：]\s*$/, '').trim());
+  const hr = mapping.logSheet.headerRow;
+  let best = null;
+  for (const [name, info] of Object.entries(map)) {
+    if (name.startsWith('__') || /^\d+$/.test(name)) continue; // skip meta + detail pages
+    // eslint-disable-next-line no-await-in-loop
+    const headers = await readHeaderRow(zip, info, hr, shared);
+    const texts = Object.values(headers).map((t) => String(t).toLowerCase().replace(/[:：]\s*$/, '').trim());
+    const score = wantNames.filter((w) => texts.includes(w)).length;
+    if (score > 0 && (!best || score > best.score)) best = { name, info, headers, score };
+  }
+  if (best) return best;
+  const byName = Object.keys(map).find((n) => /log/i.test(n) && !/^\d+$/.test(n));
+  if (byName) return { name: byName, info: map[byName], headers: await readHeaderRow(zip, map[byName], hr, shared), score: 0 };
+  const cfgName = mapping.logSheet.name;
+  return map[cfgName] ? { name: cfgName, info: map[cfgName], headers: await readHeaderRow(zip, map[cfgName], hr, shared), score: 0 } : null;
+}
+
+// Pick the log sheet: honour an explicit mapping.logSheet.name that exists in
+// the workbook; otherwise auto-detect by header match.
+async function resolveLog(zip, map, mapping, shared) {
+  const forced = mapping.logSheet?.name;
+  if (forced && map[forced]) {
+    return { name: forced, info: map[forced], headers: await readHeaderRow(zip, map[forced], mapping.logSheet.headerRow, shared), score: -1 };
+  }
+  return detectLogSheet(zip, map, mapping, shared);
+}
+
 // =====================================================================
 // Inspect a template → structure for the mapping editor.
 // =====================================================================
@@ -184,30 +228,36 @@ export async function inspectTemplate(bytes) {
   const { map, wb } = await sheetPathMap(zip);
   const shared = await sharedStrings(zip);
   const defined = definedNames(wb);
-  const logName = DEFAULT_TEMPLATE_MAPPING.logSheet.name;
-  const logInfo = map[logName];
-  const headers = {};
-  let detailSheets = [];
-  if (logInfo) {
-    const xml = await zip.file(logInfo.path).async('string');
-    const cells = readCells(xml);
-    const hr = DEFAULT_TEMPLATE_MAPPING.logSheet.headerRow;
-    for (const [ref, c] of Object.entries(cells)) {
-      const m = /^([A-Z]+)(\d+)$/.exec(ref);
-      if (m && +m[2] === hr) {
-        const t = cellText(c, shared);
-        if (t) headers[m[1]] = t;
-      }
-    }
+  const hr = DEFAULT_TEMPLATE_MAPPING.logSheet.headerRow;
+
+  // Candidate log sheets = non-numeric, non-hidden-meta sheets; read each
+  // one's header row so the picker can switch without re-inspecting.
+  const candidateLogSheets = Object.keys(map).filter((n) => !/^\d+$/.test(n) && n !== 'Sheet1');
+  const headersBySheet = {};
+  for (const name of candidateLogSheets) {
+    // eslint-disable-next-line no-await-in-loop
+    headersBySheet[name] = await readHeaderRow(zip, map[name], hr, shared);
   }
-  // Detail sheets = numeric-named sheets (item pages).
-  detailSheets = Object.keys(map).filter((n) => /^\d+$/.test(n)).sort((a, b) => +a - +b);
-  return { sheetNames: Object.keys(map), logSheet: logName, headers, detailSheets, definedNames: Object.keys(defined) };
+  const auto = await detectLogSheet(zip, map, DEFAULT_TEMPLATE_MAPPING, shared);
+  const logSheet = auto ? auto.name : candidateLogSheets[0] || DEFAULT_TEMPLATE_MAPPING.logSheet.name;
+  const detailSheets = Object.keys(map).filter((n) => /^\d+$/.test(n)).sort((a, b) => +a - +b);
+  return {
+    sheetNames: Object.keys(map),
+    candidateLogSheets,
+    headersBySheet,
+    logSheet, // auto-detected best guess
+    headers: headersBySheet[logSheet] || {},
+    detailSheets,
+    definedNames: Object.keys(defined),
+  };
 }
 
-// Resolve the full mapping against a template → preview rows.
+// Resolve the full mapping against a template → preview rows. Uses the headers
+// of the chosen log sheet (mapping.logSheet.name) when known.
 export function resolveMapping(info, mapping) {
-  const ctx = { headers: info.headers, defined: {} };
+  const chosen = mapping.logSheet?.name;
+  const headers = (chosen && info.headersBySheet?.[chosen]) || info.headers;
+  const ctx = { headers, defined: {} };
   // defined names available as a set → map name→approx (not needed for preview col)
   const rows = [];
   const itemCol = resolveColumn(mapping.logSheet.itemColumn, ctx);
@@ -330,17 +380,15 @@ export async function fillTemplate(bytes, records, mapping, constants = {}, extr
   const defined = definedNames(wbXml);
 
   const logCfg = mapping.logSheet;
-  const logInfo = map[logCfg.name];
-  if (!logInfo) throw new Error(`Sheet "${logCfg.name}" not found in template.`);
+  const log = await resolveLog(zip, map, mapping, shared);
+  if (!log) throw new Error(`Log sheet not found in template (expected something like "${logCfg.name}").`);
+  const logInfo = log.info;
+  const logName = log.name; // actual sheet name (may differ from the config)
 
   // --- resolve log columns ---
   let logXml = await zip.file(logInfo.path).async('string');
   const cells = readCells(logXml);
-  const headers = {};
-  for (const [ref, c] of Object.entries(cells)) {
-    const m = /^([A-Z]+)(\d+)$/.exec(ref);
-    if (m && +m[2] === logCfg.headerRow) { const t = cellText(c, shared); if (t) headers[m[1]] = t; }
-  }
+  const headers = log.headers;
   const ctx = { headers, defined };
   const itemCol = resolveColumn(logCfg.itemColumn, ctx);
   const fieldByCol = new Map();
@@ -412,7 +460,7 @@ export async function fillTemplate(bytes, records, mapping, constants = {}, extr
     dXml = clearCellText(dXml, beforeCell);
     dXml = clearCellText(dXml, afterCell);
     // auto-repair VLOOKUP → MATCH by header text
-    if (mapping.detail.vlookupAutoRepair) dXml = autoRepairVlookup(dXml, logCfg.name, headerTextByCol, logCfg.headerRow);
+    if (mapping.detail.vlookupAutoRepair) dXml = autoRepairVlookup(dXml, logName, headerTextByCol, logCfg.headerRow);
     zip.file(info.path, dXml);
 
     // inject before/after images (append to this sheet's drawing)

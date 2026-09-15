@@ -44,6 +44,24 @@ export default function TemplateExportPanel() {
   const preview = useMemo(() => (info ? resolveMapping(info, cfg) : null), [info, cfg]);
   const resolvedCount = preview ? preview.rows.filter((r) => r.col).length : 0;
 
+  // Once a template is inspected, pin the mapping's log sheet to the detected
+  // one (unless the user already chose a valid sheet), so the picker + fill
+  // agree and the preview isn't stuck on a stale default name.
+  useEffect(() => {
+    if (!info) return;
+    const chosen = cfg.logSheet?.name;
+    if (!info.candidateLogSheets?.includes(chosen)) {
+      setTemplateExport((c) => ({ ...c, logSheet: { ...c.logSheet, name: info.logSheet } }));
+    }
+    if (info.detailSheets?.length && !info.detailSheets.includes(cfg.detail?.patternSheet)) {
+      setTemplateExport((c) => ({ ...c, detail: { ...c.detail, patternSheet: info.detailSheets[0] } }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info]);
+
+  const setLogSheet = (name) => setTemplateExport((c) => ({ ...c, logSheet: { ...c.logSheet, name } }));
+  const setPattern = (name) => setTemplateExport((c) => ({ ...c, detail: { ...c.detail, patternSheet: name } }));
+
   const onPick = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -108,9 +126,25 @@ export default function TemplateExportPanel() {
           )}
         </div>
         {info && (
-          <p className="mt-2 text-xs text-on-surface-variant">
-            Log sheet: <b>{info.logSheet}</b> · detail pattern sheets: <b>{info.detailSheets.join(', ') || '—'}</b> · saved in this browser, reused next time.
-          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-medium text-on-surface-variant">
+              Sheet log (tabel)
+              <select className={`${inputCls} mt-1 block w-full`} value={cfg.logSheet?.name || info.logSheet} onChange={(e) => setLogSheet(e.target.value)}>
+                {(info.candidateLogSheets || []).map((n) => (
+                  <option key={n} value={n}>{n}{n === info.logSheet ? ' (auto)' : ''}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-on-surface-variant">
+              Sheet pola detail
+              <select className={`${inputCls} mt-1 block w-full`} value={cfg.detail?.patternSheet || info.detailSheets[0] || ''} onChange={(e) => setPattern(e.target.value)}>
+                {(info.detailSheets || []).map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+            <p className="text-[11px] text-on-surface-variant sm:col-span-2">Pilih sheet mana yang jadi tabel log dan sheet mana yang jadi pola detail. Tersimpan di browser, dipakai ulang.</p>
+          </div>
         )}
         {err && <p className="mt-2 text-xs text-error">{err}</p>}
       </div>
