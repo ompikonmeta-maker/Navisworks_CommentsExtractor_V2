@@ -50,7 +50,10 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok","version":"` + version + `"}`))
 	})
-	root.Handle("/api/", auth.Middleware(a.ResolveUser)(a.Routes()))
+	// Login/logout are unauthenticated (they establish the session).
+	root.HandleFunc("POST /api/login", a.Login)
+	root.HandleFunc("POST /api/logout", a.Logout)
+	root.Handle("/api/", auth.Middleware(a.Identify, a.ResolveUser)(a.Routes()))
 	root.Handle("/", spaHandler())
 
 	handler := withCORS(root)

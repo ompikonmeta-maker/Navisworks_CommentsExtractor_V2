@@ -7,7 +7,17 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL DEFAULT '',
   role         TEXT NOT NULL DEFAULT 'viewer',    -- admin | editor | viewer
   active       INTEGER NOT NULL DEFAULT 1,
+  pin_hash     TEXT NOT NULL DEFAULT '',          -- bcrypt of the PIN (empty = not set; claimed on first login)
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Browser login sessions (the non-AD path). On the office network the AD
+-- handshake fills identity in and this is bypassed; kept for off-domain use.
+CREATE TABLE IF NOT EXISTS sessions (
+  token      TEXT PRIMARY KEY,
+  username   TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS projects (

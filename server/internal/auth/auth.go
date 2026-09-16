@@ -33,11 +33,11 @@ type ctxKey struct{}
 // DevUserHeader carries the caller identity while real AD auth is not wired yet.
 const DevUserHeader = "X-Tabelin-Dev-User"
 
-// identify extracts the raw account name for a request. Replaced by the
-// Negotiate handshake on the office network; until then it trusts a dev header.
-func identify(r *http.Request) string {
-	return r.Header.Get(DevUserHeader)
-}
+// Identify extracts the raw account name for a request. It is supplied by the
+// caller so the identity source can evolve without touching this package: today
+// a login-session cookie (and a dev header); on the office network the Windows
+// Integrated Auth (Negotiate/NTLM) handshake slots in here.
+type Identify func(r *http.Request) string
 
 // Normalize lower-cases and trims an account so "DOMAIN\\JDoe" and "domain\jdoe"
 // match the same stored user.
@@ -48,7 +48,7 @@ func Normalize(name string) string {
 // Middleware authenticates every request: identify → normalize → resolve. An
 // unknown or inactive account is rejected with 401 so only accounts the
 // administrator created can use the tool.
-func Middleware(resolve Resolver) func(http.Handler) http.Handler {
+func Middleware(identify Identify, resolve Resolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			name := Normalize(identify(r))
