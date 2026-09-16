@@ -63,22 +63,25 @@ func main() {
 	}
 }
 
-// bootstrapAdmin seeds the first admin from TABELIN_BOOTSTRAP_ADMIN when the
-// users table is empty, so a fresh install has someone who can provision others.
+// bootstrapAdmin seeds the first admin when the users table is empty, so a fresh
+// install has someone who can sign in and provision others. It uses
+// TABELIN_BOOTSTRAP_ADMIN when set (e.g. the office AD account), otherwise a
+// plain "admin" account whose PIN is set on first sign-in — turnkey for a
+// double-click install with no configuration.
 func bootstrapAdmin(d *sql.DB) {
-	name := auth.Normalize(os.Getenv("TABELIN_BOOTSTRAP_ADMIN"))
-	if name == "" {
-		return
-	}
 	var n int
 	if err := d.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil || n > 0 {
 		return
+	}
+	name := auth.Normalize(os.Getenv("TABELIN_BOOTSTRAP_ADMIN"))
+	if name == "" {
+		name = "admin"
 	}
 	if _, err := d.Exec(`INSERT INTO users(username, display_name, role) VALUES(?, 'Administrator', 'admin')`, name); err != nil {
 		log.Printf("bootstrap admin: %v", err)
 		return
 	}
-	log.Printf("bootstrapped admin account: %s", name)
+	log.Printf("bootstrapped admin account: %s (set its PIN on first sign-in)", name)
 }
 
 // spaHandler serves the embedded SPA, falling back to index.html for any path
