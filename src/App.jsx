@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from './store/store.jsx';
 import { useSettings, applyThemeMode } from './store/settings.jsx';
@@ -48,6 +48,11 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   const [collapsed, setCollapsed] = useState(false);
   const [settingsSection, setSettingsSection] = useState('template');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Admins in remote mode get an extra "Users" settings section.
+  const settingsSections = useMemo(
+    () => (remote?.user?.role === 'admin' ? [...SECTIONS, { id: 'users', label: 'Users', icon: 'person' }] : SECTIONS),
+    [remote],
+  );
   const themeBtnRef = useRef(null);
   // The theme mode already reflected in the DOM. The animated toggle applies
   // the new mode itself (inside the View Transition), so this lets the sync
@@ -292,6 +297,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
                     collapsed={collapsed}
                     route={route}
                     section={settingsSection}
+                    sections={settingsSections}
                     open={settingsOpen}
                     onToggle={toggleSettings}
                     onSelect={selectSettings}
@@ -386,6 +392,8 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
             commentsFilter={commentsFilter}
             settingsSection={settingsSection}
             setSettingsSection={selectSettings}
+            settingsSections={settingsSections}
+            remoteUser={remote?.user || null}
           />
         </main>
       </div>
@@ -399,7 +407,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
 // expanded (children slide open below, indented under a guide line) and a
 // portalled flyout when the rail is collapsed to icons (children float beside
 // it). Matches the approved mock: emphasized-easing reveal + spring flyout.
-function SettingsNav({ item, i, collapsed, route, section, open, onToggle, onSelect }) {
+function SettingsNav({ item, i, collapsed, route, section, sections = SECTIONS, open, onToggle, onSelect }) {
   const active = route === 'settings';
   const btnRef = useRef(null);
   const closeTimer = useRef(null);
@@ -453,7 +461,7 @@ function SettingsNav({ item, i, collapsed, route, section, open, onToggle, onSel
       <div className={`t-subacc ${open ? 'show' : ''}`}>
         <div>
           <div className="t-subacc-inner">
-            {SECTIONS.map((s, idx) => {
+            {sections.map((s, idx) => {
               const on = active && section === s.id;
               return (
                 <button
@@ -481,7 +489,7 @@ function SettingsNav({ item, i, collapsed, route, section, open, onToggle, onSel
           onMouseLeave={scheduleClose}
         >
           <div className="t-flyout-cap">Settings</div>
-          {SECTIONS.map((s) => {
+          {sections.map((s) => {
             const on = active && section === s.id;
             return (
               <button key={s.id} onClick={() => { onSelect(s.id); setFlyOpen(false); }} className={`t-sub ${on ? 'on' : ''}`}>
@@ -497,7 +505,7 @@ function SettingsNav({ item, i, collapsed, route, section, open, onToggle, onSel
   );
 }
 
-function Screen({ route, detailId, setDetailId, openDetail, goComments, commentsFilter, settingsSection, setSettingsSection }) {
+function Screen({ route, detailId, setDetailId, openDetail, goComments, commentsFilter, settingsSection, setSettingsSection, settingsSections, remoteUser }) {
   const { status, error } = useStore();
 
   if (status === 'error') {
@@ -517,7 +525,7 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
     case 'comments':
       return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} />;
     case 'settings':
-      return <Settings section={settingsSection} setSection={setSettingsSection} />;
+      return <Settings section={settingsSection} setSection={setSettingsSection} sections={settingsSections} remoteUser={remoteUser} />;
     default:
       return null;
   }

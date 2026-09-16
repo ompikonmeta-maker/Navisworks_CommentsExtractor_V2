@@ -7,6 +7,7 @@ import DetectionEditor from '../components/DetectionEditor.jsx';
 import TemplateExportPanel from '../components/TemplateExportPanel.jsx';
 import CustomFieldsEditor from '../components/CustomFieldsEditor.jsx';
 import StatusEditor from '../components/StatusEditor.jsx';
+import UsersEditor from '../components/UsersEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
 
@@ -31,7 +32,7 @@ export const SECTIONS = [
   { id: 'about', label: 'About', icon: 'info' },
 ];
 
-export default function Settings({ section = 'template', setSection = () => {} }) {
+export default function Settings({ section = 'template', setSection = () => {}, sections = SECTIONS, remoteUser = null }) {
   const { records } = useStore();
   const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings } = useSettings();
   const [labelTab, setLabelTab] = useState('disciplines');
@@ -60,12 +61,12 @@ export default function Settings({ section = 'template', setSection = () => {} }
       {/* Section switcher — sidebar-nested on desktop; a compact horizontal
           strip here on phones, where the sidebar is a top bar with no room. */}
       <nav className="mb-4 flex gap-1 overflow-x-auto rounded-card border border-outline-variant/60 bg-surface-low p-2 md:hidden">
-        {SECTIONS.map((s) => {
+        {sections.map((s) => {
           const on = section === s.id;
           return (
             <button
               key={s.id}
-              onClick={() => { setRevealDir(SECTIONS.findIndex((x) => x.id === s.id) < SECTIONS.findIndex((x) => x.id === section) ? -1 : 1); setSection(s.id); }}
+              onClick={() => { setRevealDir(sections.findIndex((x) => x.id === s.id) < sections.findIndex((x) => x.id === section) ? -1 : 1); setSection(s.id); }}
               aria-current={on ? 'page' : undefined}
               className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-3.5 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 on ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'
@@ -80,6 +81,12 @@ export default function Settings({ section = 'template', setSection = () => {} }
 
       {/* Panel — card reveal re-plays on every section change */}
       <Reveal className="space-y-6" deps={[section]}>
+        {section === 'users' && (
+          <Card className="p-6">
+            <UsersEditor me={remoteUser} />
+          </Card>
+        )}
+
         {section === 'appearance' && (
           <Card className="p-6">
             <SectionTitle icon="dark_mode" title="Appearance" sub="How Tabelin looks. Saved to this browser." />

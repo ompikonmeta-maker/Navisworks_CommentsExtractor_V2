@@ -31,13 +31,11 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	pid, err := a.recordProject(id)
-	if err != nil {
+	if _, err := a.recordProject(id); err != nil {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
-	role, member, err := a.memberRole(u, pid)
-	if err != nil || !member || !canWrite(role) {
+	if !canWriteRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot upload to record")
 		return
 	}
@@ -85,27 +83,19 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 
 // getFile streams a stored image to any member of the project it belongs to.
 func (a *API) getFile(w http.ResponseWriter, r *http.Request) {
-	u := auth.FromContext(r.Context())
 	key := r.PathValue("key")
 	if key == "" || filepath.Base(key) != key { // no path traversal
 		writeErr(w, http.StatusBadRequest, "bad key")
 		return
 	}
 	var mime string
-	var pid int64
-	err := a.DB.QueryRow(`
-		SELECT i.mime, r.project_id FROM images i
-		JOIN records r ON r.id = i.record_id WHERE i.file_key=?`, key).Scan(&mime, &pid)
+	err := a.DB.QueryRow(`SELECT mime FROM images WHERE file_key=?`, key).Scan(&mime)
 	if err == sql.ErrNoRows {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	if err != nil {
 		writeErr(w, 500, "lookup file")
-		return
-	}
-	if _, member, err := a.memberRole(u, pid); err != nil || !member {
-		writeErr(w, http.StatusForbidden, "no access")
 		return
 	}
 	if mime != "" {

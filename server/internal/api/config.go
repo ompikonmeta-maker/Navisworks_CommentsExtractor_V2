@@ -29,22 +29,17 @@ func (a *API) putGlobalConfig(w http.ResponseWriter, r *http.Request) {
 	a.putConfig(w, r, "global")
 }
 
-// getProjectConfig returns every config entry for a project (members only).
+// getProjectConfig returns every config entry for a project (any signed-in user).
 func (a *API) getProjectConfig(w http.ResponseWriter, r *http.Request) {
-	u := auth.FromContext(r.Context())
 	pid, ok := pathID(r, "pid")
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "bad project id")
 		return
 	}
-	if _, member, err := a.memberRole(u, pid); err != nil || !member {
-		writeErr(w, http.StatusForbidden, "no access to project")
-		return
-	}
 	a.writeConfigMap(w, projectScope(pid))
 }
 
-// putProjectConfig sets one config entry for a project (owners/editors only).
+// putProjectConfig sets one config entry for a project (admins/editors only).
 func (a *API) putProjectConfig(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	pid, ok := pathID(r, "pid")
@@ -52,8 +47,7 @@ func (a *API) putProjectConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad project id")
 		return
 	}
-	role, member, err := a.memberRole(u, pid)
-	if err != nil || !member || !canWrite(role) {
+	if !canWriteRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot write project config")
 		return
 	}

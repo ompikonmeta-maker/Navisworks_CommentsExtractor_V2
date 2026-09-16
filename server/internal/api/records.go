@@ -40,14 +40,9 @@ func pathID(r *http.Request, name string) (int64, bool) {
 
 // listRecords returns a project's records (with image URLs) for any member.
 func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
-	u := auth.FromContext(r.Context())
 	pid, ok := pathID(r, "pid")
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "bad project id")
-		return
-	}
-	if _, member, err := a.memberRole(u, pid); err != nil || !member {
-		writeErr(w, http.StatusForbidden, "no access to project")
 		return
 	}
 	rows, err := a.DB.Query(`
@@ -121,8 +116,7 @@ func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad project id")
 		return
 	}
-	role, member, err := a.memberRole(u, pid)
-	if err != nil || !member || !canWrite(role) {
+	if !canWriteRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot write to project")
 		return
 	}
@@ -176,13 +170,11 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	pid, err := a.recordProject(id)
-	if err != nil {
+	if _, err := a.recordProject(id); err != nil {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
-	role, member, err := a.memberRole(u, pid)
-	if err != nil || !member || !canWrite(role) {
+	if !canWriteRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot edit record")
 		return
 	}
@@ -235,13 +227,11 @@ func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	pid, err := a.recordProject(id)
-	if err != nil {
+	if _, err := a.recordProject(id); err != nil {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
-	role, member, err := a.memberRole(u, pid)
-	if err != nil || !member || !canWrite(role) {
+	if !canWriteRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot delete record")
 		return
 	}

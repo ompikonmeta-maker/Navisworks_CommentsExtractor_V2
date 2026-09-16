@@ -18,21 +18,10 @@ type API struct {
 	FilesDir string // where uploaded images/templates live on disk
 }
 
-// memberRole returns the caller's role within a project and whether they are a
-// member at all. Admins are treated as owners of every project.
-func (a *API) memberRole(u *auth.User, projectID int64) (role string, member bool, err error) {
-	if u.Role == "admin" {
-		return "owner", true, nil
-	}
-	err = a.DB.QueryRow(`SELECT role FROM project_members WHERE project_id=? AND user_id=?`, projectID, u.ID).Scan(&role)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	return role, err == nil, err
-}
-
-// canWrite reports whether the caller may modify a project's contents.
-func canWrite(role string) bool { return role == "owner" || role == "editor" }
+// canWriteRole is the small-team access rule: any signed-in user may READ every
+// review; admins and editors may WRITE (import, edit, upload, config); viewers
+// are read-only. Per-project membership is recorded but not required for access.
+func canWriteRole(u *auth.User) bool { return u.Role == "admin" || u.Role == "editor" }
 
 // ResolveUser looks up an active, admin-provisioned user by normalized name.
 // Wired into the auth middleware.
@@ -60,8 +49,11 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/me", a.me)
 	mux.HandleFunc("GET /api/projects", a.listProjects)
 	mux.HandleFunc("POST /api/projects", a.createProject)
-	mux.HandleFunc("GET /api/users", a.listUsers)   // admin
-	mux.HandleFunc("POST /api/users", a.createUser) // admin
+	mux.HandleFunc("GET /api/users", a.listUsers)                  // admin
+	mux.HandleFunc("POST /api/users", a.createUser)                // admin
+	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)          // admin
+	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)         // admin
+	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin)   // admin
 	// records + images
 	mux.HandleFunc("GET /api/projects/{pid}/records", a.listRecords)
 	mux.HandleFunc("POST /api/projects/{pid}/records", a.importRecords)
@@ -85,21 +77,9 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, auth.FromContext(r.Context()))
 }
 
-// listProjects returns projects the caller owns or is a member of; admins see all.
+// listProjects returns every review to any signed-in user (small-team model).
 func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
-	u := auth.FromContext(r.Context())
-	var (
-		rows *sql.Rows
-		err  error
-	)
-	if u.Role == "admin" {
-		rows, err = a.DB.Query(`SELECT id, name, created_at FROM projects ORDER BY id DESC`)
-	} else {
-		rows, err = a.DB.Query(`
-			SELECT p.id, p.name, p.created_at FROM projects p
-			JOIN project_members m ON m.project_id = p.id
-			WHERE m.user_id = ? ORDER BY p.id DESC`, u.ID)
-	}
+	rows, err := a.DB.Query(`SELECT id, name, created_at FROM projects ORDER BY id DESC`)
 	if err != nil {
 		writeErr(w, 500, "query projects")
 		return

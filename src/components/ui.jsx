@@ -136,7 +136,7 @@ export const Card = forwardRef(function Card({ children, className = '' }, ref) 
 // (surface-container, elevation 2, spring open). Same props as the old
 // native <select> so all call sites keep working. Chevron + check are inline
 // SVG so they render offline without enlarging the icon-font subset.
-export function Select({ value, onChange, options, className = '', 'aria-label': ariaLabel }) {
+export function Select({ value, onChange, options, className = '', 'aria-label': ariaLabel, disabled = false }) {
   const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -220,9 +220,10 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        onClick={() => (open ? close() : openMenu())}
-        onKeyDown={onKey}
-        className="dd-trigger"
+        disabled={disabled}
+        onClick={() => (disabled ? null : open ? close() : openMenu())}
+        onKeyDown={disabled ? undefined : onKey}
+        className={`dd-trigger ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
       >
         <span className="truncate">{current ? current.label : ''}</span>
         <svg className="dd-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
