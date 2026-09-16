@@ -420,7 +420,7 @@ function encodeCell(ref, styleAttr, field, rec, constants) {
 }
 
 // Build one log data row from a style-template row's per-column styles.
-function buildRow(rowNum, rec, itemNo, colStyles, fieldByCol, itemCol, constants) {
+function buildRow(rowNum, rec, itemNo, colStyles, fieldByCol, itemCol, constants, rowOpen) {
   const cols = new Set([...Object.keys(colStyles).map(Number), ...fieldByCol.keys()]);
   if (itemCol) cols.add(itemCol);
   const ordered = [...cols].sort((a, b) => a - b);
@@ -436,7 +436,10 @@ function buildRow(rowNum, rec, itemNo, colStyles, fieldByCol, itemCol, constants
       cells += `<c r="${ref}" s="${st}"/>`;
     }
   }
-  return `<row r="${rowNum}">${cells}</row>`;
+  // Reuse the template data row's opening tag (height, style, spans, …) so the
+  // filled rows keep the form's formatting; only the row number changes.
+  const open = rowOpen ? rowOpen.replace(/\sr="\d+"/, ` r="${rowNum}"`) : `<row r="${rowNum}">`;
+  return `${open}${cells}</row>`;
 }
 
 // Parse dataURL → { ext, base64, w, h } using PNG/JPEG header for size.
@@ -539,7 +542,11 @@ export async function fillTemplate(bytes, records, rawMapping, constants = {}) {
 
   // --- rebuild sheetData rows >= dataStartRow ---
   const start = logCfg.dataStartRow;
-  const newRows = records.map((rec, i) => buildRow(start + i, rec, i + 1, colStyles, fieldByCol, itemCol, constants)).join('');
+  const lastRow = Math.max(start + records.length - 1, logCfg.headerRow);
+  // Opening tag of the template's first data row — reused so filled rows keep
+  // the form's row height and styling.
+  const rowOpen = (new RegExp(`<row r="${start}"[^>]*>`).exec(logXml) || [])[0] || null;
+  const newRows = records.map((rec, i) => buildRow(start + i, rec, i + 1, colStyles, fieldByCol, itemCol, constants, rowOpen)).join('');
   logXml = logXml.replace(/<sheetData>([\s\S]*?)<\/sheetData>/, (whole, inner) => {
     const kept = [...inner.matchAll(/<row r="(\d+)"[\s\S]*?<\/row>|<row r="(\d+)"[^>]*\/>/g)]
       .filter((m) => +(m[1] || m[2]) < start)
@@ -555,9 +562,13 @@ export async function fillTemplate(bytes, records, rawMapping, constants = {}) {
     if (/<hyperlinks>[\s\S]*?<\/hyperlinks>/.test(logXml)) logXml = logXml.replace(/<hyperlinks>[\s\S]*?<\/hyperlinks>/, `<hyperlinks>${hl}</hyperlinks>`);
     else logXml = logXml.replace(/(<\/sheetData>)/, `$1<hyperlinks>${hl}</hyperlinks>`);
   }
-  // --- dimension refresh ---
-  const lastRow = start + records.length - 1;
-  logXml = logXml.replace(/<dimension ref="([A-Z]+)\d+:([A-Z]+)\d+"\/>/, (m, a, b) => `<dimension ref="${a}1:${b}${Math.max(lastRow, logCfg.headerRow)}"/>`);
+  // --- keep every range that spanned the template's data area consistent with
+  //     the actual number of rows we wrote. A range (autoFilter, _FilterDatabase,
+  //     Print_Area, dimension) that points past the last row Excel now sees is an
+  //     inconsistency it rejects with the "…problem with some content" repair. ---
+  logXml = logXml.replace(/<dimension ref="([A-Z]+)\d+:([A-Z]+)\d+"\/>/, (m, a, b) => `<dimension ref="${a}1:${b}${lastRow}"/>`);
+  // autoFilter over the header + data rows only.
+  logXml = logXml.replace(/(<autoFilter ref="[A-Z]+\d+:[A-Z]+)\d+"/, (m, pre) => `${pre}${lastRow}"`);
   zip.file(logInfo.path, logXml);
 
   // --- detail sheets: ensure one per record, set N2 + images ---
@@ -630,6 +641,16 @@ export async function fillTemplate(bytes, records, rawMapping, constants = {}) {
   // force full recalc so VLOOKUP/formatting recompute on open
   let wb2 = await zip.file('xl/workbook.xml').async('string');
   if (/<calcPr /.test(wb2)) wb2 = wb2.replace(/<calcPr [^>]*\/>/, '<calcPr calcId="0" fullCalcOnLoad="1"/>');
+  // Clip defined-name ranges on the log sheet (Print_Area, _FilterDatabase, …)
+  // to the rows we actually wrote — a range pointing past the last row is the
+  // same inconsistency Excel rejects.
+  {
+    const esc = logName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    wb2 = wb2.replace(
+      new RegExp(`(<definedName\\b[^>]*>'?${esc}'?![^<]*:\\$[A-Z]+\\$)\\d+(</definedName>)`, 'g'),
+      (m, pre, post) => `${pre}${lastRow}${post}`
+    );
+  }
   zip.file('xl/workbook.xml', wb2);
 
   // JSZip records implicit folder entries as we add parts, but a workbook Excel
