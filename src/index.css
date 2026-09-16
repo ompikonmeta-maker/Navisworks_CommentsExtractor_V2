@@ -272,6 +272,149 @@
   }
 }
 
+/* =====================================================================
+   Settings nested submenu — accordion when the rail is expanded, portalled
+   flyout when collapsed. Motion mirrors the approved mock: chevron + height
+   on the MD3 emphasized easing, children stagger in, flyout on a spring.
+   ===================================================================== */
+.t-setwrap {
+  position: relative;
+}
+.t-subchev {
+  margin-left: auto;
+  opacity: 0.75;
+  transition: transform 320ms cubic-bezier(0.2, 0, 0, 1);
+}
+.t-subchev.open {
+  transform: rotate(90deg);
+}
+
+/* Accordion (expanded rail) — grid-rows 0fr→1fr animates height smoothly. */
+.t-subacc {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 420ms cubic-bezier(0.2, 0, 0, 1);
+}
+.t-subacc.show {
+  grid-template-rows: 1fr;
+}
+.t-subacc > div {
+  overflow: hidden;
+  min-height: 0;
+}
+.t-subacc-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 3px 6px 5px 22px;
+  padding: 4px 0 3px 8px;
+  border-left: 2px solid var(--md-sys-color-outline-variant);
+}
+
+/* Shared sub-item (accordion + flyout). */
+.t-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.t-sub:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+.t-sub.on {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-weight: 600;
+}
+/* Children fade + slide in, staggered by --d, only while the panel is open. */
+.t-subacc .t-sub {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+.t-subacc.show .t-sub {
+  opacity: 1;
+  transform: none;
+  transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1) var(--d, 0ms),
+    transform 300ms cubic-bezier(0.2, 0, 0, 1) var(--d, 0ms),
+    background 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Flyout (collapsed rail) — portalled to <body>, positioned in JS. */
+.t-flyout {
+  position: fixed;
+  z-index: 60;
+  width: 190px;
+  padding: 8px;
+  background: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 18px;
+  box-shadow: 0 12px 34px -8px rgba(2, 6, 23, 0.42);
+  opacity: 0;
+  transform: scale(0.9) translateX(-8px);
+  transform-origin: left top;
+  pointer-events: none;
+  transition: opacity 260ms cubic-bezier(0.2, 0, 0, 1),
+    transform 340ms cubic-bezier(0.34, 1.56, 0.42, 1);
+}
+.t-flyout.show {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.t-flyout::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 16px;
+  width: 12px;
+  height: 12px;
+  background: var(--md-sys-color-surface);
+  border-left: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  transform: rotate(45deg);
+}
+.t-flyout-cap {
+  padding: 6px 12px 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Regime switching: hide the accordion when collapsed (flyout takes over) and
+   on phones (the Settings page shows its own switcher there). */
+@media (min-width: 768px) {
+  .t-shell.collapsed .t-subacc,
+  .t-shell.collapsed .t-subchev {
+    display: none;
+  }
+}
+@media (max-width: 767.98px) {
+  .t-subacc,
+  .t-subchev {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-subchev,
+  .t-subacc,
+  .t-subacc.show .t-sub,
+  .t-flyout {
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Material Symbols helper */
 .msym {
   font-family: 'Material Symbols Outlined';

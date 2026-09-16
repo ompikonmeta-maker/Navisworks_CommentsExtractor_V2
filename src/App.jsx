@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from './store/store.jsx';
 import { useSettings, applyThemeMode } from './store/settings.jsx';
 import { loadSampleData } from './lib/sample.js';
@@ -18,7 +19,7 @@ import { Icon, Button } from './components/ui.jsx';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
-import Settings from './views/Settings.jsx';
+import Settings, { SECTIONS } from './views/Settings.jsx';
 
 const NAV = [
   { id: 'dashboard', label: 'Overview', icon: 'dashboard' },
@@ -44,6 +45,8 @@ export default function App() {
   const [detailId, setDetailId] = useState(null);
   const [commentsFilter, setCommentsFilter] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [settingsSection, setSettingsSection] = useState('template');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const themeBtnRef = useRef(null);
   // The theme mode already reflected in the DOM. The animated toggle applies
   // the new mode itself (inside the View Transition), so this lets the sync
@@ -192,6 +195,30 @@ export default function App() {
       setRevealDir(to < from ? -1 : 1);
       return id;
     });
+    if (id !== 'settings') setSettingsOpen(false); // fold the submenu when leaving
+    setDetailId(null);
+  }, []);
+
+  // Tap the Settings parent: enter Settings and open the submenu; if already
+  // on Settings, toggle the accordion open/closed.
+  const toggleSettings = useCallback(() => {
+    setRoute((cur) => {
+      if (cur === 'settings') { setSettingsOpen((o) => !o); return cur; }
+      setRevealDir(1);
+      setSettingsOpen(true);
+      return 'settings';
+    });
+    setDetailId(null);
+  }, []);
+
+  // Pick a Settings sub-section from the sidebar (accordion or flyout).
+  const selectSettings = useCallback((sec) => {
+    setSettingsSection((cur) => {
+      setRevealDir(SECTIONS.findIndex((x) => x.id === sec) < SECTIONS.findIndex((x) => x.id === cur) ? -1 : 1);
+      return sec;
+    });
+    setRoute('settings');
+    setSettingsOpen(true);
     setDetailId(null);
   }, []);
   // Jump to Viewpoints with a preset filter (from an Overview KPI/discipline).
@@ -238,6 +265,21 @@ export default function App() {
 
           <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible">
             {NAV.map((item, i) => {
+              if (item.id === 'settings') {
+                return (
+                  <SettingsNav
+                    key="settings"
+                    item={item}
+                    i={i}
+                    collapsed={collapsed}
+                    route={route}
+                    section={settingsSection}
+                    open={settingsOpen}
+                    onToggle={toggleSettings}
+                    onSelect={selectSettings}
+                  />
+                );
+              }
               const active = route === item.id;
               return (
                 <button
@@ -312,6 +354,8 @@ export default function App() {
             openDetail={openDetail}
             goComments={goComments}
             commentsFilter={commentsFilter}
+            settingsSection={settingsSection}
+            setSettingsSection={selectSettings}
           />
         </main>
       </div>
@@ -321,7 +365,109 @@ export default function App() {
   );
 }
 
-function Screen({ route, detailId, setDetailId, openDetail, goComments, commentsFilter }) {
+// Settings item with its nested sub-sections: an accordion when the rail is
+// expanded (children slide open below, indented under a guide line) and a
+// portalled flyout when the rail is collapsed to icons (children float beside
+// it). Matches the approved mock: emphasized-easing reveal + spring flyout.
+function SettingsNav({ item, i, collapsed, route, section, open, onToggle, onSelect }) {
+  const active = route === 'settings';
+  const btnRef = useRef(null);
+  const closeTimer = useRef(null);
+  const [flyPos, setFlyPos] = useState(null);
+  const [flyOpen, setFlyOpen] = useState(false);
+
+  const place = useCallback(() => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setFlyPos({ top: r.top - 4, left: r.right + 12 });
+  }, []);
+  const openFly = useCallback(() => { clearTimeout(closeTimer.current); place(); setFlyOpen(true); }, [place]);
+  const scheduleClose = useCallback(() => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setFlyOpen(false), 140);
+  }, []);
+
+  useEffect(() => {
+    if (!collapsed) { setFlyOpen(false); return undefined; }
+    if (!flyOpen) return undefined;
+    const on = () => place();
+    window.addEventListener('scroll', on, true);
+    window.addEventListener('resize', on);
+    return () => { window.removeEventListener('scroll', on, true); window.removeEventListener('resize', on); };
+  }, [collapsed, flyOpen, place]);
+
+  return (
+    <div
+      className="t-setwrap"
+      onMouseEnter={collapsed ? openFly : undefined}
+      onMouseLeave={collapsed ? scheduleClose : undefined}
+      onFocusCapture={collapsed ? openFly : undefined}
+      onBlurCapture={collapsed ? scheduleClose : undefined}
+    >
+      <button
+        ref={btnRef}
+        onClick={onToggle}
+        aria-current={active ? 'page' : undefined}
+        aria-expanded={collapsed ? undefined : open}
+        title={item.label}
+        style={{ '--d': `${i * 15}ms` }}
+        className={`t-navitem flex w-full items-center gap-3 rounded-full px-4 py-3 text-sm font-medium whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+          active ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-high'
+        }`}
+      >
+        <span className="t-ico grid place-items-center"><Icon name={item.icon} className="shrink-0 text-[22px]" /></span>
+        <span className="t-lbl">{item.label}</span>
+        <Icon name="chevron_right" className={`t-subchev text-[20px] ${open ? 'open' : ''}`} />
+      </button>
+
+      {/* Accordion — expanded rail (CSS hides it when collapsed / on mobile) */}
+      <div className={`t-subacc ${open ? 'show' : ''}`}>
+        <div>
+          <div className="t-subacc-inner">
+            {SECTIONS.map((s, idx) => {
+              const on = active && section === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => onSelect(s.id)}
+                  aria-current={on ? 'page' : undefined}
+                  style={{ '--d': `${idx * 45}ms` }}
+                  className={`t-sub ${on ? 'on' : ''}`}
+                >
+                  <Icon name={s.icon} className="shrink-0 text-[19px]" />
+                  <span>{s.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Flyout — collapsed rail; portalled so the aside's overflow can't clip it */}
+      {collapsed && flyPos && createPortal(
+        <div
+          className={`t-flyout ${flyOpen ? 'show' : ''}`}
+          style={{ top: flyPos.top, left: flyPos.left }}
+          onMouseEnter={openFly}
+          onMouseLeave={scheduleClose}
+        >
+          <div className="t-flyout-cap">Settings</div>
+          {SECTIONS.map((s) => {
+            const on = active && section === s.id;
+            return (
+              <button key={s.id} onClick={() => { onSelect(s.id); setFlyOpen(false); }} className={`t-sub ${on ? 'on' : ''}`}>
+                <Icon name={s.icon} className="shrink-0 text-[19px]" />
+                <span>{s.label}</span>
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+function Screen({ route, detailId, setDetailId, openDetail, goComments, commentsFilter, settingsSection, setSettingsSection }) {
   const { status, error } = useStore();
 
   if (status === 'error') {
@@ -341,7 +487,7 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
     case 'comments':
       return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} />;
     case 'settings':
-      return <Settings />;
+      return <Settings section={settingsSection} setSection={setSettingsSection} />;
     default:
       return null;
   }

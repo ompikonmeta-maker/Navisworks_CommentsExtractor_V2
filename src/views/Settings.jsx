@@ -19,10 +19,11 @@ const THEME_OPTIONS = [
 ];
 const SWATCHES = ['#1768f7', '#1f7a4d', '#a9730a', '#b3261e', '#7b3fe4', '#0e7490', '#c026d3', '#475569'];
 
-// Category rail — one focused panel each, so the page never scrolls endlessly.
+// The Settings sub-sections. These now live in the sidebar (nested under
+// Settings): an accordion when the rail is expanded, a flyout when collapsed.
 // Ordered along the data journey: pick a Template → define Labels & fields →
-// tune Detection → Appearance → About.
-const SECTIONS = [
+// tune Detection → Appearance → About. Exported so App can drive the nav.
+export const SECTIONS = [
   { id: 'template', label: 'Template', icon: 'download' },
   { id: 'labels', label: 'Labels', icon: 'table_view' },
   { id: 'detection', label: 'Detection', icon: 'search' },
@@ -30,10 +31,9 @@ const SECTIONS = [
   { id: 'about', label: 'About', icon: 'info' },
 ];
 
-export default function Settings() {
+export default function Settings({ section = 'template', setSection = () => {} }) {
   const { records } = useStore();
   const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings } = useSettings();
-  const [section, setSection] = useState('template');
   const [labelTab, setLabelTab] = useState('disciplines');
   const [newDisc, setNewDisc] = useState('');
   const [newComm, setNewComm] = useState('');
@@ -56,9 +56,10 @@ export default function Settings() {
   const addNewComm = () => { const c = newComm.trim(); if (c) addCommenter(c); setNewComm(''); };
 
   return (
-    <div className="canvas-w grid gap-4 md:grid-cols-[216px_1fr] md:items-start">
-      {/* Category rail */}
-      <nav className="flex gap-1 overflow-x-auto rounded-card border border-outline-variant/60 bg-surface-low p-2 md:sticky md:top-3 md:flex-col md:overflow-visible">
+    <div className="canvas-w">
+      {/* Section switcher — sidebar-nested on desktop; a compact horizontal
+          strip here on phones, where the sidebar is a top bar with no room. */}
+      <nav className="mb-4 flex gap-1 overflow-x-auto rounded-card border border-outline-variant/60 bg-surface-low p-2 md:hidden">
         {SECTIONS.map((s) => {
           const on = section === s.id;
           return (
@@ -66,13 +67,12 @@ export default function Settings() {
               key={s.id}
               onClick={() => { setRevealDir(SECTIONS.findIndex((x) => x.id === s.id) < SECTIONS.findIndex((x) => x.id === section) ? -1 : 1); setSection(s.id); }}
               aria-current={on ? 'page' : undefined}
-              className={`flex items-center gap-3 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-3.5 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 on ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'
               }`}
             >
-              <Icon name={s.icon} className="shrink-0 text-[20px]" />
+              <Icon name={s.icon} className="shrink-0 text-[19px]" />
               <span>{s.label}</span>
-              {s.soon && <span className="ml-auto text-[9.5px] font-bold uppercase tracking-wide opacity-70">soon</span>}
             </button>
           );
         })}
