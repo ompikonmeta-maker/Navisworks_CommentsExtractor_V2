@@ -29,12 +29,19 @@ const KIND_OPTS = [
   { value: 'attr', label: 'Custom' },
   { value: 'blank', label: 'Leave blank' },
 ];
+const DETAIL_KIND_OPTS = [
+  { value: 'record', label: 'From data' },
+  { value: 'const', label: 'Constant' },
+  { value: 'attr', label: 'Custom' },
+];
 const FMT_OPTS = [
   { value: 'text', label: 'text' },
   { value: 'date', label: 'date' },
   { value: 'number', label: 'number' },
 ];
 const RECORD_OPTS = RECORD_FIELDS.map(([value, label]) => ({ value, label }));
+// Subtle highlight on a Custom (cf_) field so it stands out from data/const.
+const cfHighlight = 'rounded bg-status-review/10 ring-1 ring-status-review/40';
 
 const inputCls =
   'rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
@@ -151,6 +158,20 @@ export default function TemplateExportPanel() {
     patchFields(() => buildFieldsFromHeaders(headersFor(cfg.logSheet.name)));
   };
   const resetMapping = () => setTemplateExport(() => JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_MAPPING)));
+
+  // ---- detail-sheet field mapping (field → cell, written as values) ----
+  const detailFields = cfg.detail.fields || [];
+  const patchDetailFields = (fn) => setTemplateExport((c) => ({ ...c, detail: { ...c.detail, fields: fn(c.detail.fields || []) } }));
+  const setDetailField = (i, patch) => patchDetailFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  const setDetailFieldSource = (i, patch) => patchDetailFields((fs) => fs.map((f, j) => (j === i ? { ...f, source: { ...f.source, ...patch } } : f)));
+  const removeDetailField = (i) => patchDetailFields((fs) => fs.filter((_, j) => j !== i));
+  const addDetailField = () => patchDetailFields((fs) => [...fs, { id: `d${Date.now()}`, source: { kind: 'record', key: RECORD_FIELDS[0][0] }, by: 'cell', value: '' }]);
+  const changeDetailKind = (i, kind) => patchDetailFields((fs) => fs.map((f, j) => {
+    if (j !== i) return f;
+    if (kind === 'record') return { ...f, source: { kind, key: RECORD_FIELDS[0][0] } };
+    const key = f.source.key || (kind === 'attr' ? `${CUSTOM_PREFIX}field` : 'const');
+    return { ...f, source: { kind, key } };
+  }));
 
   const constFields = fields.filter((f) => f.source.kind === 'const');
   const attrList = fields.map((f, i) => ({ f, i })).filter((x) => x.f.source.kind === 'attr');
@@ -340,7 +361,7 @@ export default function TemplateExportPanel() {
                         ) : kind === 'blank' ? (
                           <button onClick={() => defineBlank(i)} className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15">Define as {f.suggestKey || `${CUSTOM_PREFIX}${slug(f.label)}`}</button>
                         ) : (
-                          <input key={f.id + kind} className={`${quietInput} w-[130px] font-mono`} defaultValue={f.source.key} onBlur={(e) => commitKey(i, f.source.key, e.target.value)} />
+                          <input key={f.id + kind} className={`${quietInput} w-[130px] font-mono ${kind === 'attr' ? cfHighlight : ''}`} defaultValue={f.source.key} onBlur={(e) => commitKey(i, f.source.key, e.target.value)} />
                         )}
                       </td>
                       <td className="py-0.5 pr-2"><Select className="dd-quiet dd-compact w-[116px]" aria-label="Find by" value={f.by} onChange={(v) => setField(i, { by: v })} options={BY_OPTS} /></td>
@@ -371,7 +392,7 @@ export default function TemplateExportPanel() {
       {step === 2 && info && (
         <>
           <div className="rounded-2xl border border-outline-variant bg-surface p-4">
-            <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Detail sheet cells <InfoTip label="About detail cells">On each detail sheet the tool sets the item number and drops the before/after photos into these cells. Everything else fills itself from the template’s formulas.</InfoTip></div>
+            <div className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold">Detail sheet cells <InfoTip label="About detail cells">On each detail sheet the tool sets the item number and drops the before/after photos into these cells. Field values are filled below (or by the template’s own formulas).</InfoTip></div>
             <div className="grid gap-3 sm:grid-cols-3">
               {[['itemNumber', 'Item number'], ['imageBefore', 'Before image'], ['imageAfter', 'After image']].map(([key, label]) => (
                 <div key={key} className="text-xs font-medium text-on-surface-variant">
@@ -385,8 +406,61 @@ export default function TemplateExportPanel() {
             </div>
             <label className="mt-3 inline-flex items-center gap-2 text-sm">
               <input type="checkbox" checked={!!cfg.detail?.vlookupAutoRepair} onChange={(e) => setDetailFlag('vlookupAutoRepair', e.target.checked)} />
-              <span className="inline-flex items-center gap-1.5">Auto-repair VLOOKUP <InfoTip label="About auto-repair">Rewrites the detail-sheet formulas to look up by header text, so they keep working if you move the log columns.</InfoTip></span>
+              <span className="inline-flex items-center gap-1.5">Auto-repair VLOOKUP <InfoTip label="About auto-repair">Only for templates that already use VLOOKUP: rewrites those formulas to look up by header text so they survive column moves. Not needed if you map the fields below.</InfoTip></span>
             </label>
+          </div>
+
+          {/* detail fields — write field values straight into detail cells */}
+          <div className="rounded-2xl border border-outline-variant bg-surface p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                Detail fields
+                <InfoTip label="About detail fields">For each item, the tool writes these field values straight into the detail sheet cells — no VLOOKUP needed, so it works with any template. Locate a cell by its reference (C7) or a Defined Name.</InfoTip>
+              </div>
+              <button onClick={addDetailField} className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary"><Icon name="upload_file" className="text-[15px]" /> Add field</button>
+            </div>
+            {detailFields.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-xs">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant">
+                      <th className="pb-1.5 pr-2 font-semibold">Source</th>
+                      <th className="pb-1.5 pr-2 font-semibold">Field / key</th>
+                      <th className="pb-1.5 pr-2 font-semibold">Find cell by</th>
+                      <th className="pb-1.5 pr-2 font-semibold">Cell</th>
+                      <th className="pb-1.5 pr-2 font-semibold">Fmt</th>
+                      <th className="pb-1.5 font-semibold" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailFields.map((f, i) => {
+                      const kind = f.source.kind;
+                      return (
+                        <tr key={f.id} className="group border-t border-outline-variant/50 align-middle hover:bg-surface-low">
+                          <td className="py-0.5 pr-2"><Select className="dd-quiet dd-compact w-[116px]" aria-label="Source" value={kind} onChange={(v) => changeDetailKind(i, v)} options={DETAIL_KIND_OPTS} /></td>
+                          <td className="py-0.5 pr-2">
+                            {kind === 'record' ? (
+                              <Select className="dd-quiet dd-compact w-[150px]" aria-label="Data field" value={f.source.key} onChange={(v) => setDetailFieldSource(i, { key: v })} options={RECORD_OPTS} />
+                            ) : (
+                              <input key={f.id + kind} className={`${quietInput} w-[150px] font-mono ${kind === 'attr' ? cfHighlight : ''}`} defaultValue={f.source.key} onBlur={(e) => setDetailFieldSource(i, { key: slug(e.target.value) })} />
+                            )}
+                          </td>
+                          <td className="py-0.5 pr-2"><Select className="dd-quiet dd-compact w-[96px]" aria-label="Find cell by" value={f.by} onChange={(v) => setDetailField(i, { by: v })} options={CELL_BY} /></td>
+                          <td className="py-0.5 pr-2"><input className={`${quietInput} w-[110px] font-mono`} value={f.value} onChange={(e) => setDetailField(i, { value: e.target.value })} placeholder="e.g. C7" /></td>
+                          <td className="py-0.5 pr-2"><Select className="dd-quiet dd-compact w-[92px]" aria-label="Format" value={f.format || 'text'} onChange={(v) => setDetailField(i, { format: v === 'text' ? undefined : v })} options={FMT_OPTS} /></td>
+                          <td className="py-0.5 pl-1">
+                            <button onClick={() => removeDetailField(i)} className="grid h-6 w-6 place-items-center rounded text-on-surface-variant opacity-0 transition-opacity hover:bg-error/10 hover:text-error focus:opacity-100 group-hover:opacity-100" title="Remove"><Icon name="close" className="text-[16px]" /></button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="py-4 text-center text-xs text-on-surface-variant">No detail fields yet. Add one to write a field’s value into a detail-sheet cell — or leave empty if your template already uses VLOOKUP.</p>
+            )}
+            <p className="mt-2 text-[11px] text-on-surface-variant">Custom (<span className="font-mono">cf_</span>) fields are <span className="rounded bg-status-review/10 px-1 ring-1 ring-status-review/40">highlighted</span>. Values are written directly (no formula) so they don’t depend on the log’s sheet name or column order.</p>
           </div>
 
           {/* constants — custom (cf_) fields now live in Settings › Labels */}
