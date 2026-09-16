@@ -1,5 +1,6 @@
 // Small Material-flavored UI primitives shared across views.
 import { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useSettings } from '../store/settings.jsx';
 import { statusColor, chipStyle } from '../lib/status.js';
 
@@ -140,9 +141,22 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [active, setActive] = useState(-1);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const rootRef = useRef(null);
   const btnRef = useRef(null);
+  const menuRef = useRef(null);
   const current = opts.find((o) => o.value === value);
+
+  // The menu is rendered in a portal with fixed positioning so it can never be
+  // clipped by a scrollable/overflow ancestor (e.g. a mapping table).
+  const place = useCallback(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const minW = Math.max(r.width, 180);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - 8 - minW));
+    setPos({ top: r.bottom + 6, left, width: r.width });
+  }, []);
 
   const close = useCallback(() => {
     setOpen((wasOpen) => {
@@ -155,6 +169,7 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
   }, []);
   const openMenu = () => {
     setClosing(false);
+    place();
     setOpen(true);
     setActive(Math.max(0, opts.findIndex((o) => o.value === value)));
   };
@@ -167,11 +182,19 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
   useEffect(() => {
     if (!open) return undefined;
     const onDoc = (e) => {
-      if (!rootRef.current?.contains(e.target)) close();
+      if (rootRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      close();
     };
+    const reposition = () => place();
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open, close]);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, close, place]);
 
   const onKey = (e) => {
     if (e.key === 'Escape') return close();
@@ -206,8 +229,14 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
           <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      {(open || closing) && (
-        <ul role="listbox" aria-label={ariaLabel} className={`dd-menu ${open ? 'open' : 'closing'}`}>
+      {(open || closing) && createPortal(
+        <ul
+          ref={menuRef}
+          role="listbox"
+          aria-label={ariaLabel}
+          className={`dd-menu ${open ? 'open' : 'closing'}`}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 180) }}
+        >
           {opts.map((o, i) => {
             const sel = o.value === value;
             return (
@@ -230,7 +259,8 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
               </li>
             );
           })}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   );
