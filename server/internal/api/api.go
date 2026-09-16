@@ -13,9 +13,26 @@ import (
 
 // API bundles the dependencies the handlers need.
 type API struct {
-	DB      *sql.DB
-	Version string
+	DB       *sql.DB
+	Version  string
+	FilesDir string // where uploaded images/templates live on disk
 }
+
+// memberRole returns the caller's role within a project and whether they are a
+// member at all. Admins are treated as owners of every project.
+func (a *API) memberRole(u *auth.User, projectID int64) (role string, member bool, err error) {
+	if u.Role == "admin" {
+		return "owner", true, nil
+	}
+	err = a.DB.QueryRow(`SELECT role FROM project_members WHERE project_id=? AND user_id=?`, projectID, u.ID).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return role, err == nil, err
+}
+
+// canWrite reports whether the caller may modify a project's contents.
+func canWrite(role string) bool { return role == "owner" || role == "editor" }
 
 // ResolveUser looks up an active, admin-provisioned user by normalized name.
 // Wired into the auth middleware.
@@ -45,6 +62,13 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/projects", a.createProject)
 	mux.HandleFunc("GET /api/users", a.listUsers)   // admin
 	mux.HandleFunc("POST /api/users", a.createUser) // admin
+	// records + images
+	mux.HandleFunc("GET /api/projects/{pid}/records", a.listRecords)
+	mux.HandleFunc("POST /api/projects/{pid}/records", a.importRecords)
+	mux.HandleFunc("PATCH /api/records/{id}", a.patchRecord)
+	mux.HandleFunc("DELETE /api/records/{id}", a.deleteRecord)
+	mux.HandleFunc("POST /api/records/{id}/images", a.uploadImage)
+	mux.HandleFunc("GET /api/files/{key}", a.getFile)
 	return mux
 }
 

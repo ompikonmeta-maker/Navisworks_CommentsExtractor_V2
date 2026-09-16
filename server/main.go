@@ -40,7 +40,7 @@ func main() {
 	}
 	defer database.Close()
 
-	a := &api.API{DB: database, Version: version}
+	a := &api.API{DB: database, Version: version, FilesDir: filepath.Join(dataDir, "files")}
 	bootstrapAdmin(database)
 
 	root := http.NewServeMux()
