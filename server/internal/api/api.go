@@ -1,0 +1,195 @@
+// Package api holds the JSON HTTP handlers for Tabelin V2.
+package api
+
+import (
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+
+	"tabelin/server/internal/auth"
+)
+
+// API bundles the dependencies the handlers need.
+type API struct {
+	DB      *sql.DB
+	Version string
+}
+
+// ResolveUser looks up an active, admin-provisioned user by normalized name.
+// Wired into the auth middleware.
+func (a *API) ResolveUser(username string) (*auth.User, error) {
+	var u auth.User
+	var active int
+	err := a.DB.QueryRow(
+		`SELECT id, username, display_name, role, active FROM users WHERE username = ?`,
+		username,
+	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &active)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	u.Active = active == 1
+	return &u, nil
+}
+
+// Routes returns the /api/* handler. Auth (except health) is applied by caller.
+func (a *API) Routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/health", a.health)
+	mux.HandleFunc("GET /api/me", a.me)
+	mux.HandleFunc("GET /api/projects", a.listProjects)
+	mux.HandleFunc("POST /api/projects", a.createProject)
+	mux.HandleFunc("GET /api/users", a.listUsers)   // admin
+	mux.HandleFunc("POST /api/users", a.createUser) // admin
+	return mux
+}
+
+func (a *API) health(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": a.Version})
+}
+
+func (a *API) me(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, auth.FromContext(r.Context()))
+}
+
+// listProjects returns projects the caller owns or is a member of; admins see all.
+func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if u.Role == "admin" {
+		rows, err = a.DB.Query(`SELECT id, name, created_at FROM projects ORDER BY id DESC`)
+	} else {
+		rows, err = a.DB.Query(`
+			SELECT p.id, p.name, p.created_at FROM projects p
+			JOIN project_members m ON m.project_id = p.id
+			WHERE m.user_id = ? ORDER BY p.id DESC`, u.ID)
+	}
+	if err != nil {
+		writeErr(w, 500, "query projects")
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id int64
+		var name, created string
+		if err := rows.Scan(&id, &name, &created); err != nil {
+			writeErr(w, 500, "scan project")
+			return
+		}
+		out = append(out, map[string]any{"id": id, "name": name, "createdAt": created})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// createProject makes a project and records the creator as its owner. Viewers
+// may not create projects.
+func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	if u.Role == "viewer" {
+		writeErr(w, http.StatusForbidden, "viewers cannot create projects")
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+		writeErr(w, http.StatusBadRequest, "name required")
+		return
+	}
+	tx, err := a.DB.Begin()
+	if err != nil {
+		writeErr(w, 500, "begin")
+		return
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`INSERT INTO projects(name, created_by) VALUES(?, ?)`, strings.TrimSpace(body.Name), u.ID)
+	if err != nil {
+		writeErr(w, 500, "insert project")
+		return
+	}
+	pid, _ := res.LastInsertId()
+	if _, err := tx.Exec(`INSERT INTO project_members(project_id, user_id, role) VALUES(?, ?, 'owner')`, pid, u.ID); err != nil {
+		writeErr(w, 500, "insert member")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 500, "commit")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": pid, "name": body.Name})
+}
+
+func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
+	if u := auth.FromContext(r.Context()); u.Role != "admin" {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	rows, err := a.DB.Query(`SELECT id, username, display_name, role, active FROM users ORDER BY username`)
+	if err != nil {
+		writeErr(w, 500, "query users")
+		return
+	}
+	defer rows.Close()
+	out := []auth.User{}
+	for rows.Next() {
+		var u auth.User
+		var active int
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &active); err != nil {
+			writeErr(w, 500, "scan user")
+			return
+		}
+		u.Active = active == 1
+		out = append(out, u)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// createUser provisions an account (admin only). username is an AD account.
+func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
+	if u := auth.FromContext(r.Context()); u.Role != "admin" {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	var body struct {
+		Username    string `json:"username"`
+		DisplayName string `json:"displayName"`
+		Role        string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad body")
+		return
+	}
+	username := auth.Normalize(body.Username)
+	if username == "" {
+		writeErr(w, http.StatusBadRequest, "username required")
+		return
+	}
+	role := body.Role
+	if role != "admin" && role != "editor" && role != "viewer" {
+		role = "viewer"
+	}
+	_, err := a.DB.Exec(`INSERT INTO users(username, display_name, role) VALUES(?, ?, ?)`, username, body.DisplayName, role)
+	if err != nil {
+		writeErr(w, http.StatusConflict, "user exists or invalid")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"username": username, "role": role})
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(v)
+}
+
+func writeErr(w http.ResponseWriter, code int, msg string) {
+	writeJSON(w, code, map[string]string{"error": msg})
+}
