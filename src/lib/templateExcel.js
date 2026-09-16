@@ -567,16 +567,22 @@ export async function fillTemplate(bytes, records, rawMapping, constants = {}) {
   const stats = { logRows: records.length, detailSheets: 0, images: 0, cloned: 0 };
 
   let mediaN = 1000;
+  // Phase A — ensure every item has its own detail sheet, cloned from the
+  // PRISTINE pattern. This must happen BEFORE any image is injected, otherwise
+  // the first item's photo lives in the pattern's drawing and every later clone
+  // inherits it (a photo leaking onto sheets that shouldn't have one).
+  for (let i = 0; i < records.length; i += 1) {
+    const name = String(i + 1);
+    if (!map[name]) {
+      map[name] = await cloneDetailSheet(zip, map, wbXml, rels, patternInfo, name, defined);
+      stats.cloned += 1;
+    }
+  }
+  // Phase B — fill each detail sheet: item number, clear placeholders, photos.
   for (let i = 0; i < records.length; i += 1) {
     const itemNo = i + 1;
     const name = String(itemNo);
-    let info = map[name];
-    if (!info) {
-      // clone the pattern verbatim
-      info = await cloneDetailSheet(zip, map, wbXml, rels, patternInfo, name, defined);
-      map[name] = info;
-      stats.cloned += 1;
-    }
+    const info = map[name];
     stats.detailSheets += 1;
     // set N2 (item number)
     let dXml = await zip.file(info.path).async('string');
@@ -605,17 +611,31 @@ export async function fillTemplate(bytes, records, rawMapping, constants = {}) {
     }
   }
 
-  // remove calcChain (Excel rebuilds; avoids stale refs after edits)
+  // remove calcChain (Excel rebuilds; avoids stale refs after edits). Also drop
+  // its content-type override AND the workbook relationship that points at it —
+  // a relationship to a part we deleted is a dangling ref that makes Excel show
+  // the "we found a problem with some content" repair prompt on open.
   if (zip.file('xl/calcChain.xml')) {
     zip.remove('xl/calcChain.xml');
     let ct = await zip.file('[Content_Types].xml').async('string');
     ct = ct.replace(/<Override PartName="\/xl\/calcChain\.xml"[^>]*\/>/, '');
     zip.file('[Content_Types].xml', ct);
+    const wbRelsPath = 'xl/_rels/workbook.xml.rels';
+    if (zip.file(wbRelsPath)) {
+      let wr = await zip.file(wbRelsPath).async('string');
+      wr = wr.replace(/<Relationship\b[^>]*Target="[^"]*calcChain\.xml"[^>]*\/>/, '');
+      zip.file(wbRelsPath, wr);
+    }
   }
   // force full recalc so VLOOKUP/formatting recompute on open
   let wb2 = await zip.file('xl/workbook.xml').async('string');
   if (/<calcPr /.test(wb2)) wb2 = wb2.replace(/<calcPr [^>]*\/>/, '<calcPr calcId="0" fullCalcOnLoad="1"/>');
   zip.file('xl/workbook.xml', wb2);
+
+  // JSZip records implicit folder entries as we add parts, but a workbook Excel
+  // wrote has none. Delete just the folder markers from the entry map — NOT via
+  // zip.remove(), which would recursively drop the folder's whole subtree.
+  for (const p of Object.keys(zip.files)) { if (zip.files[p].dir) delete zip.files[p]; }
 
   const out = await zip.generateAsync({ type: typeof window === 'undefined' ? 'nodebuffer' : 'uint8array' });
   return { bytes: out, stats };
