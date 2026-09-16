@@ -10,6 +10,7 @@ import { useSettings } from '../store/settings.jsx';
 import { statusLabels, openLabel, doneLabel } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
+import { remoteState, importParsedRecords } from '../lib/server.js';
 import { Icon, Button, Card, StatusBadge, DisciplineBadge, InfoTip } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 
@@ -81,6 +82,12 @@ export default function Dashboard({ openDetail, goComments }) {
       const { records: recs, stats, errors } = await ingestFiles(files);
       if (recs.length === 0) {
         notify(errors[0] || 'No comments could be imported.', 'error');
+      } else if (remoteState.active) {
+        // Remote mode: send to the server (with before-images), then show the
+        // stored list so everyone on this review sees the same data.
+        const mapped = await importParsedRecords(remoteState.projectId, recs);
+        setData(mapped, `project:${remoteState.projectId}`, stats);
+        notify(`Imported ${stats.comments} comments to this review · ${stats.linked} images linked.`, 'success');
       } else {
         setData(recs, 'user', stats);
         notify(`Imported ${stats.comments} comments from ${stats.html} HTML · ${stats.linked} images linked.`, 'success');

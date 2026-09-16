@@ -8,6 +8,7 @@ import { detectCommenter } from '../lib/parser.js';
 import { extract } from '../lib/detect.js';
 import { useSettings } from './settings.jsx';
 import { doneLabel as doneLabelOf, resolveStatus } from '../lib/status.js';
+import { remoteState, syncRecord } from '../lib/server.js';
 
 const StoreContext = createContext(null);
 
@@ -135,7 +136,22 @@ export function StoreProvider({ children }) {
     [settings.statuses]
   );
   const updateRecord = useCallback(
-    (id, patch) => dispatch({ type: 'UPDATE_RECORD', id, patch, doneLabel }),
+    (id, patch) => {
+      dispatch({ type: 'UPDATE_RECORD', id, patch, doneLabel });
+      // In remote mode, persist the same edit to the server. Mirror the
+      // reducer's closedAt auto-stamp so the server stays consistent when a
+      // status button (not the manual editor) closes/reopens a record.
+      if (remoteState.active) {
+        let sync = patch;
+        if ('status' in patch && !('closedAt' in patch)) {
+          sync = { ...patch, closedAt: patch.status === doneLabel ? new Date().toISOString() : '' };
+        }
+        syncRecord(id, sync).catch((e) => dispatch({
+          type: 'TOAST',
+          toast: { message: `Couldn’t save to server: ${e.message}`, kind: 'error', ts: Date.now() },
+        }));
+      }
+    },
     [doneLabel]
   );
   const applyDetect = useCallback(

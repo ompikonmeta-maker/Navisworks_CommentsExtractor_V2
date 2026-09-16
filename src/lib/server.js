@@ -1,0 +1,142 @@
+// V2 remote mode: talk to the Tabelin server that serves this page.
+//
+// "Remote mode" is on only when the app is served BY the Go server (there is an
+// /api/health on the same origin). Opened as a single file (file://) or from a
+// plain static host, detectRemote() is false and the app stays fully offline —
+// V1 behaviour is untouched.
+
+async function req(method, path, body) {
+  const init = { method, headers: {}, credentials: 'same-origin' };
+  if (body instanceof Blob) {
+    init.body = body;
+    init.headers['Content-Type'] = body.type || 'application/octet-stream';
+  } else if (body !== undefined) {
+    init.body = JSON.stringify(body);
+    init.headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(path, init);
+  if (res.status === 401) {
+    const e = new Error('unauthorized');
+    e.code = 401;
+    throw e;
+  }
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    const e = new Error(t || res.statusText);
+    e.code = res.status;
+    throw e;
+  }
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('application/json') ? res.json() : res;
+}
+
+export const api = {
+  health: () => req('GET', '/api/health'),
+  me: () => req('GET', '/api/me'),
+  login: (username, pin) => req('POST', '/api/login', { username, pin }),
+  logout: () => req('POST', '/api/logout'),
+  listProjects: () => req('GET', '/api/projects'),
+  createProject: (name) => req('POST', '/api/projects', { name }),
+  getRecords: (pid) => req('GET', `/api/projects/${pid}/records`),
+  importRecords: (pid, records) => req('POST', `/api/projects/${pid}/records`, { records }),
+  patchRecord: (id, patch) => req('PATCH', `/api/records/${id}`, patch),
+  uploadImage: (id, kind, blob) => req('POST', `/api/records/${id}/images?kind=${kind}`, blob),
+  getGlobalConfig: () => req('GET', '/api/config'),
+  getProjectConfig: (pid) => req('GET', `/api/projects/${pid}/config`),
+  putProjectConfig: (pid, key, json) => req('PUT', `/api/projects/${pid}/config`, { key, json }),
+  putGlobalConfig: (key, json) => req('PUT', '/api/config', { key, json }),
+};
+
+// Session-wide remote flag + selected project. Set once by Root; read by App,
+// the store, and the import path to branch behaviour without prop-drilling.
+export const remoteState = { active: false, projectId: null, user: null };
+
+let _isRemote = null;
+export async function detectRemote() {
+  if (_isRemote !== null) return _isRemote;
+  // A file:// build (the portable single file) is always offline — skip the
+  // probe so the browser doesn't log an unsupported-scheme fetch error.
+  if (typeof location !== 'undefined' && location.protocol === 'file:') {
+    _isRemote = false;
+    return _isRemote;
+  }
+  try {
+    const r = await fetch('/api/health', { credentials: 'same-origin' });
+    _isRemote = r.ok;
+  } catch {
+    _isRemote = false;
+  }
+  return _isRemote;
+}
+
+// Map a server record to the shape the existing UI/store expect (parser shape).
+// Server ids become the record ID so edits can be synced back by that id, and
+// stored image URLs stand in for the data-URL image fields (an <img> src works
+// with either).
+export function mapServerRecord(s) {
+  return {
+    ...s,
+    ID: s.id,
+    imageData: s.beforeUrl || '',
+    afterImageData: s.afterUrl || '',
+    rawStatus: s.status || '',
+  };
+}
+
+// Load a project's records for the store.
+export async function loadProjectRecords(pid) {
+  const recs = await api.getRecords(pid);
+  return recs.map(mapServerRecord);
+}
+
+function dataURLtoBlob(dataUrl) {
+  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl || '');
+  if (!m) return null;
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: m[1] });
+}
+
+// Import parsed records (from ingestFiles) into a project: POST the metadata,
+// then upload each linked "before" image. New rows are appended in array order,
+// so the last N server records line up with the parsed ones. Returns the fresh
+// mapped list for the store.
+export async function importParsedRecords(pid, recs) {
+  await api.importRecords(pid, recs);
+  const server = await api.getRecords(pid);
+  const start = Math.max(0, server.length - recs.length);
+  for (let i = 0; i < recs.length; i += 1) {
+    const src = recs[i];
+    const dst = server[start + i];
+    if (dst && typeof src.imageData === 'string' && src.imageData.startsWith('data:')) {
+      const blob = dataURLtoBlob(src.imageData);
+      if (blob) {
+        try { await api.uploadImage(dst.id, 'before', blob); } catch { /* keep going */ }
+      }
+    }
+  }
+  const finalList = await api.getRecords(pid);
+  return finalList.map(mapServerRecord);
+}
+
+// Persist one record edit to the server. Splits image uploads (which have their
+// own endpoint) from ordinary field edits. Fire-and-forget; returns a promise
+// callers may await when they need to refresh.
+export async function syncRecord(id, patch) {
+  if (!remoteState.active) return;
+  const fieldKeys = ['commenter', 'discipline', 'resolution', 'status', 'closedAt', 'commentText', 'extra'];
+  const fields = {};
+  for (const k of fieldKeys) if (k in patch) fields[k] = patch[k];
+
+  for (const [field, kind] of [['imageData', 'before'], ['afterImageData', 'after']]) {
+    if (!(field in patch)) continue;
+    const val = patch[field];
+    if (typeof val === 'string' && val.startsWith('data:')) {
+      const blob = dataURLtoBlob(val);
+      if (blob) await api.uploadImage(id, kind, blob);
+    }
+    // Deleting an image from the UI is not synced yet (no delete endpoint).
+  }
+  if (Object.keys(fields).length) await api.patchRecord(id, fields);
+}

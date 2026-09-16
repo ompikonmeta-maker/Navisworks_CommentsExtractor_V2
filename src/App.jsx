@@ -16,6 +16,7 @@ import {
   writeSessionToFolder,
 } from './lib/persist.js';
 import { Icon, Button } from './components/ui.jsx';
+import { loadProjectRecords } from './lib/server.js';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
@@ -37,7 +38,7 @@ function effectiveTheme() {
 const EXPANDED = 300;
 const RAIL = 96;
 
-export default function App() {
+export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   const store = useStore();
   const { settings, update } = useSettings();
   const [effTheme, setEffTheme] = useState(effectiveTheme);
@@ -80,9 +81,24 @@ export default function App() {
   const folderHandleRef = useRef(null);
 
   // Startup: restore the saved session (IndexedDB) if any, else the sample.
+  // In remote mode, load the chosen project's records from the server instead —
+  // no local session, no sample.
   useEffect(() => {
     let cancelled = false;
     store.setLoading();
+    if (remote) {
+      (async () => {
+        try {
+          const recs = await loadProjectRecords(remote.id);
+          if (!cancelled) {
+            store.setData(recs, `project:${remote.id}`, { comments: recs.length, html: 0, images: 0, linked: 0 });
+          }
+        } catch (e) {
+          if (!cancelled) store.setError(e.message);
+        }
+      })();
+      return () => { cancelled = true; };
+    }
     (async () => {
       await requestPersistentStorage();
       let restored = false;
@@ -122,7 +138,9 @@ export default function App() {
   }, []);
 
   // Autosave: browser (IndexedDB) always; mirror to the folder when granted.
+  // Skipped in remote mode — edits are saved to the server per change instead.
   useEffect(() => {
+    if (remote) return undefined;
     if (store.status !== 'ready') return undefined;
     const t = setTimeout(async () => {
       setSaving('saving');
@@ -313,7 +331,13 @@ export default function App() {
               {NAV.find((n) => n.id === route)?.label}
             </h1>
             <div className="flex shrink-0 items-center gap-1">
-              {FS_SUPPORTED &&
+              {remote && (
+                <>
+                  <Button variant="text" icon="folder_open" onClick={onExitProject} title="Switch review">{remote.name}</Button>
+                  <Button variant="text" onClick={onSignOut}>Sign out</Button>
+                </>
+              )}
+              {!remote && FS_SUPPORTED &&
                 (needsReconnect ? (
                   <Button variant="tonal" icon="folder_open" onClick={reconnectFolder}>Reconnect folder</Button>
                 ) : folderName ? (
@@ -336,13 +360,19 @@ export default function App() {
               className={`h-2 w-2 rounded-full ${saving === 'saving' ? 'bg-status-review' : 'bg-status-closed'}`}
               title={saving === 'saving' ? 'Saving…' : 'Saved'}
             />
-            <span>
-              Autosaving · browser{folderName ? ` + ${folderName}/` : ''}
-              {needsReconnect && folderName ? ' (folder paused)' : ''}
-            </span>
-            <button onClick={resetToSample} className="ml-auto inline-flex items-center gap-1 text-on-surface-variant hover:text-primary">
-              <Icon name="restart_alt" className="text-[15px]" /> Reset to sample
-            </button>
+            {remote ? (
+              <span>Shared review · saved on the server</span>
+            ) : (
+              <>
+                <span>
+                  Autosaving · browser{folderName ? ` + ${folderName}/` : ''}
+                  {needsReconnect && folderName ? ' (folder paused)' : ''}
+                </span>
+                <button onClick={resetToSample} className="ml-auto inline-flex items-center gap-1 text-on-surface-variant hover:text-primary">
+                  <Icon name="restart_alt" className="text-[15px]" /> Reset to sample
+                </button>
+              </>
+            )}
           </div>
         </header>
 
