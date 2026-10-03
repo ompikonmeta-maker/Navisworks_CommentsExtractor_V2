@@ -119,7 +119,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   quick export stays as-is.
 - `src/lib/snapshot.js` — DOM→PNG via **html-to-image** (foreignObject → SVG → canvas;
   dynamically imported, bundled so it stays offline). It renders through the browser's own
-  layout engine, so flex alignment, padded badges and the Recharts SVG come out exactly as on
+  layout engine, so flex alignment, padded badges and the chart SVG come out exactly as on
   screen — html2canvas (a re-implemented rasteriser) mis-centred those, so don't switch back.
   `snapshotNode` downloads a card / whole-Overview PNG; `nodeToImage` returns a data URL, used
   to capture the dashboard charts for the Excel Overview sheet. Elements marked `data-nosnap`
@@ -173,13 +173,19 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   reveal re-plays on every section switch). Theme is
   driven by `useSettings` (the toggle animates via `animateThemeSwitch`); there is no longer a
   `lib/theme.js`. Import is a single action — the Overview Import button opens the file picker
-  and calls `ingestFiles` — not its own route. The **Overview carries all the analytics**
-  (KPIs + Recharts: a status-stacked "By discipline" bar, a Resolution ring, and an "Over
-  time" card that toggles between **Intake** (monthly comments stacked by current status) and
-  **Burndown** (cumulative opened vs closed — a real burndown, computed from `closedAt`; only
-  comments closed in-app since v1.1 have a close-out time, so it fills in going forward)) plus
-  Needs-attention and Recent lists; there is no separate Analytics route, so `Dashboard.jsx`
-  pulls in Recharts on initial load.
+  and calls `ingestFiles` — not its own route. The **Overview is a close-out cockpit** (`views/Dashboard.jsx`):
+  all numbers come from the pure `lib/overview.js` (`computeOverview(records, statuses, {target})`
+  — counts, pace = close-outs in the last 14 days from `closedAt`, needed pace and forecast vs
+  the review target, log-sheet readiness = closed + after-photo + resolution, per-discipline
+  scorecard/forecast/ages, pipeline, burn-up, weekly close-outs, "raised by" party from the
+  commenter prefix). Charts are hand-drawn SVG in `components/OverviewCharts.jsx` (no chart
+  library; colours are MD3/status CSS variables so themes switch without re-render): hero
+  (progress · target verdict · log sheet), the **Forecast finish** comet runway, burn-up,
+  weekly pace, pipeline, needs-attention tiles, discipline scorecard, backlog-age heatmap,
+  raised by. Labels stay minimal — explanations live in `InfoTip`s and the shared chart
+  tooltip (`TipProvider`/`useTipProps`). The review target is `settings.reviewTarget`
+  ('YYYY-MM-DD', set from the Target chip). Pace/forecast need `closedAt`, so they fill in as
+  comments are closed in Tabelin.
 - `src/views/*` and `src/components/*` — screens and shared MD3-flavored primitives
   (`ui.jsx`), the editable `DetailPanel.jsx`, and the `Toast.jsx` notifier.
 

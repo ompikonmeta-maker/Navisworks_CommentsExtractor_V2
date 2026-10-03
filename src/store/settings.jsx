@@ -34,6 +34,9 @@ const DEFAULTS = {
   // Configurable comment statuses (label + colour + role). Open and Closed
   // are mandatory; the middle ones are editable. See lib/status.js.
   statuses: DEFAULT_STATUSES,
+  // Review close-out target date ('YYYY-MM-DD', '' = none). Drives the
+  // Overview verdict, needed pace and the forecast finish line.
+  reviewTarget: '',
 };
 
 const SettingsContext = createContext(null);
