@@ -49,11 +49,11 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/me", a.me)
 	mux.HandleFunc("GET /api/projects", a.listProjects)
 	mux.HandleFunc("POST /api/projects", a.createProject)
-	mux.HandleFunc("GET /api/users", a.listUsers)                  // admin
-	mux.HandleFunc("POST /api/users", a.createUser)                // admin
-	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)          // admin
-	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)         // admin
-	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin)   // admin
+	mux.HandleFunc("GET /api/users", a.listUsers)                // admin
+	mux.HandleFunc("POST /api/users", a.createUser)              // admin
+	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)        // admin
+	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)       // admin
+	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin) // admin
 	// records + images
 	mux.HandleFunc("GET /api/projects/{pid}/records", a.listRecords)
 	mux.HandleFunc("POST /api/projects/{pid}/records", a.importRecords)

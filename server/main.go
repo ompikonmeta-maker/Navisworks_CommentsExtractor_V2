@@ -8,11 +8,15 @@ package main
 import (
 	"database/sql"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"tabelin/server/internal/api"
@@ -57,10 +61,86 @@ func main() {
 	root.Handle("/", spaHandler())
 
 	handler := withCORS(root)
-	log.Printf("Tabelin V2 %s listening on %s (data: %s)", version, addr, dataDir)
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	// Bind first so we can report a busy port plainly and only open the
+	// browser once the server is actually reachable.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		fmt.Printf("\nTabelin could not start: port %s is already in use.\n", addr)
+		fmt.Println("It is probably already running in another window — open http://localhost" + portOf(addr) + " in your browser.")
+		fmt.Println("\nPress Enter to close.")
+		fmt.Scanln()
+		os.Exit(1)
+	}
+	printBanner(addr, dataDir)
+	if os.Getenv("TABELIN_NO_BROWSER") != "1" {
+		openBrowser("http://localhost" + portOf(addr))
+	}
+	if err := http.Serve(ln, handler); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// printBanner tells a non-technical user what to do: where to open the tool,
+// how colleagues reach it, and to keep this window open.
+func printBanner(addr, dataDir string) {
+	port := portOf(addr)
+	fmt.Println()
+	fmt.Println("  ================================================")
+	fmt.Println("   Tabelin is running  (v" + version + ")")
+	fmt.Println("  ================================================")
+	fmt.Println()
+	fmt.Println("   Open in your browser:   http://localhost" + port)
+	ips := lanIPs()
+	if len(ips) > 0 {
+		fmt.Println()
+		fmt.Println("   Colleagues on the office network open:")
+		for _, ip := range ips {
+			fmt.Println("                           http://" + ip + port)
+		}
+	}
+	fmt.Println()
+	fmt.Println("   Data folder: " + dataDir)
+	fmt.Println()
+	fmt.Println("   KEEP THIS WINDOW OPEN. Closing it stops Tabelin.")
+	fmt.Println()
+}
+
+func portOf(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		return addr[i:]
+	}
+	return ":" + addr
+}
+
+// lanIPs lists this machine's IPv4 addresses that other PCs can use.
+func lanIPs() []string {
+	var out []string
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return out
+	}
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok && !n.IP.IsLoopback() && !n.IP.IsLinkLocalUnicast() {
+			if v4 := n.IP.To4(); v4 != nil {
+				out = append(out, v4.String())
+			}
+		}
+	}
+	return out
+}
+
+// openBrowser opens the default browser on the host (best effort).
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Start()
 }
 
 // bootstrapAdmin seeds the first admin when the users table is empty, so a fresh

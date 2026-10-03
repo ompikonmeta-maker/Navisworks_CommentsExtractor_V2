@@ -101,4 +101,3 @@ func (a *API) putConfig(w http.ResponseWriter, r *http.Request, scope string) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
-
