@@ -213,6 +213,42 @@
   transition: background 180ms cubic-bezier(0.2, 0, 0, 1),
     padding 660ms cubic-bezier(0.38, 1.45, 0.22, 1);
 }
+/* MD3 state layer: hover/press tint drawn in the item's own content colour
+   (8% hover, 12% press) on a ::after overlay, so it reads on any surface —
+   including the active pill — and fades in/out smoothly instead of swapping
+   to a near-invisible flat grey. In the collapsed rail the layer moves to the
+   icon pill (.t-ico), matching the MD3 navigation rail. */
+.t-navitem,
+.t-sub,
+.t-ico {
+  position: relative;
+  isolation: isolate;
+}
+.t-navitem::after,
+.t-sub::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.t-navitem:hover::after,
+.t-sub:hover::after {
+  opacity: 0.08;
+}
+.t-navitem:active::after,
+.t-sub:active::after {
+  opacity: 0.12;
+}
+.t-navitem:focus-visible::after,
+.t-sub:focus-visible::after {
+  opacity: 0.1;
+}
+
 /* Chevron points left (collapse) when expanded; rotates to point right
    (expand) when the rail is collapsed. */
 .t-chev {
@@ -245,6 +281,26 @@
     height: 30px;
     border-radius: 999px;
     transition: background 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .t-shell.collapsed .t-navitem::after {
+    display: none;
+  }
+  .t-shell.collapsed .t-ico::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .t-shell.collapsed .t-navitem:hover .t-ico::after {
+    opacity: 0.08;
+  }
+  .t-shell.collapsed .t-navitem:active .t-ico::after {
+    opacity: 0.12;
   }
   .t-shell.collapsed .t-navitem[aria-current='page'] .t-ico {
     background: var(--md-sys-color-secondary-container);
@@ -328,9 +384,6 @@
   color: var(--md-sys-color-on-surface-variant);
   cursor: pointer;
   transition: background 160ms cubic-bezier(0.2, 0, 0, 1);
-}
-.t-sub:hover {
-  background: var(--md-sys-color-surface-container-high);
 }
 .t-sub.on {
   background: var(--md-sys-color-secondary-container);

@@ -315,7 +315,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
                   className={`t-navitem flex items-center gap-3 rounded-full px-4 py-3 text-sm font-medium whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     active
                       ? 'bg-secondary-container text-on-secondary-container'
-                      : 'text-on-surface-variant hover:bg-surface-high'
+                      : 'text-on-surface-variant'
                   }`}
                 >
                   <span className="t-ico grid place-items-center"><Icon name={item.icon} className="shrink-0 text-[22px]" /></span>
@@ -449,7 +449,7 @@ function SettingsNav({ item, i, collapsed, route, section, sections = SECTIONS, 
         title={item.label}
         style={{ '--d': `${i * 15}ms` }}
         className={`t-navitem flex w-full items-center gap-3 rounded-full px-4 py-3 text-sm font-medium whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-          active ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-high'
+          active ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant'
         }`}
       >
         <span className="t-ico grid place-items-center"><Icon name={item.icon} className="shrink-0 text-[22px]" /></span>
