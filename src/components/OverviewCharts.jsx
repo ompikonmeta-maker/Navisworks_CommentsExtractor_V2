@@ -85,16 +85,17 @@ export function TipRows({ title, rows = [], note }) {
 export function useWidth() {
   const ref = useRef(null);
   const [w, setW] = useState(0);
+  const [h, setH] = useState(0);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const measure = () => setW(el.clientWidth);
+    const measure = () => { setW(el.clientWidth); setH(el.clientHeight); };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return [ref, w];
+  return [ref, w, h];
 }
 
 /* ---------------- status bar ---------------- */
@@ -320,18 +321,18 @@ export function BurnUp({ ov, height = 290 }) {
 }
 
 /* ---------------- weekly close-outs ---------------- */
-export function WeeklyPace({ ov, height = 220 }) {
-  const [ref, W] = useWidth();
+export function WeeklyPace({ ov, height = 220, fill = false }) {
+  const [ref, W, MH] = useWidth();
   const tp = useTipProps();
   const need = ov.needed != null ? ov.needed * 7 : null;
-  const H = height, m = { l: 6, r: 6, t: 24, b: 24 };
+  const H = fill ? Math.max(140, MH) : height, m = { l: 6, r: 6, t: 24, b: 24 };
   const ymax = Math.max(5, ...ov.weeks.map((w) => w.value), need ?? 0) * 1.12;
   const Y = (v) => H - m.b - (v / ymax) * (H - m.t - m.b);
   const n = ov.weeks.length, slot = (W - m.l - m.r) / n, bw = Math.max(6, Math.min(30, slot - 10));
   return (
-    <div ref={ref} style={{ height, width: '100%', minWidth: 0, overflow: 'hidden' }}>
+    <div ref={ref} style={fill ? { flex: 1, minHeight: 140, width: '100%', minWidth: 0, overflow: 'hidden' } : { height, width: '100%', minWidth: 0, overflow: 'hidden' }}>
       {W > 0 && (
-        <svg width={W} height={H} role="img" aria-label="Closed per week, last 8 weeks">
+        <svg width={W} height={H} style={{ display: 'block' }} role="img" aria-label="Closed per week, last 8 weeks">
           <line x1={m.l} x2={W - m.r} y1={Y(0)} y2={Y(0)} className="ov-axis" />
           {ov.weeks.map((w, i) => {
             const cx = m.l + slot * (i + 0.5), y = Y(w.value), last = i === n - 1;
@@ -347,7 +348,7 @@ export function WeeklyPace({ ov, height = 220 }) {
           })}
           {need != null && <>
             <line x1={m.l} x2={W - m.r} y1={Y(need)} y2={Y(need)} strokeWidth="1.5" strokeDasharray="2 3" style={{ stroke: 'var(--md-sys-color-on-surface-variant)' }} pointerEvents="none" />
-            <text x={W - m.r} y={Y(need) - 6} textAnchor="end" fontSize="11" fontWeight="700" className="ov-ink2">{Math.ceil(need)} needed</text></>}
+            {!fill && <text x={W - m.r} y={Y(need) - 6} textAnchor="end" fontSize="11" fontWeight="700" className="ov-ink2">{Math.ceil(need)} needed</text>}</>}
         </svg>
       )}
     </div>
@@ -435,6 +436,58 @@ export function RaisedBy({ ov }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ---------------- weekly pace: headline + coverage ---------------- */
+export function PaceHeadline({ ov }) {
+  const tp = useTipProps();
+  const w = ov.weeks, cur = w[w.length - 1]?.value ?? 0, prev = w[w.length - 2]?.value ?? 0, d = cur - prev;
+  const need = ov.needed != null ? Math.ceil(ov.needed * 7) : null;
+  const up = d >= 0;
+  return (
+    <div className="mb-1 flex items-end justify-between gap-3">
+      <div tabIndex={0} {...tp(<TipRows title={`Week to ${fmtDay(w[w.length - 1]?.end)}`} rows={[['Closed', cur], ['Week before', prev]]} />)}>
+        <div className="flex items-baseline gap-2">
+          <span className="text-[40px] font-bold leading-none tracking-[-0.03em] tabular-nums">{cur}</span>
+          {w.length > 1 && (
+            <span className="rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums"
+              style={{ background: tint(up ? 'var(--tabelin-status-closed)' : 'var(--tabelin-status-open)', 16), color: up ? 'var(--tabelin-status-closed)' : 'var(--tabelin-status-open)' }}>
+              {up ? '▲' : '▼'} {Math.abs(d)}
+            </span>
+          )}
+        </div>
+        <div className="mt-1 text-[12px] text-on-surface-variant">this week</div>
+      </div>
+      {need != null && (
+        <div className="text-right" tabIndex={0} {...tp(<TipRows title="Needed per week" note={`${ov.remaining} left over ${ov.daysLeft} days`} />)}>
+          <div className="text-[22px] font-bold leading-none tabular-nums text-on-surface-variant">{need}</div>
+          <div className="mt-1 text-[12px] text-on-surface-variant">needed</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PaceCoverage({ ov }) {
+  const tp = useTipProps();
+  const need = ov.needed != null ? ov.needed * 7 : null;
+  const last4 = ov.weeks.slice(-4);
+  const avg = last4.reduce((a, x) => a + x.value, 0) / Math.max(1, last4.length);
+  if (need == null || need <= 0) return null;
+  const pct = Math.round((avg / need) * 100);
+  const col = pct >= 100 ? 'var(--tabelin-status-closed)' : pct >= 80 ? 'var(--tabelin-status-review)' : 'var(--tabelin-status-open)';
+  return (
+    <div className="mt-3 border-t border-outline-variant/40 pt-3" tabIndex={0}
+      {...tp(<TipRows title="4-week average vs needed" rows={[['Average', `${Math.round(avg)} / week`], ['Needed', `${Math.ceil(need)} / week`]]} />)}>
+      <div className="mb-1.5 flex items-baseline justify-between text-[12.5px] tabular-nums">
+        <span className="text-on-surface-variant">4-wk avg <b className="text-on-surface">{Math.round(avg)}</b></span>
+        <b style={{ color: col }}>{pct}%</b>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-surface-high">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: col }} />
+      </div>
     </div>
   );
 }

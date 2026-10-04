@@ -10,7 +10,7 @@ import { computeOverview, parseDay, parseTs } from '../lib/overview.js';
 import { Icon, Button, Card, InfoTip } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 import {
-  TipProvider, TipRows, useTipProps, StatusBar, ForecastRunway, BurnUp, WeeklyPace, Pipeline, AgeHeatmap, RaisedBy,
+  TipProvider, TipRows, useTipProps, StatusBar, ForecastRunway, BurnUp, WeeklyPace, PaceHeadline, PaceCoverage, Pipeline, AgeHeatmap, RaisedBy,
   VERDICT, tint, hatch, discName, discCode, fmtDay, fmtDayY,
 } from '../components/OverviewCharts.jsx';
 
@@ -141,9 +141,11 @@ function Overview({ openDetail, goComments }) {
                 tip="Comments raised (grey) against closed (blue). The gap is the open backlog. Dashed blue: forecast at the current pace. Dotted: the pace needed to hit the target." />
               <BurnUp ov={ov} />
             </Card>
-            <Card className="relative min-w-0 p-6 lg:col-span-4">
-              <Head icon="speed" title="Closed per week" tip="Close-outs recorded in Tabelin over the last 8 weeks. The dotted line is the weekly pace the target needs." />
-              <WeeklyPace ov={ov} />
+            <Card className="relative flex min-w-0 flex-col p-6 lg:col-span-4">
+              <Head icon="speed" title="Closed per week" tip="Close-outs recorded in Tabelin over the last 8 weeks. The dotted line is the weekly pace the target needs; the bar below compares the last 4 weeks with it." />
+              <PaceHeadline ov={ov} />
+              <WeeklyPace ov={ov} fill />
+              <PaceCoverage ov={ov} />
             </Card>
           </Reveal>
 
