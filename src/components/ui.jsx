@@ -187,7 +187,11 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
     const r = el.getBoundingClientRect();
     const minW = Math.max(r.width, 180);
     const left = Math.max(8, Math.min(r.left, window.innerWidth - 8 - minW));
-    setPos({ top: r.bottom + 6, left, width: r.width });
+    // Open upward when there isn't room below (e.g. the bulk-edit bar).
+    const below = window.innerHeight - r.bottom - 14;
+    const above = r.top - 14;
+    if (below < 240 && above > below) setPos({ bottom: window.innerHeight - r.top + 6, left, width: r.width, maxH: above });
+    else setPos({ top: r.bottom + 6, left, width: r.width, maxH: below });
   }, []);
 
   const close = useCallback(() => {
@@ -268,7 +272,7 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
           role="listbox"
           aria-label={ariaLabel}
           className={`dd-menu ${open ? 'open' : 'closing'}`}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 180) }}
+          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, minWidth: Math.max(pos.width, 180), maxHeight: pos.maxH ? Math.min(pos.maxH, 264) : undefined, overflowY: 'auto', transformOrigin: pos.bottom != null ? 'bottom left' : undefined }}
         >
           {opts.map((o, i) => {
             const sel = o.value === value;

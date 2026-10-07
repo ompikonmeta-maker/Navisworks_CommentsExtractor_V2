@@ -900,6 +900,50 @@ aside[data-rail] {
   background: var(--md-sys-color-surface-container);
   border-color: var(--md-sys-color-outline);
 }
+/* Bulk-edit bar (Viewpoints): an inverse pill that rises in while rows are
+   ticked. Its dropdowns sit flat on the bar. */
+.t-bulk {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 18px;
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  font-size: 13px;
+  box-shadow: 0 14px 34px -6px rgba(16, 24, 40, 0.35);
+  max-width: calc(100vw - 32px);
+  overflow-x: auto;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 16px);
+  transition: opacity 180ms var(--tabelin-ease), transform 320ms cubic-bezier(0.34, 1.4, 0.42, 1);
+}
+.t-bulk.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+.text-inverse-primary { color: var(--md-sys-color-inverse-primary); }
+.dd-bar .dd-trigger {
+  height: 34px;
+  min-width: 0;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 6px 0 12px;
+  background: transparent;
+  color: inherit;
+  font-weight: 500;
+}
+.dd-bar .dd-trigger:hover { background: rgba(255, 255, 255, 0.1); }
+@media (prefers-reduced-motion: reduce) {
+  .t-bulk { transition: opacity 120ms ease; transform: translate(-50%, 0); }
+}
+
 /* Select styled as a filter chip (Viewpoints commenter filter). */
 .dd-chip .dd-trigger {
   height: 32px;

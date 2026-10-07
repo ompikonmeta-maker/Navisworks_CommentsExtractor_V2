@@ -4,9 +4,10 @@ import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
 import { attrFields, attrType } from '../lib/templateExcel.js';
 import { chipStyle, doneLabel as doneLabelOf } from '../lib/status.js';
-import { Icon, Select, StatusBadge, DisciplineBadge } from './ui.jsx';
+import { Icon, Select, StatusBadge, DisciplineBadge, Dialog, Button } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
-import { isReadOnly } from '../lib/server.js';
+import { isReadOnly, remoteState } from '../lib/server.js';
+const remoteActive = () => remoteState.active;
 import Lightbox from './Lightbox.jsx';
 
 // ISO ⇄ <input type="datetime-local"> (which works in the viewer's local time).
@@ -72,8 +73,26 @@ const TrashIcon = () => (
 // `transform` transition (no flicker, no mount/unmount). The main table is
 // never dimmed and stays interactive: clicking another row swaps the
 // drawer's content in place; clicking anywhere else closes it.
-export default function DetailPanel({ record, onClose }) {
+// "2024-10-07T…" → "2 hours ago" (falls back to a date after a week).
+function timeAgo(iso) {
+  const t = Date.parse(iso);
+  if (!t) return '';
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = Math.round(h / 24);
+  if (d < 7) return `${d} day${d === 1 ? '' : 's'} ago`;
+  return new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// nav: { index, total, prev, next } over the list as filtered on Viewpoints;
+// onClosedOut(id) is called when this comment moves to the done status (the
+// list can then move on); onDelete(id) removes the comment.
+export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelete }) {
   const { updateRecord, records } = useStore();
+  const [askDelete, setAskDelete] = useState(false);
   const { settings } = useSettings();
   const doneLabel = doneLabelOf(settings.statuses);
   // Commenter dropdown options: everyone found in the data plus any names
@@ -102,10 +121,11 @@ export default function DetailPanel({ record, onClose }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !document.querySelector('.t-dlg, .crop-card')) onClose(); // a dialog on top closes first
     };
     const onDown = (e) => {
       if (e.target.closest('[data-drawer]')) return; // inside the drawer
+      if (e.target.closest('.t-dlg, .t-pop')) return; // a dialog or menu above it
       if (e.target.closest('tbody tr')) return; // row → handled as a switch
       if (e.target.closest('[data-toast]')) return; // toast action (e.g. Undo)
       onClose();
@@ -166,6 +186,7 @@ export default function DetailPanel({ record, onClose }) {
       const patch = crop.target === 'after'
         ? { afterImageData: dataUrl, status: doneLabel }
         : { imageData: dataUrl };
+      if (crop.target === 'after' && rec.status !== doneLabel) onClosedOut?.(rec.ID);
       updateRecord(rec.ID, patch);
     }
     setCrop(null);
@@ -241,14 +262,29 @@ export default function DetailPanel({ record, onClose }) {
                 {rec.commentId ? `#${rec.commentId} · ` : ''}{rec.commentDate}
               </p>
             </div>
-            <button
-              ref={closeRef}
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded-control p-2 text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Icon name="close" />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              {nav && nav.total > 1 && nav.index >= 0 && (
+                <>
+                  <span className="mr-1 text-xs tabular-nums text-on-surface-variant">{nav.index + 1} of {nav.total}</span>
+                  <button type="button" onClick={nav.prev} disabled={nav.index <= 0} aria-label="Previous comment (K)" title="Previous (K)"
+                    className="t-press rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <Icon name="expand_less" className="text-[22px]" />
+                  </button>
+                  <button type="button" onClick={nav.next} disabled={nav.index >= nav.total - 1} aria-label="Next comment (J)" title="Next (J)"
+                    className="t-press rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <Icon name="expand_more" className="text-[22px]" />
+                  </button>
+                </>
+              )}
+              <button
+                ref={closeRef}
+                onClick={onClose}
+                aria-label="Close"
+                className="rounded-control p-2 text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Icon name="close" />
+              </button>
+            </div>
           </div>
 
           {/* Body — re-keyed by record so switching rows cross-fades in place */}
@@ -349,7 +385,7 @@ export default function DetailPanel({ record, onClose }) {
                       key={s.key}
                       type="button"
                       aria-pressed={on}
-                      onClick={() => set({ status: s.label })}
+                      onClick={() => { if (s.label === doneLabel && rec.status !== doneLabel) onClosedOut?.(rec.ID); set({ status: s.label }); }}
                       style={on ? chipStyle(s.color) : undefined}
                       className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                         on ? '' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'
@@ -441,9 +477,41 @@ export default function DetailPanel({ record, onClose }) {
             )}
             </fieldset>
           </div>
+
+          {/* Footer: who changed it last, auto-advance, delete */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-outline-variant/60 px-5 py-3 text-xs text-on-surface-variant">
+            {rec.changedBy && rec.changedAt ? (
+              <span className="inline-flex min-w-0 items-center gap-1.5" title={new Date(rec.changedAt).toLocaleString()}>
+                <Icon name="history" className="text-[16px]" />
+                <span className="truncate">Changed by <b className="font-semibold text-on-surface">{rec.changedBy}</b> · {timeAgo(rec.changedAt)}</span>
+              </span>
+            ) : <span />}
+            <span className="flex-1" />
+            {nav && !readOnly && (
+              <label className="inline-flex cursor-pointer items-center gap-2" title="After a comment is closed, open the next one in the list">
+                <input type="checkbox" checked={nav.autoNext} onChange={(e) => nav.setAutoNext(e.target.checked)} className="h-4 w-4 accent-[var(--md-sys-color-primary)]" />
+                Next after closing
+              </label>
+            )}
+            {onDelete && !readOnly && (
+              <button type="button" onClick={() => setAskDelete(true)} aria-label="Delete this comment" title="Delete this comment"
+                className="t-press rounded-full p-1.5 hover:bg-surface-container hover:text-error focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                <Icon name="delete" className="text-[18px]" />
+              </button>
+            )}
+          </div>
         </>
       )}
     </div>
+
+    <Dialog open={askDelete} onClose={() => setAskDelete(false)} labelledBy="del-title" width={420}>
+      <h2 id="del-title" className="text-lg font-semibold">Delete this comment?</h2>
+      <p className="mt-2 text-sm text-on-surface-variant">{rec?.viewpoint} and its photos are removed{remoteActive() ? ' for everyone' : ''}. This can’t be undone.</p>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="text" onClick={() => setAskDelete(false)}>Cancel</Button>
+        <Button variant="danger" onClick={() => { setAskDelete(false); onDelete?.(rec.ID); }}>Delete comment</Button>
+      </div>
+    </Dialog>
 
     {crop && (
       <ImageCropper src={crop.src} onDone={cropDone} onCancel={() => setCrop(null)} />

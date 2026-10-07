@@ -13,7 +13,7 @@ import { api, remoteState, syncRecord } from '../lib/server.js';
 const StoreContext = createContext(null);
 
 // Record fields a bulk change can touch.
-const BULK_KEYS = ['commenter', 'discipline', 'commentText', 'status', 'extra'];
+const BULK_KEYS = ['commenter', 'discipline', 'commentText', 'status', 'closedAt', 'extra'];
 
 // Fields typed into a text box — their server saves are batched.
 const TEXT_KEYS = new Set(['resolution', 'commentText', 'extra']);
@@ -127,6 +127,35 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'BULK_UPDATE': {
+      // Same patch on many records (Viewpoints bulk bar), with the closedAt
+      // stamp rules of UPDATE_RECORD.
+      const ids = new Set(action.ids);
+      const done = action.doneLabel || 'Closed';
+      const now = new Date().toISOString();
+      return {
+        ...state,
+        records: state.records.map((r) => {
+          if (!ids.has(r.ID)) return r;
+          const next = { ...r, ...action.patch };
+          if ('status' in action.patch) {
+            if (next.status === done && r.status !== done) next.closedAt = now;
+            else if (next.status !== done && r.status === done) next.closedAt = null;
+          }
+          return next;
+        }),
+      };
+    }
+    case 'REMOVE_RECORDS': {
+      const ids = new Set(action.ids);
+      return { ...state, records: state.records.filter((r) => !ids.has(r.ID)) };
+    }
+    case 'RESTORE_RECORDS': {
+      // Put removed records back at their old positions (a failed delete).
+      const next = [...state.records];
+      for (const { index, record } of [...action.items].sort((a, b) => a.index - b.index)) next.splice(index, 0, record);
+      return { ...state, records: next };
+    }
     case 'REPLACE_RECORDS': {
       // Put back specific records (by ID) — used to undo a failed bulk save.
       const { byId } = action;
@@ -179,7 +208,12 @@ export function StoreProvider({ children }) {
 
   const updateRecord = useCallback(
     (id, patch) => {
-      dispatch({ type: 'UPDATE_RECORD', id, patch, doneLabel });
+      // On the server, stamp the edit locally too so "Changed by" is current
+      // without a reload (the server records the same on save).
+      const stamp = remoteState.active
+        ? { changedBy: remoteState.user?.displayName || remoteState.user?.username || '', changedAt: new Date().toISOString() }
+        : null;
+      dispatch({ type: 'UPDATE_RECORD', id, patch: stamp ? { ...patch, ...stamp } : patch, doneLabel });
       if (!remoteState.active) return;
       // Mirror the reducer's closedAt auto-stamp so the server stays consistent
       // when a status button (not the manual editor) closes/reopens a record.
@@ -228,11 +262,25 @@ export function StoreProvider({ children }) {
       dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
     });
   }, []);
+  // Delete comments (and their photos). On the server a failed delete puts
+  // them back where they were.
+  const removeRecords = useCallback((ids) => {
+    const set = new Set(ids);
+    const items = recordsRef.current.map((record, index) => ({ record, index })).filter((x) => set.has(x.record.ID));
+    dispatch({ type: 'REMOVE_RECORDS', ids });
+    if (!remoteState.active) return Promise.resolve();
+    return api.deleteRecords(remoteState.reviewId, ids).catch((e) => {
+      dispatch({ type: 'RESTORE_RECORDS', items });
+      dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
+      throw e;
+    });
+  }, []);
   const applyDetect = useCallback(
     (field, config, allowed, mode) => bulk({ type: 'APPLY_DETECT', field, config, allowed, mode }),
     [bulk]
   );
   const renameAttr = useCallback((from, to) => bulk({ type: 'RENAME_ATTR', from, to }), [bulk]);
+  const bulkUpdate = useCallback((ids, patch) => bulk({ type: 'BULK_UPDATE', ids, patch, doneLabel }), [bulk, doneLabel]);
   const remapStatus = useCallback((from, to) => bulk({ type: 'REMAP_STATUS', from, to }), [bulk]);
   // Named `notify` (not `toast`) so it doesn't collide with `state.toast`,
   // the current toast payload the provider also exposes.
@@ -246,8 +294,8 @@ export function StoreProvider({ children }) {
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);
 
   const value = useMemo(
-    () => ({ ...state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, remapStatus, notify, clearToast }),
-    [state, setLoading, setError, setData, updateRecord, applyDetect, renameAttr, remapStatus, notify, clearToast]
+    () => ({ ...state, setLoading, setError, setData, updateRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast }),
+    [state, setLoading, setError, setData, updateRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

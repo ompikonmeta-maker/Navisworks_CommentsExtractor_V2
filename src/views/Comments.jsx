@@ -7,6 +7,7 @@ import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
 import ExportButton from '../components/ExportButton.jsx';
+import { isReadOnly } from '../lib/server.js';
 import { exportLogSheet } from '../lib/logsheet.js';
 import { parseTs } from '../lib/overview.js';
 
@@ -26,7 +27,8 @@ function FilterChip({ on, onClick, icon, label, count }) {
 }
 
 export default function Comments({ detailId, setDetailId, initialFilter, goSettings }) {
-  const { status, records, notify } = useStore();
+  const { status, records, notify, removeRecords, bulkUpdate } = useStore();
+  const canEdit = !isReadOnly();
   const { settings } = useSettings();
   const loading = status === 'loading';
 
@@ -91,6 +93,54 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
   const commenters = useMemo(() => [...new Set(records.map((r) => r.commenter).filter(Boolean))].sort(), [records]);
 
   const active = detailId != null ? records.find((r) => r.ID === detailId) : null;
+
+  // Move through the filtered list from the drawer: buttons, J/K, and
+  // optionally the next comment after one is closed.
+  const index = active ? filtered.findIndex((r) => r.ID === active.ID) : -1;
+  const go = (d) => { const n = filtered[index + d]; if (n) setDetailId(n.ID); };
+  const [autoNext, setAutoNextState] = useState(() => { try { return localStorage.getItem('tabelin.autoNext') !== '0'; } catch { return true; } });
+  const setAutoNext = (v) => { setAutoNextState(v); try { localStorage.setItem('tabelin.autoNext', v ? '1' : '0'); } catch { /* ignore */ } };
+  const onClosedOut = (id) => {
+    if (!autoNext) return;
+    const i = filtered.findIndex((r) => r.ID === id);
+    const n = filtered[i + 1];
+    if (n) setTimeout(() => setDetailId(n.ID), 450);
+  };
+  useEffect(() => {
+    if (!active) return undefined;
+    const onKey = (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const t = e.target;
+      if (t.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"][aria-modal="true"]')) return;
+      if (e.key === 'j' || e.key === 'J') { e.preventDefault(); go(1); }
+      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); go(-1); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  // Keep the open row in view while stepping through.
+  useEffect(() => {
+    if (detailId == null) return;
+    document.querySelector(`tr[data-id="${detailId}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [detailId]);
+  // Bulk edit: tick rows, then set a field for all of them from the bar.
+  const [picked, setPicked] = useState(() => new Set());
+  useEffect(() => { setPicked(new Set()); }, [query, discipline, statusFilter, commenter, noPhoto, noRes, old]);
+  const visiblePicked = filtered.filter((r) => picked.has(r.ID));
+  const allPicked = filtered.length > 0 && visiblePicked.length === filtered.length;
+  const toggle = (id) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(filtered.map((r) => r.ID)));
+  const applyBulk = (field, value, label) => {
+    if (!value || !visiblePicked.length) return;
+    bulkUpdate(visiblePicked.map((r) => r.ID), { [field]: value === '__none' ? '' : value });
+    notify(`${label} set on ${visiblePicked.length} comment${visiblePicked.length === 1 ? '' : 's'}.`, 'success');
+  };
+
+  const deleteOne = async (id) => {
+    const n = filtered[index + 1] || filtered[index - 1];
+    setDetailId(n && n.ID !== id ? n.ID : null);
+    try { await removeRecords([id]); notify('Comment deleted.', 'success'); } catch { /* store reports it */ }
+  };
 
   const handleExport = async () => {
     if (!filtered.length) return;
@@ -198,6 +248,13 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
             <table className="vp-table text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-on-surface-variant">
+                  {canEdit && (
+                    <th className="w-10 py-3 pl-4 pr-0">
+                      <input type="checkbox" aria-label="Select all shown" checked={allPicked}
+                        ref={(el) => { if (el) el.indeterminate = visiblePicked.length > 0 && !allPicked; }}
+                        onChange={toggleAll} className="h-4 w-4 cursor-pointer accent-[var(--md-sys-color-primary)]" />
+                    </th>
+                  )}
                   <th className="px-4 py-3 font-medium">Viewpoint</th>
                   <th className="px-3 py-3 font-medium">Discipline</th>
                   <th className="px-3 py-3 font-medium">Comment</th>
@@ -209,9 +266,16 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
                 {filtered.map((r) => (
                   <tr
                     key={r.ID}
+                    data-id={r.ID}
                     className={`vp-row ${r.ID === detailId ? 'selected' : ''}`}
                     onClick={() => setDetailId(r.ID)}
                   >
+                    {canEdit && (
+                      <td className="w-10 py-3 pl-4 pr-0" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" aria-label={`Select ${r.viewpoint}`} checked={picked.has(r.ID)} onChange={() => toggle(r.ID)}
+                          className="h-4 w-4 cursor-pointer accent-[var(--md-sys-color-primary)]" />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {r.imageData ? (
@@ -238,7 +302,22 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
         </Card>
       )}
 
-      <DetailPanel record={active} onClose={() => setDetailId(null)} />
+      {canEdit && (
+        <div className={`t-bulk ${visiblePicked.length ? 'show' : ''}`} role="toolbar" aria-label="Edit selected comments">
+          <b className="whitespace-nowrap pl-2 tabular-nums">{visiblePicked.length} selected</b>
+          <span className="mx-1 h-5 w-px bg-current opacity-25" />
+          <Select className="dd-bar" aria-label="Set discipline" value="" onChange={(v) => applyBulk('discipline', v, 'Discipline')}
+            options={[{ value: '', label: 'Discipline' }, ...DISCIPLINES.map((d) => ({ value: d, label: d }))]} />
+          <Select className="dd-bar" aria-label="Set status" value="" onChange={(v) => applyBulk('status', v, 'Status')}
+            options={[{ value: '', label: 'Status' }, ...statusLabels(settings.statuses).map((x) => ({ value: x, label: x }))]} />
+          <Select className="dd-bar" aria-label="Set commenter" value="" onChange={(v) => applyBulk('commenter', v, 'Commenter')}
+            options={[{ value: '', label: 'Commenter' }, { value: '__none', label: '— Unassigned —' }, ...commenters.map((c) => ({ value: c, label: c }))]} />
+          <button type="button" onClick={() => setPicked(new Set())} className="t-press rounded-full px-3 py-1.5 font-medium text-inverse-primary hover:bg-white/10">Clear</button>
+        </div>
+      )}
+
+      <DetailPanel record={active} onClose={() => setDetailId(null)} onClosedOut={onClosedOut} onDelete={deleteOne}
+        nav={{ index, total: filtered.length, prev: () => go(-1), next: () => go(1), autoNext, setAutoNext }} />
     </div>
   );
 }
