@@ -1,5 +1,5 @@
 // Small Material-flavored UI primitives shared across views.
-import { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
+import { forwardRef, useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useSettings } from '../store/settings.jsx';
 import { statusColor, chipStyle } from '../lib/status.js';
@@ -346,14 +346,53 @@ export function EmptyState({ icon = 'inbox', title, children, action }) {
 // lives in index.css (`.info-tip` / `.info-bubble`), with the ~0.4s hover
 // delay. Use it to keep long explanations out of the way.
 export function InfoTip({ children, label = 'More info' }) {
+  // The bubble lives in a fixed layer on <body>, clamped to the window, so it
+  // never widens the page or gets clipped by a card. Opens after a short
+  // hover delay; closes at once.
+  const ref = useRef(null);
+  const bub = useRef(null);
+  const timer = useRef(0);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const [shown, setShown] = useState(false);
+  const show = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(true), 350); };
+  const hide = () => { clearTimeout(timer.current); setOpen(false); setPos(null); setShown(false); };
+  useLayoutEffect(() => {
+    if (!open || !ref.current || !bub.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const w = bub.current.offsetWidth, h = bub.current.offsetHeight;
+    const cx = r.left + r.width / 2;
+    const left = Math.min(Math.max(8, cx - w / 2), window.innerWidth - w - 8);
+    const below = r.top - h - 10 < 8;
+    setPos({ left, top: below ? r.bottom + 10 : r.top - h - 10, below, arrow: cx - left });
+  }, [open]);
+  useEffect(() => {
+    if (!pos) return undefined;
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, [pos]);
+  useEffect(() => {
+    if (!open) return undefined;
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [open]);
+  useEffect(() => () => clearTimeout(timer.current), []);
   return (
-    <span className="info-tip" tabIndex={0} role="button" aria-label={label}>
+    <span ref={ref} className="info-tip" tabIndex={0} role="button" aria-label={label}
+      onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
         <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
         <circle cx="12" cy="8" r="1.3" fill="currentColor" />
         <path d="M12 11v6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
-      <span className="info-bubble" role="tooltip">{children}</span>
+      {open && createPortal(
+        <span ref={bub} role="tooltip"
+          className={`info-bubble ${shown ? 'show' : ''} ${pos?.below ? 'below' : ''}`}
+          style={pos ? { left: pos.left, top: pos.top, '--arrow': `${pos.arrow}px` } : { left: -9999, top: 0 }}>
+          {children}
+        </span>,
+        document.body,
+      )}
     </span>
   );
 }

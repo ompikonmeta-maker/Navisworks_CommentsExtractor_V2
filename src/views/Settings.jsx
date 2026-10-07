@@ -114,10 +114,10 @@ export default function Settings({ section = 'template', setSection = () => {}, 
           <Card className="p-6">
             <SectionTitle icon="table_view" title="Labels" sub="Disciplines with their colours, the people who comment, statuses, and custom fields for the export."
               right={
-                <div role="tablist" aria-label="Labels" className="inline-flex gap-1 rounded-[14px] bg-surface-container p-1 text-[13px]">
+                <div role="tablist" aria-label="Labels" className="inline-flex max-w-full gap-1 overflow-x-auto rounded-[14px] bg-surface-container p-1 text-[13px]">
                   {[['disciplines', 'Disciplines'], ['commenters', 'Commenters'], ['status', 'Status'], ['custom', 'Custom fields']].map(([k, label]) => (
                     <button key={k} role="tab" aria-selected={labelTab === k} onClick={() => setLabelTab(k)}
-                      className={`rounded-[10px] px-3.5 py-1.5 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${labelTab === k ? 't-card bg-surface text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}`}>{label}</button>
+                      className={`shrink-0 whitespace-nowrap rounded-[10px] px-3.5 py-1.5 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${labelTab === k ? 't-card bg-surface text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}`}>{label}</button>
                   ))}
                 </div>
               } />

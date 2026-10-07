@@ -200,6 +200,25 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - Tailwind color utilities map to MD3 role tokens (`bg-surface`, `text-on-surface`,
   `text-primary`, `status-open/review/closed`) defined in `tailwind.config.js` +
   `src/index.css`. Prefer these over hard-coded colors so theming stays consistent.
+  The colours are wrapped in `color-mix(… calc(<alpha-value> * 100%) …)` in the config so
+  opacity modifiers (`border-outline-variant/50`) actually generate.
+- **Surfaces:** cool-grey canvas (`background`), white cards (`Card` → `.t-card`: shadow
+  `--tabelin-elev-card`, no border; a hairline ring in dark). In-card fills use
+  `surface-low/container/high`. The **sidebar keeps its original lavender look** — its tokens
+  are re-pinned on `[data-rail]` / `.t-flyout` in `index.css`; don't restyle it unless asked.
+- **Colour meaning:** statuses come from the registry (defaults Open orange, In Review violet,
+  Closed green; old default colours auto-upgrade in `normalizeStatuses`). Verdicts and
+  warnings use `--tabelin-good/warn/bad` — red only means late/behind. Disciplines are a
+  colour dot + neutral text from the fixed `DISC_PALETTE` (`discColor`, by DISCIPLINES order;
+  user overrides in Settings › Labels win).
+- **Motion:** one easing (`--tabelin-ease`) for hover/press/focus on every control (base
+  layer); `.t-pop` for menus/popovers (fade + spring scale), `.t-press` for press feedback.
+  `InfoTip` renders its bubble in a fixed layer on `<body>`, clamped to the window, so tips
+  never widen the page or get clipped by cards.
+- **No overflow, little dead space:** content must stay inside its card at 390–1440px wide
+  (wide tables scroll inside their own wrapper). Shorter cards in a row spread their content
+  (`flex-1 justify-between`) instead of leaving a blank bottom. Explanations go in tooltips,
+  not extra labels.
 - Icons render via the embedded Material Symbols subset. `Icon` in `components/ui.jsx` maps
   each name to a **codepoint** (not a ligature) so the font subset stays ~4 KB. When you use
   a new icon, add its name→codepoint to `ICON_CODEPOINTS` **and** re-subset the font in
