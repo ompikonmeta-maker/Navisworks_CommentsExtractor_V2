@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Icon, Card, SegmentedButtons } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
+import { remoteState } from '../lib/server.js';
 import shotPicker from '../assets/help/picker.webp';
 import shotOverview from '../assets/help/overview.webp';
 import shotReimport from '../assets/help/reimport.webp';
@@ -18,6 +19,8 @@ import shotExport from '../assets/help/export.webp';
 const C = { blue: '#2a78d6', violet: '#7a5af8', green: '#1baf7a', orange: '#eb6834', pink: '#d9548f', teal: '#0e7c86', amber: '#d98a00', slate: '#64748b' };
 const tint = (c, p = 14) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
 
+const APP_VERSION = '2.0.0';
+const TABS = ['use', 'roles', 'about'];
 const LANG_KEY = 'tabelin.helpLang';
 function initialLang() {
   try { const v = localStorage.getItem(LANG_KEY); if (v === 'en' || v === 'id') return v; } catch { /* no storage */ }
@@ -28,7 +31,25 @@ function initialLang() {
 const T = {
   en: {
     sub: 'Short guide · real screens',
-    tabs: { use: 'How to use', roles: 'Roles & limits' },
+    tabs: { use: 'How to use', roles: 'Roles & limits', about: 'About' },
+    about: {
+      server: 'Shared on your office Tabelin server · settings saved per project.',
+      local: 'Runs fully in your browser · settings saved on this PC · nothing uploaded.',
+      title: 'Where each field comes from',
+      note: 'Any of these can go to a column in your Excel template (Settings › Template).',
+      groups: [
+        { icon: 'description', c: C.blue, title: 'From the report', sub: 'Written by Navisworks.', rows: [
+          ['Viewpoint', 'Tag view title'], ['Image ref', 'Picture file name'], ['Camera position', 'Saved camera'],
+          ['Comment ID', 'Number in the viewpoint'], ['Author code', 'Navisworks “User”'], ['Comment date', 'Date after the comment'],
+          ['Raw text · status', 'As written, e.g. “New”'] ] },
+        { icon: 'search', c: C.violet, title: 'Read from the text', sub: 'Tune it in Settings › Detection.', rows: [
+          ['Comment text', 'Without the “Name:” prefix'], ['Commenter', 'The “Name:” at the start'],
+          ['Discipline', 'Guessed from words'], ['Status', 'Tidied to Open / In Review / Closed'] ] },
+        { icon: 'edit', c: C.green, title: 'Added in Tabelin', sub: 'Yours to fill in.', rows: [
+          ['Resolution', 'You type it'], ['Closed at', 'Stamped when closed'], ['After photo', 'Uploaded or pasted'],
+          ['Custom fields', 'Evidence, remarks, …'], ['Source', 'Report file name, or “manual”'] ] },
+      ],
+    },
     flowTitle: 'From report to log sheet',
     flow: [
       ['upload_file', 'Import', 'Navisworks report'],
@@ -107,7 +128,25 @@ const T = {
   },
   id: {
     sub: 'Panduan singkat · tampilan asli',
-    tabs: { use: 'Cara pakai', roles: 'Hak akses & batasan' },
+    tabs: { use: 'Cara pakai', roles: 'Hak akses', about: 'Tentang' },
+    about: {
+      server: 'Dipakai bersama di server Tabelin kantor · setting disimpan per project.',
+      local: 'Berjalan penuh di browser · setting disimpan di PC ini · tidak ada yang di-upload.',
+      title: 'Asal setiap field',
+      note: 'Semua field ini bisa diisikan ke kolom template Excel Anda (Settings › Template).',
+      groups: [
+        { icon: 'description', c: C.blue, title: 'Dari laporan', sub: 'Ditulis oleh Navisworks.', rows: [
+          ['Viewpoint', 'Judul tag view'], ['Image ref', 'Nama file gambar'], ['Camera position', 'Posisi kamera'],
+          ['Comment ID', 'Nomor di viewpoint'], ['Author code', '“User” Navisworks'], ['Comment date', 'Tanggal di akhir komentar'],
+          ['Teks · status asli', 'Apa adanya, mis. “New”'] ] },
+        { icon: 'search', c: C.violet, title: 'Dibaca dari teks', sub: 'Atur di Settings › Detection.', rows: [
+          ['Comment text', 'Tanpa awalan “Nama:”'], ['Commenter', '“Nama:” di awal teks'],
+          ['Discipline', 'Ditebak dari kata'], ['Status', 'Dirapikan jadi Open / In Review / Closed'] ] },
+        { icon: 'edit', c: C.green, title: 'Ditambah di Tabelin', sub: 'Anda yang mengisi.', rows: [
+          ['Resolution', 'Anda ketik'], ['Closed at', 'Tercatat saat ditutup'], ['After photo', 'Upload atau paste'],
+          ['Custom fields', 'Evidence, remarks, …'], ['Source', 'Nama file laporan, atau “manual”'] ] },
+      ],
+    },
     flowTitle: 'Dari laporan ke log sheet',
     flow: [
       ['upload_file', 'Import', 'Laporan Navisworks'],
@@ -375,12 +414,54 @@ function Roles({ t }) {
   );
 }
 
+function About({ t }) {
+  const a = t.about;
+  return (
+    <>
+      <Card className="flex items-center gap-4 p-5 sm:p-6">
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[18px] text-white shadow-md" style={{ background: `linear-gradient(135deg, ${C.blue}, ${C.violet})` }}>
+          <Icon name="table_view" className="text-[28px]" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-lg font-bold">Tabelin <span className="text-sm font-semibold text-on-surface-variant">v{APP_VERSION}</span></div>
+          <p className="mt-0.5 text-sm text-on-surface-variant">{remoteState.active ? a.server : a.local}</p>
+        </div>
+      </Card>
+      <Card className="p-5 sm:p-6">
+        <h2 className="mb-4 text-base font-semibold">{a.title}</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {a.groups.map((g) => (
+            <div key={g.title} className="flex flex-col rounded-[18px] p-4" style={{ background: tint(g.c, 8) }}>
+              <div className="flex items-center gap-3">
+                <Bubble icon={g.icon} c={g.c} size={36} />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{g.title}</div>
+                  <div className="text-xs text-on-surface-variant">{g.sub}</div>
+                </div>
+              </div>
+              <dl className="mt-3 flex-1 divide-y" style={{ borderColor: tint(g.c, 20) }}>
+                {g.rows.map(([k, v]) => (
+                  <div key={k} className="flex items-baseline justify-between gap-3 py-2 text-xs" style={{ borderColor: tint(g.c, 18) }}>
+                    <dt className="shrink-0 font-semibold" style={{ color: g.c }}>{k}</dt>
+                    <dd className="min-w-0 text-right text-on-surface-variant">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 flex items-center gap-2 text-xs text-on-surface-variant"><Icon name="info" className="shrink-0 text-[16px]" />{a.note}</p>
+      </Card>
+    </>
+  );
+}
+
 export default function Help() {
   const [tab, setTab] = useState('use');
   const [lang, setLangState] = useState(initialLang);
   const setLang = (v) => { setLangState(v); try { localStorage.setItem(LANG_KEY, v); } catch { /* ignore */ } };
   const t = T[lang];
-  const pickTab = (v) => { setRevealDir(v === 'roles' ? 1 : -1); setTab(v); };
+  const pickTab = (v) => { setRevealDir(TABS.indexOf(v) < TABS.indexOf(tab) ? -1 : 1); setTab(v); };
   return (
     <div className="canvas-w">
       <Card className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 p-4 sm:px-5">
@@ -388,17 +469,15 @@ export default function Help() {
           <Bubble icon="menu_book" c={C.blue} />
           <span className="text-sm text-on-surface-variant">{t.sub}</span>
         </div>
-        <div className="flex w-full items-center gap-3 sm:w-auto">
-          <div className="min-w-0 flex-1 sm:w-[340px] sm:flex-none">
-            <SegmentedButtons aria-label="Help section" value={tab} onChange={pickTab} options={[{ value: 'use', label: t.tabs.use }, { value: 'roles', label: t.tabs.roles }]} />
-          </div>
-          <div className="w-[116px] shrink-0">
-            <SegmentedButtons aria-label="Language" value={lang} onChange={setLang} options={[{ value: 'en', label: 'EN' }, { value: 'id', label: 'ID' }]} />
-          </div>
+        <div className="order-last w-full lg:order-none lg:w-[420px]">
+          <SegmentedButtons aria-label="Help section" value={tab} onChange={pickTab} options={TABS.map((k) => ({ value: k, label: t.tabs[k] }))} />
+        </div>
+        <div className="w-[116px] shrink-0">
+          <SegmentedButtons aria-label="Language" value={lang} onChange={setLang} options={[{ value: 'en', label: 'EN' }, { value: 'id', label: 'ID' }]} />
         </div>
       </Card>
       <Reveal className="space-y-4" deps={[tab, lang]}>
-        {tab === 'use' ? <HowTo t={t} /> : <Roles t={t} />}
+        {tab === 'use' ? <HowTo t={t} /> : tab === 'roles' ? <Roles t={t} /> : <About t={t} />}
       </Reveal>
     </div>
   );

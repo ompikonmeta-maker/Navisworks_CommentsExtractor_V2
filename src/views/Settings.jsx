@@ -10,9 +10,7 @@ import StatusEditor from '../components/StatusEditor.jsx';
 import UsersEditor from '../components/UsersEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
-import { remoteState, isReadOnly } from '../lib/server.js';
-
-const APP_VERSION = '1.1.0';
+import { isReadOnly } from '../lib/server.js';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System' },
@@ -23,13 +21,12 @@ const THEME_OPTIONS = [
 // The Settings sub-sections. These now live in the sidebar (nested under
 // Settings): an accordion when the rail is expanded, a flyout when collapsed.
 // Ordered along the data journey: pick a Template → define Labels & fields →
-// tune Detection → Appearance → About. Exported so App can drive the nav.
+// tune Detection → Appearance (About lives in Help). Exported so App can drive the nav.
 export const SECTIONS = [
   { id: 'template', label: 'Template', icon: 'download' },
   { id: 'labels', label: 'Labels', icon: 'table_view' },
   { id: 'detection', label: 'Detection', icon: 'search' },
   { id: 'appearance', label: 'Appearance', icon: 'dark_mode' },
-  { id: 'about', label: 'About', icon: 'info' },
 ];
 
 export default function Settings({ section = 'template', setSection = () => {}, sections = SECTIONS, remoteUser = null }) {
@@ -107,6 +104,12 @@ export default function Settings({ section = 'template', setSection = () => {}, 
               <SegmentedButtons aria-label="Theme" value={settings.themeMode} onChange={setThemeMode} options={THEME_OPTIONS} />
               <p className="mt-2 text-xs text-on-surface-variant">“System” follows your operating-system light/dark preference.</p>
             </div>
+            {!readOnly && (
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-outline-variant pt-4">
+                <p className="text-xs text-on-surface-variant">Put labels, detection, template mapping and statuses back to the defaults.</p>
+                <Button variant="text" icon="restart_alt" onClick={() => { if (window.confirm('Restore all settings to defaults?')) resetSettings(); }}>Restore defaults</Button>
+              </div>
+            )}
           </Card>
         )}
 
@@ -199,90 +202,8 @@ export default function Settings({ section = 'template', setSection = () => {}, 
           </Card>
         )}
 
-        {section === 'about' && (
-          <div className="flex flex-col gap-4">
-            <Card className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm">
-                <div className="font-semibold">Tabelin v{APP_VERSION}</div>
-                <p className="mt-0.5 text-xs text-on-surface-variant">
-                  {remoteState.active ? 'Shared on your office Tabelin server · settings saved per project.' : 'Runs fully in your browser · settings saved locally · nothing uploaded.'}
-                </p>
-              </div>
-              {!readOnly && <Button variant="outlined" icon="restart_alt" onClick={() => { if (window.confirm('Restore all settings to defaults?')) resetSettings(); }}>Restore defaults</Button>}
-            </Card>
-
-            <Card className="p-6">
-              <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <Icon name="table_view" className="text-[18px] text-primary" /> Where the data comes from
-              </h3>
-              <p className="mt-1 text-xs text-on-surface-variant">
-                A Navisworks report only stores a few things per comment. Everything else is worked out
-                or added by Tabelin. Here is what each field is.
-              </p>
-
-              <FieldGroup
-                title="Straight from the HTML"
-                sub="The real fields Navisworks writes into the report."
-                rows={[
-                  ['Viewpoint', 'The viewpoint name (the tag view title).'],
-                  ['Image ref', 'The picture file name for that viewpoint.'],
-                  ['Camera position', 'The saved camera position.'],
-                  ['Comment ID', 'The comment number inside the viewpoint.'],
-                  ['Author code', 'The Navisworks “User” code (the “Author” column).'],
-                  ['Comment text (raw)', 'The original comment, still with its “Name:” prefix.'],
-                  ['Status (raw)', 'The status word as written, e.g. “New”.'],
-                  ['Comment date', 'The date shown at the end of the comment.'],
-                ]}
-              />
-
-              <FieldGroup
-                title="Worked out from the text"
-                sub="Not real fields — Tabelin reads these out of the comment text. You can tune how in Detection."
-                rows={[
-                  ['Comment text', 'The clean comment, with the “Name:” prefix removed.'],
-                  ['Commenter', 'The person who wrote it, read from the “Name:” at the start.'],
-                  ['Discipline', 'Guessed from the text. Navisworks has no discipline field.'],
-                  ['Status', 'The raw status tidied up into Open / In Review / Closed.'],
-                ]}
-              />
-
-              <FieldGroup
-                title="Added by Tabelin"
-                sub="These are not in the report at all — they are yours to fill in."
-                rows={[
-                  ['Resolution', 'Empty at first; you type it in.'],
-                  ['Closed at', 'The report has no close date. It is stamped when you set a comment to Closed here.'],
-                  ['Before / after photos', 'The before image is linked from the companion files; the after photo you upload in the drawer.'],
-                  ['Custom fields', 'Your own extra fields (evidence, remarks, …) added for the template export.'],
-                  ['Source', 'The name of the HTML file the comment came from.'],
-                ]}
-              />
-
-              <p className="mt-4 text-xs text-on-surface-variant">
-                Any of these can be sent to a column in your Excel template from the <strong>Template</strong> page.
-              </p>
-            </Card>
-          </div>
-        )}
       </Reveal>
       </fieldset>
-    </div>
-  );
-}
-
-function FieldGroup({ title, sub, rows }) {
-  return (
-    <div className="mt-4">
-      <div className="text-xs font-semibold text-on-surface">{title}</div>
-      {sub && <p className="mt-0.5 text-[11px] text-on-surface-variant">{sub}</p>}
-      <dl className="mt-2 divide-y divide-outline-variant/40 rounded-control bg-surface-variant/30 px-3">
-        {rows.map(([name, desc]) => (
-          <div key={name} className="flex flex-col gap-0.5 py-2 sm:flex-row sm:gap-3">
-            <dt className="shrink-0 text-xs font-medium text-on-surface sm:w-40">{name}</dt>
-            <dd className="text-xs text-on-surface-variant">{desc}</dd>
-          </div>
-        ))}
-      </dl>
     </div>
   );
 }

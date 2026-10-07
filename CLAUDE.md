@@ -173,7 +173,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
   route switch: Dashboard (Overview), Comments (Viewpoints — list + editable detail
   drawer), and Settings (`views/Settings.jsx`, v1.1 — a **two-pane** page: a category rail
-  (Appearance · Labels · Detection · Export[soon] · About) beside one focused panel. **Labels**
+  (Template · Labels · Detection · Appearance, plus Users for admins on the server; "Restore defaults" sits in Appearance) beside one focused panel. **Labels**
   merges Disciplines (colours) + Commenters behind an inner segmented toggle; **Detection** hosts
   `DetectionEditor`. The panel is wrapped in `<Reveal deps={[section]}>` so the staggered card
   reveal re-plays on every section switch). Theme is
@@ -226,7 +226,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
 - **Help** (`views/Help.jsx`, last sidebar item): "How to use" (flow infographic + one card per
   step with a real screenshot) and "Roles & limits" (role cards, permission matrix, safety nets,
-  limits), in EN / ID (`localStorage tabelin.helpLang`, default from the browser language).
+  limits) and "About" (version, run mode, where each record field comes from), in EN / ID (`localStorage tabelin.helpLang`, default from the browser language).
   Screenshots are WebP files in `src/assets/help/`, inlined at build time so Help works
   offline — re-capture them when a pictured screen changes. Keep the matrix in sync with the
   server's role checks (`canWriteRole` / `requireAdmin`).
