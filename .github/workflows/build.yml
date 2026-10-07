@@ -2,9 +2,8 @@ name: Build
 
 # Build the Tabelin app and publish the production dist/ as a downloadable
 # artifact (Actions tab → this run → Artifacts).
+# Runs only when started by hand (Actions → Build → Run workflow), never on push.
 on:
-  push:
-    branches: ['**']
   workflow_dispatch:
 
 jobs:
