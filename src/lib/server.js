@@ -7,7 +7,7 @@
 
 async function req(method, path, body) {
   // keepalive lets a small save finish even if the tab is closing.
-  const init = { method, headers: {}, credentials: 'same-origin', keepalive: method === 'PATCH' };
+  const init = { method, headers: {}, credentials: 'same-origin', keepalive: method === 'PATCH' && path.startsWith('/api/records/') };
   if (body instanceof Blob) {
     init.body = body;
     init.headers['Content-Type'] = body.type || 'application/octet-stream';
@@ -44,6 +44,7 @@ export const api = {
   renameReview: (rid, name) => req('PATCH', `/api/reviews/${rid}`, { name }),
   getRecords: (rid) => req('GET', `/api/reviews/${rid}/records`),
   importRecords: (rid, records) => req('POST', `/api/reviews/${rid}/records`, { records }),
+  bulkPatchRecords: (rid, updates) => req('PATCH', `/api/reviews/${rid}/records`, { updates }),
   patchRecord: (id, patch) => req('PATCH', `/api/records/${id}`, patch),
   uploadImage: (id, kind, blob) => req('POST', `/api/records/${id}/images?kind=${kind}`, blob),
   listUsers: () => req('GET', '/api/users'),

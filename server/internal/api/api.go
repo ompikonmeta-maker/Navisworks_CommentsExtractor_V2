@@ -61,6 +61,7 @@ func (a *API) Routes() http.Handler {
 	// records + images
 	mux.HandleFunc("GET /api/reviews/{rid}/records", a.listRecords)
 	mux.HandleFunc("POST /api/reviews/{rid}/records", a.importRecords)
+	mux.HandleFunc("PATCH /api/reviews/{rid}/records", a.bulkPatchRecords)
 	mux.HandleFunc("PATCH /api/records/{id}", a.patchRecord)
 	mux.HandleFunc("DELETE /api/records/{id}", a.deleteRecord)
 	mux.HandleFunc("POST /api/records/{id}/images", a.uploadImage)

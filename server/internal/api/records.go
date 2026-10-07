@@ -183,7 +183,74 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad body")
 		return
 	}
-	// Only these fields are editable in the drawer; column ← jsonKey.
+	set, args := buildPatch(patch, u.ID)
+	if set == "" {
+		writeErr(w, http.StatusBadRequest, "nothing to update")
+		return
+	}
+	if _, err := a.DB.Exec(`UPDATE records SET `+set+` WHERE id=?`, append(args, id)...); err != nil {
+		writeErr(w, 500, "update record")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// bulkPatchRecords applies many record edits in one transaction — used when a
+// change touches lots of records at once (detection re-run, status or custom
+// field rename). Only records of this review are touched. Owners/editors only.
+func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	if !canWriteRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot edit records")
+		return
+	}
+	var body struct {
+		Updates []struct {
+			ID    int64                      `json:"id"`
+			Patch map[string]json.RawMessage `json:"patch"`
+		} `json:"updates"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad body")
+		return
+	}
+	tx, err := a.DB.Begin()
+	if err != nil {
+		writeErr(w, 500, "begin")
+		return
+	}
+	defer tx.Rollback()
+	n := 0
+	for _, up := range body.Updates {
+		set, args := buildPatch(up.Patch, u.ID)
+		if set == "" {
+			continue
+		}
+		res, err := tx.Exec(`UPDATE records SET `+set+` WHERE id=? AND review_id=?`, append(args, up.ID, rid)...)
+		if err != nil {
+			writeErr(w, 500, "update record")
+			return
+		}
+		if c, _ := res.RowsAffected(); c > 0 {
+			n++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 500, "commit")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"updated": n})
+}
+
+// buildPatch turns a JSON patch into "col=?, …" plus args for the editable
+// fields, stamping who changed it and when. Empty set = nothing editable.
+func buildPatch(patch map[string]json.RawMessage, userID int64) (string, []any) {
+	// Only these fields are editable; column ← jsonKey.
 	allowed := map[string]string{
 		"commenter": "commenter", "discipline": "discipline", "resolution": "resolution",
 		"status": "status", "closed_at": "closedAt", "comment_text": "commentText", "extra": "extra",
@@ -207,16 +274,10 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if set == "" {
-		writeErr(w, http.StatusBadRequest, "nothing to update")
-		return
+		return "", nil
 	}
 	set += ", updated_by=?, updated_at=?"
-	args = append(args, u.ID, time.Now().UTC().Format(time.RFC3339), id)
-	if _, err := a.DB.Exec(`UPDATE records SET `+set+` WHERE id=?`, args...); err != nil {
-		writeErr(w, 500, "update record")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return set, append(args, userID, time.Now().UTC().Format(time.RFC3339))
 }
 
 // deleteRecord removes a record and its image files (owners/editors only).

@@ -8,9 +8,12 @@ import { detectCommenter } from '../lib/parser.js';
 import { extract } from '../lib/detect.js';
 import { useSettings } from './settings.jsx';
 import { doneLabel as doneLabelOf, resolveStatus } from '../lib/status.js';
-import { remoteState, syncRecord } from '../lib/server.js';
+import { api, remoteState, syncRecord } from '../lib/server.js';
 
 const StoreContext = createContext(null);
+
+// Record fields a bulk change can touch.
+const BULK_KEYS = ['commenter', 'discipline', 'commentText', 'status', 'extra'];
 
 // Fields typed into a text box — their server saves are batched.
 const TEXT_KEYS = new Set(['resolution', 'commentText', 'extra']);
@@ -124,6 +127,11 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'REPLACE_RECORDS': {
+      // Put back specific records (by ID) — used to undo a failed bulk save.
+      const { byId } = action;
+      return { ...state, records: state.records.map((r) => byId.get(r.ID) || r) };
+    }
     case 'TOAST':
       return { ...state, toast: action.toast };
     case 'CLEAR_TOAST':
@@ -190,12 +198,37 @@ export function StoreProvider({ children }) {
     },
     [doneLabel, flush]
   );
+  // Changes that touch many records at once. On the server, the records that
+  // actually changed are saved in one request; if it fails they're put back.
+  const bulk = useCallback((action) => {
+    const prev = recordsRef.current;
+    dispatch(action);
+    if (!remoteState.active) return;
+    const next = reducer({ records: prev }, action).records;
+    const updates = [];
+    const old = new Map();
+    next.forEach((r, i) => {
+      const o = prev[i];
+      if (r === o) return;
+      const patch = {};
+      for (const k of BULK_KEYS) if (JSON.stringify(r[k]) !== JSON.stringify(o[k])) patch[k] = r[k];
+      if (Object.keys(patch).length) {
+        updates.push({ id: r.ID, patch });
+        old.set(r.ID, o);
+      }
+    });
+    if (!updates.length) return;
+    api.bulkPatchRecords(remoteState.reviewId, updates).catch((e) => {
+      dispatch({ type: 'REPLACE_RECORDS', byId: old });
+      dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
+    });
+  }, []);
   const applyDetect = useCallback(
-    (field, config, allowed, mode) => dispatch({ type: 'APPLY_DETECT', field, config, allowed, mode }),
-    []
+    (field, config, allowed, mode) => bulk({ type: 'APPLY_DETECT', field, config, allowed, mode }),
+    [bulk]
   );
-  const renameAttr = useCallback((from, to) => dispatch({ type: 'RENAME_ATTR', from, to }), []);
-  const remapStatus = useCallback((from, to) => dispatch({ type: 'REMAP_STATUS', from, to }), []);
+  const renameAttr = useCallback((from, to) => bulk({ type: 'RENAME_ATTR', from, to }), [bulk]);
+  const remapStatus = useCallback((from, to) => bulk({ type: 'REMAP_STATUS', from, to }), [bulk]);
   // Named `notify` (not `toast`) so it doesn't collide with `state.toast`,
   // the current toast payload the provider also exposes.
   // `action` (optional): { label, onClick } renders a button in the toast —
