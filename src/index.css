@@ -218,8 +218,9 @@
   }
 }
 
-/* The sidebar (and its collapsed-rail flyout) keeps its original lavender
-   look: its tokens are pinned here so the app-wide palette doesn't reach it. */
+/* The sidebar (and its collapsed-rail flyout) has its own tokens, pinned here
+   so the app-wide palette doesn't reach it: the original lavender look in light
+   mode; in dark mode the card surface with a solid blue active item. */
 [data-rail],
 .t-flyout {
   --md-sys-color-primary: #0056d2;
@@ -239,44 +240,62 @@
 }
 :root[data-theme="dark"] [data-rail],
 :root[data-theme="dark"] .t-flyout {
-  --md-sys-color-primary: #c0c1ff;
-  --md-sys-color-on-primary: #002b73;
-  --md-sys-color-secondary-container: #3b4378;
-  --md-sys-color-on-secondary-container: #e0e0ff;
-  --md-sys-color-background: #13121d;
-  --md-sys-color-surface: #13121d;
-  --md-sys-color-on-surface: #e2e1f0;
-  --md-sys-color-on-surface-variant: #c4c4e5;
-  --md-sys-color-surface-container-low: #1a1b25;
-  --md-sys-color-surface-container: #1e1f2a;
-  --md-sys-color-surface-container-high: #292934;
-  --md-sys-color-surface-container-highest: #343440;
-  --md-sys-color-outline: #8e8eae;
-  --md-sys-color-outline-variant: #434460;
+  --md-sys-color-primary: #2f6bf0;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-secondary-container: #2f6bf0;
+  --md-sys-color-on-secondary-container: #ffffff;
+  --md-sys-color-background: #171c26;
+  --md-sys-color-surface: #171c26;
+  --md-sys-color-on-surface: #e8ecf3;
+  --md-sys-color-on-surface-variant: #a8b1c2;
+  --md-sys-color-surface-container-low: #1c2230;
+  --md-sys-color-surface-container: #171c26;
+  --md-sys-color-surface-container-high: #283041;
+  --md-sys-color-surface-container-highest: #30394b;
+  --md-sys-color-outline: #7c8698;
+  --md-sys-color-outline-variant: #2c3445;
+  --tabelin-sb-sub-on: rgba(122, 167, 255, 0.16);
+  --tabelin-sb-sub-on-ink: #e8efff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) [data-rail],
   :root:not([data-theme="light"]):not([data-theme="dark"]) .t-flyout {
-  --md-sys-color-primary: #c0c1ff;
-  --md-sys-color-on-primary: #002b73;
-  --md-sys-color-secondary-container: #3b4378;
-  --md-sys-color-on-secondary-container: #e0e0ff;
-  --md-sys-color-background: #13121d;
-  --md-sys-color-surface: #13121d;
-  --md-sys-color-on-surface: #e2e1f0;
-  --md-sys-color-on-surface-variant: #c4c4e5;
-  --md-sys-color-surface-container-low: #1a1b25;
-  --md-sys-color-surface-container: #1e1f2a;
-  --md-sys-color-surface-container-high: #292934;
-  --md-sys-color-surface-container-highest: #343440;
-  --md-sys-color-outline: #8e8eae;
-  --md-sys-color-outline-variant: #434460;
+  --md-sys-color-primary: #2f6bf0;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-secondary-container: #2f6bf0;
+  --md-sys-color-on-secondary-container: #ffffff;
+  --md-sys-color-background: #171c26;
+  --md-sys-color-surface: #171c26;
+  --md-sys-color-on-surface: #e8ecf3;
+  --md-sys-color-on-surface-variant: #a8b1c2;
+  --md-sys-color-surface-container-low: #1c2230;
+  --md-sys-color-surface-container: #171c26;
+  --md-sys-color-surface-container-high: #283041;
+  --md-sys-color-surface-container-highest: #30394b;
+  --md-sys-color-outline: #7c8698;
+  --md-sys-color-outline-variant: #2c3445;
+  --tabelin-sb-sub-on: rgba(122, 167, 255, 0.16);
+  --tabelin-sb-sub-on-ink: #e8efff;
   }
 }
 
-/* The sidebar's outline has always rendered in this light grey; keep it. */
+/* Light mode: the sidebar's outline has always rendered in this light grey;
+   keep it. Dark mode: no outline — the panel lifts by shadow like a card. */
 aside[data-rail] {
   border-color: #e5e7eb;
+}
+:root[data-theme="dark"] aside[data-rail] {
+  border-color: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) aside[data-rail] {
+    border-color: transparent;
+  }
+}
+/* Dark-mode sub-items: a soft blue tint, so only the main item is solid. */
+.t-sub.on {
+  background: var(--tabelin-sb-sub-on, var(--md-sys-color-secondary-container));
+  color: var(--tabelin-sb-sub-on-ink, var(--md-sys-color-on-secondary-container));
 }
 
 /* Press feedback for chips/buttons that aren't the shared Button. */
@@ -565,8 +584,6 @@ aside[data-rail] {
   transition: background 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 .t-sub.on {
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
   font-weight: 600;
 }
 /* Children fade + slide in, staggered by --d, only while the panel is open. */
@@ -1084,17 +1101,17 @@ fieldset:disabled textarea {
   }
   :root[data-theme="dark"] .t-panel {
     box-shadow:
-      0 18px 50px rgba(0, 0, 0, 0.605),
-      0 4px 14px rgba(0, 0, 0, 0.44),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 6px 18px rgba(0, 0, 0, 0.22);
   }
 }
 @media (min-width: 768px) and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) .t-panel {
     box-shadow:
-      0 18px 50px rgba(0, 0, 0, 0.605),
-      0 4px 14px rgba(0, 0, 0, 0.44),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 6px 18px rgba(0, 0, 0, 0.22);
   }
 }
 

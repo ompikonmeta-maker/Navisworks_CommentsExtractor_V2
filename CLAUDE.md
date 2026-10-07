@@ -204,8 +204,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   opacity modifiers (`border-outline-variant/50`) actually generate.
 - **Surfaces:** cool-grey canvas (`background`), white cards (`Card` → `.t-card`: shadow
   `--tabelin-elev-card`, no border; a hairline ring in dark). In-card fills use
-  `surface-low/container/high`. The **sidebar keeps its original lavender look** — its tokens
-  are re-pinned on `[data-rail]` / `.t-flyout` in `index.css`; don't restyle it unless asked.
+  `surface-low/container/high`. The **sidebar has its own pinned tokens** on `[data-rail]` /
+  `.t-flyout` in `index.css`: the original lavender look in light mode; in dark mode the card
+  surface (no outline, card shadow) with a solid blue active item and a soft blue tint for the
+  active Settings sub-item. Don't restyle it unless asked.
 - **Colour meaning:** statuses come from the registry (defaults Open orange, In Review violet,
   Closed green; old default colours auto-upgrade in `normalizeStatuses`). Verdicts and
   warnings use `--tabelin-good/warn/bad` — red only means late/behind. Disciplines are a
