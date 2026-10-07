@@ -411,10 +411,10 @@ function Hero({ ov, statuses, goComments }) {
         {ov.done > 0 && (
           <div className="mt-4 grid gap-1">
             {[
-              ['no_photography', ov.noPhoto, 'without an after-photo', 'Closed, but the after-photo is missing.'],
-              ['description', ov.noRes, 'without a resolution', 'Closed, but no resolution was written.'],
-            ].map(([icon, n, label, tip]) => (
-              <button key={icon} type="button" onClick={() => goComments({ status: ov.doneL, discipline: 'all' })} disabled={!n}
+              ['no_photography', ov.noPhoto, 'without an after-photo', 'Closed, but the after-photo is missing.', { noPhoto: true }],
+              ['description', ov.noRes, 'without a resolution', 'Closed, but no resolution was written.', { noRes: true }],
+            ].map(([icon, n, label, tip, f]) => (
+              <button key={icon} type="button" onClick={() => goComments({ status: ov.doneL, ...f })} disabled={!n}
                 className="t-press flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-[12.5px] tabular-nums enabled:hover:bg-surface-container disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 {...tp(<TipRows title={`${n} closed ${label}`} note={tip} />)}>
                 <Icon name={icon} className="text-[17px]" style={{ color: n ? 'var(--tabelin-warn)' : 'var(--tabelin-good)' }} />
@@ -432,10 +432,10 @@ function Attention({ ov, statuses, goComments, openDetail }) {
   const a = ov.attention;
   const mid = statuses.filter((s) => s.role === 'middle');
   const items = [
-    a.unassignedOpen > 0 && { n: a.unassignedOpen, t: 'without a discipline', icon: 'person_off', c: 'var(--tabelin-bad)', go: () => goComments({ discipline: 'OTHER', status: 'all' }), tip: 'Nobody owns these yet. Detection could not read a discipline from the text.' },
-    a.over90 > 0 && { n: a.over90, t: 'open over 3 months', icon: 'hourglass_bottom', c: 'var(--tabelin-bad)', go: () => goComments({ status: ov.openL, discipline: 'all' }), tip: 'Raised more than 90 days ago and still not closed.' },
+    a.unassignedOpen > 0 && { n: a.unassignedOpen, t: 'without a discipline', icon: 'person_off', c: 'var(--tabelin-bad)', go: () => goComments({ discipline: 'OTHER', status: '!done' }), tip: 'Nobody owns these yet. Detection could not read a discipline from the text.' },
+    a.over90 > 0 && { n: a.over90, t: 'open over 3 months', icon: 'hourglass_bottom', c: 'var(--tabelin-bad)', go: () => goComments({ old: true }), tip: 'Raised more than 90 days ago and still not closed.' },
     a.middle > 0 && { n: a.middle, t: mid.length === 1 ? `${mid[0].label.toLowerCase()}` : 'waiting for verification', icon: 'pending', c: 'var(--tabelin-warn)', go: () => goComments({ status: mid[0]?.label || ov.openL, discipline: 'all' }), tip: 'Fixed, waiting for the reviewer to verify.' },
-    a.missingEvidence > 0 && { n: a.missingEvidence, t: 'closed without evidence', icon: 'no_photography', c: 'var(--tabelin-warn)', go: () => goComments({ status: ov.doneL, discipline: 'all' }), tip: `${a.noPhoto} without an after-photo · ${a.noRes} without a resolution.` },
+    a.missingEvidence > 0 && { n: a.missingEvidence, t: 'closed without evidence', icon: 'no_photography', c: 'var(--tabelin-warn)', go: () => goComments({ status: ov.doneL, noPhoto: true, noRes: true }), tip: `${a.noPhoto} without an after-photo · ${a.noRes} without a resolution.` },
   ].filter(Boolean);
   const tp = useTipProps();
   return (

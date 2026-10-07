@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
-import { statusLabels } from '../lib/status.js';
+import { statusLabels, doneLabel } from '../lib/status.js';
 import { DISCIPLINES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
@@ -16,6 +16,15 @@ function fmtCommentDate(raw) {
   return t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : raw || '—';
 }
 
+function FilterChip({ on, onClick, icon, label, count }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className={`t-press inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${on ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container text-on-surface-variant hover:text-on-surface'}`}>
+      <Icon name={on ? 'check' : icon} className="text-[16px]" />{label}<b className="tabular-nums">{count}</b>
+    </button>
+  );
+}
+
 export default function Comments({ detailId, setDetailId, initialFilter, goSettings }) {
   const { status, records, notify } = useStore();
   const { settings } = useSettings();
@@ -23,28 +32,63 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
 
   const [query, setQuery] = useState('');
   const [discipline, setDiscipline] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // a label, 'all' or '!done'
+  const [commenter, setCommenter] = useState('all');
+  const [noPhoto, setNoPhoto] = useState(false);
+  const [noRes, setNoRes] = useState(false);
+  const [old, setOld] = useState(false);
+  const doneL = doneLabel(settings.statuses);
 
-  // Apply a filter handed in from Overview (KPI card / discipline row click).
-  // The object carries a nonce so re-clicking the same target re-applies.
+  // Apply a filter handed in from Overview. Anything it doesn't name is
+  // cleared, so the list shows exactly the counted set. The object carries a
+  // nonce so re-clicking the same target re-applies.
   useEffect(() => {
     if (!initialFilter) return;
-    if ('status' in initialFilter) setStatusFilter(initialFilter.status);
-    if ('discipline' in initialFilter) setDiscipline(initialFilter.discipline);
+    setQuery('');
+    setStatusFilter(initialFilter.status ?? 'all');
+    setDiscipline(initialFilter.discipline ?? 'all');
+    setCommenter(initialFilter.commenter ?? 'all');
+    setNoPhoto(!!initialFilter.noPhoto);
+    setNoRes(!!initialFilter.noRes);
+    setOld(!!initialFilter.old);
   }, [initialFilter]);
 
-  const filtered = useMemo(() => {
+  // Search + dropdowns first; the chips then narrow that (their counts are
+  // taken from this base so each chip says what it would show).
+  const base = useMemo(() => {
     const q = query.trim().toLowerCase();
     return records.filter((r) => {
       if (discipline !== 'all' && r.discipline !== discipline) return false;
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (statusFilter === '!done' ? r.status === doneL : statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (commenter !== 'all' && (r.commenter || '') !== commenter) return false;
       if (q) {
         const hay = `${r.commentText} ${r.viewpoint} ${r.authorCode} ${r.commenter || ''} ${r.resolution} ${r.commentId}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [records, query, discipline, statusFilter]);
+  }, [records, query, discipline, statusFilter, commenter, doneL]);
+  const lacksPhoto = (r) => !r.afterImageData;
+  const lacksRes = (r) => !String(r.resolution || '').trim();
+  const isOld = (r) => {
+    if (r.status === doneL) return false;
+    const t = parseTs(r.commentDate);
+    return t != null && Date.now() - t > 90 * 86400000;
+  };
+  const filtered = useMemo(() => base.filter((r) => {
+    // the two evidence chips widen each other: missing either one
+    if ((noPhoto || noRes) && !((noPhoto && lacksPhoto(r)) || (noRes && lacksRes(r)))) return false;
+    if (old && !isOld(r)) return false;
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [base, noPhoto, noRes, old, doneL]);
+  const chipCount = useMemo(() => ({
+    noPhoto: base.filter(lacksPhoto).length,
+    noRes: base.filter(lacksRes).length,
+    old: base.filter(isOld).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [base, doneL]);
+  const commenters = useMemo(() => [...new Set(records.map((r) => r.commenter).filter(Boolean))].sort(), [records]);
 
   const active = detailId != null ? records.find((r) => r.ID === detailId) : null;
 
@@ -72,8 +116,12 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
     setQuery('');
     setDiscipline('all');
     setStatusFilter('all');
+    setCommenter('all');
+    setNoPhoto(false);
+    setNoRes(false);
+    setOld(false);
   };
-  const hasFilters = query || discipline !== 'all' || statusFilter !== 'all';
+  const hasFilters = query || discipline !== 'all' || statusFilter !== 'all' || commenter !== 'all' || noPhoto || noRes || old;
 
   return (
     <div className="canvas-w space-y-4">
@@ -104,7 +152,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
               aria-label="Filter by status"
               value={statusFilter}
               onChange={setStatusFilter}
-              options={[{ value: 'all', label: 'All statuses' }, ...statusLabels(settings.statuses).map((s) => ({ value: s, label: s }))]}
+              options={[{ value: 'all', label: 'All statuses' }, { value: '!done', label: `Not ${doneL.toLowerCase()}` }, ...statusLabels(settings.statuses).map((s) => ({ value: s, label: s }))]}
             />
             {hasFilters && (
               <Button variant="text" icon="filter_alt_off" onClick={resetFilters}>
@@ -113,6 +161,18 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
             )}
             <ExportButton onLogSheet={logSheet} onQuick={handleExport} quickNote="The comments shown here" disabled={!filtered.length} />
           </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <FilterChip on={noPhoto} onClick={() => setNoPhoto((v) => !v)} icon="no_photography" label="No after-photo" count={chipCount.noPhoto} />
+          <FilterChip on={noRes} onClick={() => setNoRes((v) => !v)} icon="description" label="No resolution" count={chipCount.noRes} />
+          <FilterChip on={old} onClick={() => setOld((v) => !v)} icon="hourglass_bottom" label={`Not ${doneL.toLowerCase()} > 3 months`} count={chipCount.old} />
+          <Select
+            className={`dd-chip ${commenter !== 'all' ? 'is-on' : ''}`}
+            aria-label="Filter by commenter"
+            value={commenter}
+            onChange={setCommenter}
+            options={[{ value: 'all', label: 'Any commenter' }, ...commenters.map((c) => ({ value: c, label: c }))]}
+          />
         </div>
       </Card>
 

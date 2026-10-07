@@ -900,6 +900,24 @@ aside[data-rail] {
   background: var(--md-sys-color-surface-container);
   border-color: var(--md-sys-color-outline);
 }
+/* Select styled as a filter chip (Viewpoints commenter filter). */
+.dd-chip .dd-trigger {
+  height: 32px;
+  min-width: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 8px 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+}
+.dd-chip .dd-trigger:hover { color: var(--md-sys-color-on-surface); }
+.dd-chip.is-on .dd-trigger {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
 /* Read-only (viewer) areas: controls show their value without inviting a click. */
 fieldset:disabled .dd-trigger,
 fieldset:disabled .dd-trigger:hover {
