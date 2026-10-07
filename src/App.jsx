@@ -582,9 +582,9 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
 
   switch (route) {
     case 'dashboard':
-      return <Dashboard openDetail={openDetail} goComments={goComments} />;
+      return <Dashboard openDetail={openDetail} goComments={goComments} goSettings={setSettingsSection} remoteUser={remoteUser} />;
     case 'comments':
-      return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} />;
+      return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} goSettings={setSettingsSection} />;
     case 'settings':
       return <Settings section={settingsSection} setSection={setSettingsSection} sections={settingsSections} remoteUser={remoteUser} />;
     default:

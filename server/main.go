@@ -45,6 +45,13 @@ func main() {
 	defer database.Close()
 
 	a := &api.API{DB: database, Version: version, FilesDir: filepath.Join(dataDir, "files")}
+	a.ServerURLs = func() []string {
+		var urls []string
+		for _, ip := range lanIPs() {
+			urls = append(urls, "http://"+ip+portOf(addr))
+		}
+		return urls
+	}
 	bootstrapAdmin(database)
 
 	root := http.NewServeMux()

@@ -178,3 +178,65 @@ func (a *API) renameReview(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": rid, "name": name})
 }
+
+// deleteReview removes a review with all its records and photos (admin).
+func (a *API) deleteReview(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	a.unlinkFilesWhere(`r.review_id=?`, rid)
+	res, err := a.DB.Exec(`DELETE FROM reviews WHERE id=?`, rid)
+	if err != nil {
+		writeErr(w, 500, "delete review")
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeErr(w, http.StatusNotFound, "review not found")
+		return
+	}
+	a.DB.Exec(`DELETE FROM config WHERE scope=?`, reviewScope(rid))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// deleteProject removes an empty project (admin). Reviews must be deleted
+// first, so a project's comments are never lost by one click.
+func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	pid, ok := pathID(r, "pid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad project id")
+		return
+	}
+	var n int
+	a.DB.QueryRow(`SELECT COUNT(*) FROM reviews WHERE project_id=?`, pid).Scan(&n)
+	if n > 0 {
+		writeErr(w, http.StatusConflict, "project still has reviews")
+		return
+	}
+	a.removeTemplates(pid)
+	if _, err := a.DB.Exec(`DELETE FROM projects WHERE id=?`, pid); err != nil {
+		writeErr(w, 500, "delete project")
+		return
+	}
+	a.DB.Exec(`DELETE FROM config WHERE scope=?`, projectScope(pid))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// serverInfo tells an admin the addresses colleagues can open.
+func (a *API) serverInfo(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	urls := []string{}
+	if a.ServerURLs != nil {
+		urls = append(urls, a.ServerURLs()...)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"urls": urls})
+}

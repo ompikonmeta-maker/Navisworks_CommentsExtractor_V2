@@ -81,6 +81,61 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"key": key, "url": "/api/files/" + key, "kind": kind})
 }
 
+// deleteImage removes a record's before/after photo (owners/editors only).
+func (a *API) deleteImage(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad id")
+		return
+	}
+	if !canWriteRole(auth.FromContext(r.Context())) {
+		writeErr(w, http.StatusForbidden, "cannot change record")
+		return
+	}
+	kind := r.URL.Query().Get("kind")
+	if kind != "after" {
+		kind = "before"
+	}
+	if rows, err := a.DB.Query(`SELECT file_key FROM images WHERE record_id=? AND kind=?`, id, kind); err == nil {
+		var keys []string
+		for rows.Next() {
+			var k string
+			if rows.Scan(&k) == nil {
+				keys = append(keys, k)
+			}
+		}
+		rows.Close()
+		for _, k := range keys {
+			os.Remove(filepath.Join(a.FilesDir, k))
+		}
+	}
+	if _, err := a.DB.Exec(`DELETE FROM images WHERE record_id=? AND kind=?`, id, kind); err != nil {
+		writeErr(w, 500, "delete image")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// unlinkFilesWhere removes the image files of every record matched by the
+// given WHERE clause on records (rows themselves go via ON DELETE CASCADE).
+func (a *API) unlinkFilesWhere(where string, args ...any) {
+	rows, err := a.DB.Query(`SELECT i.file_key FROM images i JOIN records r ON r.id = i.record_id WHERE `+where, args...)
+	if err != nil {
+		return
+	}
+	var keys []string
+	for rows.Next() {
+		var k string
+		if rows.Scan(&k) == nil {
+			keys = append(keys, k)
+		}
+	}
+	rows.Close()
+	for _, k := range keys {
+		os.Remove(filepath.Join(a.FilesDir, k))
+	}
+}
+
 // getFile streams a stored image to any signed-in user.
 func (a *API) getFile(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")

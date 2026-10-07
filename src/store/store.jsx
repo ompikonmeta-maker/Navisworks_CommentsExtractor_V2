@@ -193,7 +193,12 @@ export function StoreProvider({ children }) {
       Object.assign(p.fields, sync);
       pending.current.set(id, p);
       clearTimeout(p.timer);
-      if (Object.keys(sync).every((k) => TEXT_KEYS.has(k))) p.timer = setTimeout(() => flush(id), 700);
+      // A removed photo waits out the drawer's Undo (5 s) before the server
+      // deletes it; an Undo puts the old URL back into the pending patch,
+      // which then saves as a no-op.
+      const removesPhoto = Object.keys(sync).some((k) => (k === 'imageData' || k === 'afterImageData') && !sync[k]);
+      if (removesPhoto) p.timer = setTimeout(() => flush(id), 6000);
+      else if (Object.keys(sync).every((k) => TEXT_KEYS.has(k))) p.timer = setTimeout(() => flush(id), 700);
       else flush(id);
     },
     [doneLabel, flush]

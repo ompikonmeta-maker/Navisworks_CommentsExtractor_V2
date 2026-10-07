@@ -345,6 +345,43 @@ export function EmptyState({ icon = 'inbox', title, children, action }) {
 // Small "i" affordance that reveals a tooltip bubble on hover/focus. Styling
 // lives in index.css (`.info-tip` / `.info-bubble`), with the ~0.4s hover
 // delay. Use it to keep long explanations out of the way.
+// Modal dialog: a dimmed backdrop fades in and the card springs up; it fades
+// out on close. Esc and a backdrop click close it; focus moves into the card.
+export function Dialog({ open, onClose, labelledBy, width = 520, children }) {
+  const [mounted, setMounted] = useState(open);
+  const [shown, setShown] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const id = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)));
+      return () => cancelAnimationFrame(id);
+    }
+    setShown(false);
+    const t = setTimeout(() => setMounted(false), 220);
+    return () => clearTimeout(t);
+  }, [open]);
+  useEffect(() => {
+    if (!shown) return undefined;
+    const prev = document.activeElement;
+    (ref.current?.querySelector('[data-autofocus]') || ref.current?.querySelector('input, button'))?.focus();
+    const esc = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('keydown', esc); prev?.focus?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
+  if (!mounted) return null;
+  return createPortal(
+    <div className={`t-dlg ${shown ? 'show' : ''}`}>
+      <div className="t-dlg-scrim" onClick={onClose} />
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={labelledBy} className="t-dlg-card" style={{ width: `min(${width}px, calc(100vw - 32px))` }}>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function InfoTip({ children, label = 'More info' }) {
   // The bubble lives in a fixed layer on <body>, clamped to the window, so it
   // never widens the page or gets clipped by a card. Opens after a short

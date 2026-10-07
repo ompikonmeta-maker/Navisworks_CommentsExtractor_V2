@@ -5,7 +5,11 @@ import { useSettings } from '../store/settings.jsx';
 import { statusLabels } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
-import { remoteState, importParsedRecords, isReadOnly } from '../lib/server.js';
+import { remoteState, isReadOnly, applyMergeRemote, undoImportRemote } from '../lib/server.js';
+import { planMerge, applyMergeLocal } from '../lib/merge.js';
+import ImportDialog from '../components/ImportDialog.jsx';
+import ExportButton from '../components/ExportButton.jsx';
+import { exportLogSheet } from '../lib/logsheet.js';
 import { computeOverview, parseDay, parseTs } from '../lib/overview.js';
 import { Icon, Button, Card, InfoTip } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
@@ -20,7 +24,7 @@ export default function Dashboard(props) {
   return <TipProvider><Overview {...props} /></TipProvider>;
 }
 
-function Overview({ openDetail, goComments }) {
+function Overview({ openDetail, goComments, goSettings, remoteUser }) {
   const { status, records, meta, notify, setData } = useStore();
   const { settings, update } = useSettings();
   const statuses = settings.statuses;
@@ -41,23 +45,66 @@ function Overview({ openDetail, goComments }) {
   };
 
   const readOnly = isReadOnly();
+  // Import. Into an empty review (or over the offline sample) it's a plain
+  // load; into a review with comments it first shows what the new report
+  // changes and then merges by comment ID. Either way it can be undone.
+  const [merge, setMerge] = useState(null); // { plan, stats, fileName, missingAction }
+  const [busy, setBusy] = useState(false);
+  const fresh = !records.length || (!remoteState.active && meta.source === 'sample');
+
   const handleImport = async (fileList) => {
     const files = Array.from(fileList || []);
     if (!files.length) return;
     try {
       const { records: recs, stats, errors } = await ingestFiles(files);
-      if (recs.length === 0) {
-        notify(errors[0] || 'No comments could be imported.', 'error');
-      } else if (remoteState.active) {
-        const mapped = await importParsedRecords(remoteState.reviewId, recs);
-        setData(mapped, `review:${remoteState.reviewId}`, stats);
-        notify(`Imported ${stats.comments} comments to this review · ${stats.linked} images linked.`, 'success');
-      } else {
-        setData(recs, 'user', stats);
-        notify(`Imported ${stats.comments} comments from ${stats.html} HTML · ${stats.linked} images linked.`, 'success');
-      }
+      if (recs.length === 0) { notify(errors[0] || 'No comments could be imported.', 'error'); return; }
+      const fileName = files.find((f) => /\.html?$/i.test(f.name))?.name || files[0].name;
+      if (fresh) await runImport(planMerge([], recs), stats, 'keep');
+      else setMerge({ plan: planMerge(records, recs), stats, fileName, missingAction: 'keep' });
     } catch (e) {
       notify(`Import failed: ${e.message}`, 'error');
+    }
+  };
+
+  const runImport = async (plan, stats, missingAction) => {
+    const doneLabel = ov.doneL;
+    const before = { records, source: meta.source };
+    setBusy(true);
+    try {
+      let undo;
+      if (remoteState.active) {
+        const res = await applyMergeRemote(remoteState.reviewId, plan, { missingAction, doneLabel });
+        setData(res.records, `review:${remoteState.reviewId}`, stats);
+        undo = async () => setData(await undoImportRemote(remoteState.reviewId, res.undo), `review:${remoteState.reviewId}`, stats);
+      } else {
+        const base = before.source === 'sample' ? [] : before.records;
+        setData(applyMergeLocal(base, plan, { missingAction, doneLabel }), 'user', stats);
+        undo = async () => setData(before.records, before.source, { comments: before.records.length, html: 0, images: 0, linked: 0 });
+      }
+      const msg = plan.matched.length
+        ? `Review updated: ${plan.added.length} added, ${plan.changed} changed.`
+        : `Imported ${plan.added.length} comments · ${stats.linked} images linked.`;
+      notify(msg, 'success', {
+        label: 'Undo',
+        onClick: async () => {
+          try { await undo(); notify('Import undone.', 'success'); } catch (e) { notify(`Couldn’t undo: ${e.message}`, 'error'); }
+        },
+      });
+      setMerge(null);
+    } catch (e) {
+      notify(`Import failed: ${e.message}`, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const logSheet = async () => {
+    try {
+      const st = await exportLogSheet(records, settings.templateExport);
+      notify(`Log sheet ready: ${st.logRows} rows · ${st.images} photos.`, 'success');
+    } catch (e) {
+      if (e.code === 'no-template') notify(e.message, 'info', { label: 'Set up', onClick: () => goSettings('template') });
+      else notify(`Export failed: ${e.message}`, 'error');
     }
   };
 
@@ -106,10 +153,10 @@ function Overview({ openDetail, goComments }) {
       <div className="flex flex-wrap items-center justify-between gap-2" data-nosnap>
         <TargetChip value={settings.reviewTarget} onChange={(v) => update({ reviewTarget: v })} readOnly={readOnly} />
         <div className="flex flex-wrap items-center gap-1">
-          {!readOnly && <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import</Button>}
-          <input ref={fileInputRef} type="file" multiple accept=".html,.htm,.jpg,.jpeg,.png,.zip" className="hidden" onChange={(e) => handleImport(e.target.files)} />
+          {!readOnly && <Button variant="text" icon="upload_file" onClick={() => fileInputRef.current?.click()} title="Import a Navisworks report">Import</Button>}
+          <input ref={fileInputRef} type="file" multiple accept=".html,.htm,.jpg,.jpeg,.png,.zip" className="hidden" onChange={(e) => { handleImport(e.target.files); e.target.value = ''; }} />
           <Button variant="text" icon="image" onClick={() => snap(overviewRef, 'overview')} disabled={!records.length} title="Save the whole Overview as an image">Snapshot</Button>
-          <Button variant="text" icon="download" onClick={handleExport} disabled={!records.length} title="Excel with every comment plus this Overview">Excel</Button>
+          <ExportButton onLogSheet={logSheet} onQuick={handleExport} quickNote="All comments + this Overview" disabled={!records.length} />
         </div>
       </div>
 
@@ -180,6 +227,9 @@ function Overview({ openDetail, goComments }) {
           </Reveal>
         </>
       )}
+
+      <ImportDialog state={merge} onChange={setMerge} onCancel={() => setMerge(null)} busy={busy}
+        onConfirm={() => runImport(merge.plan, merge.stats, merge.missingAction)} />
     </div>
   );
 }

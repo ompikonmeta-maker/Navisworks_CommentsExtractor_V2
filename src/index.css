@@ -303,6 +303,45 @@ aside[data-rail] {
   transform: scale(0.96);
 }
 
+/* Modal dialog (ui.jsx Dialog). */
+.t-dlg {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.t-dlg-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.42);
+  opacity: 0;
+  transition: opacity 220ms var(--tabelin-ease);
+}
+.t-dlg-card {
+  position: relative;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: var(--tabelin-radius-card);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: 0 0 0 1px var(--tabelin-card-ring), 0 24px 60px rgba(16, 24, 40, 0.28);
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+  transition: opacity 200ms var(--tabelin-ease), transform 380ms cubic-bezier(0.34, 1.4, 0.42, 1);
+}
+.t-dlg.show .t-dlg-scrim { opacity: 1; }
+.t-dlg.show .t-dlg-card { opacity: 1; transform: none; }
+:root[data-theme="dark"] .t-dlg-scrim { background: rgba(0, 0, 0, 0.58); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .t-dlg-scrim { background: rgba(0, 0, 0, 0.58); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-dlg-card { transform: none; transition: opacity 120ms ease; }
+}
+
 /* Cards: lift by shadow (plus a hairline ring in dark mode, where shadows
    barely read). */
 .t-card {

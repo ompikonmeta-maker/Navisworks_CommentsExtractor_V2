@@ -5,7 +5,6 @@ import { Icon, Button, Select, InfoTip } from './ui.jsx';
 import {
   inspectTemplate,
   resolveMapping,
-  fillTemplate,
   migrateMapping,
   buildFieldsFromHeaders,
   DEFAULT_TEMPLATE_MAPPING,
@@ -13,7 +12,8 @@ import {
   CUSTOM_PREFIX,
 } from '../lib/templateExcel.js';
 import { saveTemplate, loadTemplate, clearTemplate } from '../lib/persist.js';
-import { inlineImages, isReadOnly } from '../lib/server.js';
+import { isReadOnly } from '../lib/server.js';
+import { exportLogSheet } from '../lib/logsheet.js';
 
 const BY_OPTS = [
   { value: 'header', label: 'By header' },
@@ -198,8 +198,7 @@ export default function TemplateExportPanel() {
     if (!tpl) return;
     setBusy(true); setErr('');
     try {
-      const { bytes, stats } = await fillTemplate(tpl.bytes, await inlineImages(records), cfg, cfg.constants || {});
-      download(bytes, `3D-review-log-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const stats = await exportLogSheet(records, cfg, tpl.bytes);
       notify(`Export done: ${stats.logRows} rows · ${stats.detailSheets} detail sheets · ${stats.images} images.`, 'success');
     } catch (e) { setErr(e.message); notify(`Export failed: ${e.message}`, 'error'); } finally { setBusy(false); }
   };

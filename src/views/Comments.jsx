@@ -6,6 +6,8 @@ import { DISCIPLINES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
+import ExportButton from '../components/ExportButton.jsx';
+import { exportLogSheet } from '../lib/logsheet.js';
 import { parseTs } from '../lib/overview.js';
 
 // "2024/12/9 04:0:23" → "9 Dec 2024"; the raw stamp stays in the tooltip.
@@ -14,7 +16,7 @@ function fmtCommentDate(raw) {
   return t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : raw || '—';
 }
 
-export default function Comments({ detailId, setDetailId, initialFilter }) {
+export default function Comments({ detailId, setDetailId, initialFilter, goSettings }) {
   const { status, records, notify } = useStore();
   const { settings } = useSettings();
   const loading = status === 'loading';
@@ -53,6 +55,16 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
       notify(`Exported ${filtered.length} comments.`, 'success');
     } catch (e) {
       notify(`Export failed: ${e.message}`, 'error');
+    }
+  };
+
+  const logSheet = async () => {
+    try {
+      const st = await exportLogSheet(filtered, settings.templateExport);
+      notify(`Log sheet ready: ${st.logRows} rows · ${st.images} photos.`, 'success');
+    } catch (e) {
+      if (e.code === 'no-template') notify(e.message, 'info', { label: 'Set up', onClick: () => goSettings?.('template') });
+      else notify(`Export failed: ${e.message}`, 'error');
     }
   };
 
@@ -99,9 +111,7 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
                 Reset
               </Button>
             )}
-            <Button variant="tonal" icon="download" onClick={handleExport} disabled={!filtered.length}>
-              Excel
-            </Button>
+            <ExportButton onLogSheet={logSheet} onQuick={handleExport} quickNote="The comments shown here" disabled={!filtered.length} />
           </div>
         </div>
       </Card>

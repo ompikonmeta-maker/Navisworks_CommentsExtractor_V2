@@ -31,6 +31,8 @@ type Record struct {
 	Extra          json.RawMessage `json:"extra"`
 	BeforeURL      string          `json:"beforeUrl,omitempty"`
 	AfterURL       string          `json:"afterUrl,omitempty"`
+	ChangedBy      string          `json:"changedBy,omitempty"`
+	ChangedAt      string          `json:"changedAt,omitempty"`
 }
 
 func pathID(r *http.Request, name string) (int64, bool) {
@@ -46,10 +48,12 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := a.DB.Query(`
-		SELECT id, review_id, comment_id, viewpoint, commenter, discipline, comment_raw,
-		       comment_text, resolution, status, closed_at, comment_date, author_code,
-		       camera_position, image_ref, source, extra
-		FROM records WHERE review_id=? ORDER BY id`, rid)
+		SELECT r.id, r.review_id, r.comment_id, r.viewpoint, r.commenter, r.discipline, r.comment_raw,
+		       r.comment_text, r.resolution, r.status, r.closed_at, r.comment_date, r.author_code,
+		       r.camera_position, r.image_ref, r.source, r.extra,
+		       COALESCE(NULLIF(u.display_name, ''), u.username, ''), r.updated_at
+		FROM records r LEFT JOIN users u ON u.id = r.updated_by
+		WHERE r.review_id=? ORDER BY r.id`, rid)
 	if err != nil {
 		writeErr(w, 500, "query records")
 		return
@@ -59,14 +63,21 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var rec Record
 		var extra string
-		var closed, cdate sql.NullString
+		var closed, cdate, changedAt sql.NullString
 		if err := rows.Scan(&rec.ID, &rec.ReviewID, &rec.CommentID, &rec.Viewpoint, &rec.Commenter,
 			&rec.Discipline, &rec.CommentRaw, &rec.CommentText, &rec.Resolution, &rec.Status,
-			&closed, &cdate, &rec.AuthorCode, &rec.CameraPosition, &rec.ImageRef, &rec.Source, &extra); err != nil {
+			&closed, &cdate, &rec.AuthorCode, &rec.CameraPosition, &rec.ImageRef, &rec.Source, &extra,
+			&rec.ChangedBy, &changedAt); err != nil {
 			writeErr(w, 500, "scan record")
 			return
 		}
 		rec.ClosedAt, rec.CommentDate = closed.String, cdate.String
+		// Imported rows carry no edit stamp; only real edits report who/when.
+		if changedAt.String != "" {
+			rec.ChangedAt = changedAt.String
+		} else {
+			rec.ChangedBy = ""
+		}
 		if extra == "" {
 			extra = "{}"
 		}
@@ -136,8 +147,8 @@ func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 	stmt, err := tx.Prepare(`
 		INSERT INTO records(review_id, comment_id, viewpoint, commenter, discipline, comment_raw,
 			comment_text, resolution, status, closed_at, comment_date, author_code, camera_position,
-			image_ref, source, extra, updated_by)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+			image_ref, source, extra, updated_by, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'')`)
 	if err != nil {
 		writeErr(w, 500, "prepare")
 		return
@@ -254,6 +265,9 @@ func buildPatch(patch map[string]json.RawMessage, userID int64) (string, []any) 
 	allowed := map[string]string{
 		"commenter": "commenter", "discipline": "discipline", "resolution": "resolution",
 		"status": "status", "closed_at": "closedAt", "comment_text": "commentText", "extra": "extra",
+		// refreshed from a newer Navisworks report when a review is re-imported
+		"comment_raw": "commentRaw", "viewpoint": "viewpoint", "comment_date": "commentDate",
+		"author_code": "authorCode", "camera_position": "cameraPosition", "image_ref": "imageRef",
 	}
 	set, args := "", []any{}
 	for col, key := range allowed {
@@ -278,6 +292,37 @@ func buildPatch(patch map[string]json.RawMessage, userID int64) (string, []any) 
 	}
 	set += ", updated_by=?, updated_at=?"
 	return set, append(args, userID, time.Now().UTC().Format(time.RFC3339))
+}
+
+// bulkDeleteRecords removes many records of a review (and their photos) in
+// one go — used to undo an import. Owners/editors only.
+func (a *API) bulkDeleteRecords(w http.ResponseWriter, r *http.Request) {
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	if !canWriteRole(auth.FromContext(r.Context())) {
+		writeErr(w, http.StatusForbidden, "cannot delete records")
+		return
+	}
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad body")
+		return
+	}
+	n := 0
+	for _, id := range body.IDs {
+		a.unlinkFilesWhere(`r.id=? AND r.review_id=?`, id, rid)
+		if res, err := a.DB.Exec(`DELETE FROM records WHERE id=? AND review_id=?`, id, rid); err == nil {
+			if c, _ := res.RowsAffected(); c > 0 {
+				n++
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
 }
 
 // deleteRecord removes a record and its image files (owners/editors only).

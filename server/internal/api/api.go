@@ -15,6 +15,9 @@ type API struct {
 	DB       *sql.DB
 	Version  string
 	FilesDir string // where uploaded images/templates live on disk
+	// ServerURLs lists the addresses colleagues can open (office network);
+	// set by main, shown to admins when inviting the team.
+	ServerURLs func() []string
 }
 
 // canWriteRole is the small-team access rule: any signed-in user may READ every
@@ -52,12 +55,15 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/projects/{pid}", a.renameProject) // admin
 	mux.HandleFunc("GET /api/projects/{pid}/reviews", a.listReviews)
 	mux.HandleFunc("POST /api/projects/{pid}/reviews", a.createReview) // admin
-	mux.HandleFunc("PATCH /api/reviews/{rid}", a.renameReview)         // admin
-	mux.HandleFunc("GET /api/users", a.listUsers)                      // admin
-	mux.HandleFunc("POST /api/users", a.createUser)                    // admin
-	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)              // admin
-	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)             // admin
-	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin)       // admin
+	mux.HandleFunc("PATCH /api/reviews/{rid}", a.renameReview)
+	mux.HandleFunc("DELETE /api/reviews/{rid}", a.deleteReview)   // admin
+	mux.HandleFunc("DELETE /api/projects/{pid}", a.deleteProject) // admin, empty projects only
+	mux.HandleFunc("GET /api/server-info", a.serverInfo)          // admin         // admin
+	mux.HandleFunc("GET /api/users", a.listUsers)                 // admin
+	mux.HandleFunc("POST /api/users", a.createUser)               // admin
+	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)         // admin
+	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)        // admin
+	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin)  // admin
 	// records + images
 	mux.HandleFunc("GET /api/reviews/{rid}/records", a.listRecords)
 	mux.HandleFunc("POST /api/reviews/{rid}/records", a.importRecords)
@@ -65,6 +71,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/records/{id}", a.patchRecord)
 	mux.HandleFunc("DELETE /api/records/{id}", a.deleteRecord)
 	mux.HandleFunc("POST /api/records/{id}/images", a.uploadImage)
+	mux.HandleFunc("DELETE /api/records/{id}/images", a.deleteImage)
+	mux.HandleFunc("POST /api/reviews/{rid}/records/delete", a.bulkDeleteRecords)
 	mux.HandleFunc("GET /api/files/{key}", a.getFile)
 	// central configuration (settings, detection, statuses, template mapping, custom fields)
 	mux.HandleFunc("GET /api/config", a.getGlobalConfig)
@@ -92,21 +100,28 @@ func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "admin only")
 		return
 	}
-	rows, err := a.DB.Query(`SELECT id, username, display_name, role, active FROM users ORDER BY username`)
+	rows, err := a.DB.Query(`SELECT id, username, display_name, role, active, pin_hash != '' FROM users ORDER BY username`)
 	if err != nil {
 		writeErr(w, 500, "query users")
 		return
 	}
 	defer rows.Close()
-	out := []auth.User{}
+	// signedIn: the account has set its PIN, i.e. the person has signed in at
+	// least once (shown when inviting the team).
+	type listed struct {
+		auth.User
+		SignedIn bool `json:"signedIn"`
+	}
+	out := []listed{}
 	for rows.Next() {
-		var u auth.User
-		var active int
-		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &active); err != nil {
+		var u listed
+		var active, signed int
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &active, &signed); err != nil {
 			writeErr(w, 500, "scan user")
 			return
 		}
 		u.Active = active == 1
+		u.SignedIn = signed == 1
 		out = append(out, u)
 	}
 	writeJSON(w, http.StatusOK, out)

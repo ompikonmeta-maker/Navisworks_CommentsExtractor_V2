@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../lib/server.js';
-import { Icon, Card, Button } from './ui.jsx';
+import { api, undoImportRemote } from '../lib/server.js';
+import { Icon, Card, Button, Dialog } from './ui.jsx';
 
 // After sign-in: choose Project › Review. Everyone signed in sees every project;
 // only admins create or rename projects and reviews.
@@ -58,6 +58,34 @@ export default function ProjectPicker({ user, initialProject = null, onPick, onS
     }
   };
 
+  // Admin actions from the row menu: undo the last import, delete.
+  const [confirm, setConfirm] = useState(null); // { kind: 'delete'|'undo', row, undo? }
+  const [typed, setTyped] = useState('');
+  const [working, setWorking] = useState(false);
+  const askUndo = async (row) => {
+    try {
+      const cfg = await api.getReviewConfig(row.id);
+      if (!cfg.lastImport) { setErr(`Nothing to undo in “${row.name}”.`); return; }
+      setConfirm({ kind: 'undo', row, undo: cfg.lastImport });
+    } catch { setErr('Could not read the last import.'); }
+  };
+  const askDelete = (row) => { setTyped(''); setConfirm({ kind: 'delete', row }); };
+  const runConfirm = async () => {
+    const { kind, row, undo } = confirm;
+    setWorking(true);
+    try {
+      if (kind === 'undo') await undoImportRemote(row.id, undo);
+      else if (project) await api.deleteReview(row.id);
+      else await api.deleteProject(row.id);
+      setConfirm(null);
+      await load(project);
+    } catch {
+      setErr(kind === 'undo' ? 'Could not undo the import.' : `Could not delete the ${project ? 'review' : 'project'}.`);
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const noun = project ? 'review' : 'project';
   const meta = (row) =>
     project
@@ -110,6 +138,9 @@ export default function ProjectPicker({ user, initialProject = null, onPick, onS
                 canEdit={isAdmin}
                 onOpen={() => open(row)}
                 onRename={(n) => rename(row, n)}
+                onUndo={project ? () => askUndo(row) : null}
+                onDelete={() => askDelete(row)}
+                deleteBlocked={!project && row.reviews > 0}
               />
             ))}
           </ul>
@@ -117,16 +148,63 @@ export default function ProjectPicker({ user, initialProject = null, onPick, onS
 
         {isAdmin && <NewItem key={project?.id ?? 'root'} noun={noun} onCreate={create} />}
         {err && <p className="mt-3 text-xs text-error">{err}</p>}
+        <ConfirmDialog confirm={confirm} noun={noun} typed={typed} setTyped={setTyped} working={working}
+          onCancel={() => setConfirm(null)} onConfirm={runConfirm} />
       </Card>
     </div>
   );
 }
 
-function Row({ row, icon, meta, canEdit, onOpen, onRename }) {
+function ConfirmDialog({ confirm, noun, typed, setTyped, working, onCancel, onConfirm }) {
+  const row = confirm?.row;
+  const isUndo = confirm?.kind === 'undo';
+  const u = confirm?.undo;
+  const needsName = !isUndo && noun === 'review' && row?.comments > 0;
+  const ok = !needsName || typed.trim() === row?.name;
+  return (
+    <Dialog open={!!confirm} onClose={working ? undefined : onCancel} labelledBy="cf-title" width={460}>
+      {row && (
+        <>
+          <h2 id="cf-title" className="text-lg font-semibold">{isUndo ? `Undo the last import into “${row.name}”?` : `Delete “${row.name}”?`}</h2>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            {isUndo
+              ? `Removes the ${u.added?.length || 0} comments it added and puts back what it changed on ${u.restore?.length || 0}. Work done on the added comments is lost.`
+              : noun === 'review'
+                ? `Its ${row.comments} comment${row.comments === 1 ? '' : 's'} and their photos are removed for everyone. This can’t be undone.`
+                : 'The empty project is removed for everyone.'}
+          </p>
+          {needsName && (
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Type the review name to confirm" placeholder="Type the review name to confirm" data-autofocus
+              className="mt-4 block w-full rounded-control border border-outline-variant bg-surface-low px-3 py-2.5 text-sm hover:border-outline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="text" onClick={onCancel} disabled={working}>Cancel</Button>
+            <Button variant={isUndo ? 'filled' : 'danger'} onClick={onConfirm} disabled={working || !ok}>
+              {working ? 'Working…' : isUndo ? 'Undo import' : `Delete ${noun}`}
+            </Button>
+          </div>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
+function Row({ row, icon, meta, canEdit, onOpen, onRename, onUndo, onDelete, deleteBlocked }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(row.name);
   const inputRef = useRef(null);
   useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!menu) return undefined;
+    const off = (e) => { if (!menuRef.current?.contains(e.target)) setMenu(false); };
+    const esc = (e) => e.key === 'Escape' && setMenu(false);
+    document.addEventListener('mousedown', off);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+  }, [menu]);
+  const pick = (fn) => () => { setMenu(false); fn(); };
 
   const commit = () => {
     const n = val.trim();
@@ -167,14 +245,26 @@ function Row({ row, icon, meta, canEdit, onOpen, onRename }) {
         <Icon name="chevron_right" className="text-[20px] text-on-surface-variant" />
       </button>
       {canEdit && (
-        <button
-          onClick={() => setEditing(true)}
-          aria-label={`Rename ${row.name}`}
-          title="Rename"
-          className="absolute right-11 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-on-surface-variant opacity-0 hover:bg-surface-high focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100"
-        >
-          <Icon name="edit" className="text-[18px]" />
-        </button>
+        <div ref={menuRef} className="absolute right-11 top-1/2 -translate-y-1/2">
+          <button
+            onClick={() => setMenu((m) => !m)}
+            aria-label={`More for ${row.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            title="More"
+            className={`t-press flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-high focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 ${menu ? 'bg-surface-high opacity-100' : 'opacity-0'}`}
+          >
+            <Icon name="more_horiz" className="text-[20px]" />
+          </button>
+          <div role="menu" className={`t-pop absolute right-0 top-10 z-20 w-56 rounded-[16px] bg-surface p-1.5 ${menu ? 'show' : ''}`}>
+            <button role="menuitem" className="t-menuitem" onClick={pick(() => setEditing(true))}><Icon name="edit" className="text-[18px]" />Rename</button>
+            {onUndo && <button role="menuitem" className="t-menuitem" onClick={pick(onUndo)}><Icon name="undo" className="text-[18px]" />Undo last import</button>}
+            <button role="menuitem" className="t-menuitem disabled:opacity-50" style={{ color: 'var(--md-sys-color-error)' }} disabled={deleteBlocked} onClick={pick(onDelete)}
+              title={deleteBlocked ? 'Delete its reviews first' : undefined}>
+              <Icon name="delete" className="text-[18px]" />{deleteBlocked ? 'Delete (empty it first)' : 'Delete…'}
+            </button>
+          </div>
+        </div>
       )}
     </li>
   );

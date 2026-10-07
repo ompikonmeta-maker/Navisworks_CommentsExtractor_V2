@@ -47,6 +47,12 @@ export const api = {
   bulkPatchRecords: (rid, updates) => req('PATCH', `/api/reviews/${rid}/records`, { updates }),
   patchRecord: (id, patch) => req('PATCH', `/api/records/${id}`, patch),
   uploadImage: (id, kind, blob) => req('POST', `/api/records/${id}/images?kind=${kind}`, blob),
+  deleteImage: (id, kind) => req('DELETE', `/api/records/${id}/images?kind=${kind}`),
+  deleteRecords: (rid, ids) => req('POST', `/api/reviews/${rid}/records/delete`, { ids }),
+  deleteReview: (rid) => req('DELETE', `/api/reviews/${rid}`),
+  deleteProject: (pid) => req('DELETE', `/api/projects/${pid}`),
+  serverInfo: () => req('GET', '/api/server-info'),
+  hasTemplate: (pid) => fetch(`/api/projects/${pid}/template`, { method: 'HEAD', credentials: 'same-origin' }).then((r) => r.ok).catch(() => false),
   listUsers: () => req('GET', '/api/users'),
   createUser: (username, displayName, role) => req('POST', '/api/users', { username, displayName, role }),
   updateUser: (id, patch) => req('PATCH', `/api/users/${id}`, patch),
@@ -108,7 +114,7 @@ export async function loadReviewRecords(rid) {
   return recs.map(mapServerRecord);
 }
 
-function dataURLtoBlob(dataUrl) {
+export function dataURLtoBlob(dataUrl) {
   const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl || '');
   if (!m) return null;
   const bin = atob(m[2]);
@@ -154,8 +160,9 @@ export async function syncRecord(id, patch) {
     if (typeof val === 'string' && val.startsWith('data:')) {
       const blob = dataURLtoBlob(val);
       if (blob) await api.uploadImage(id, kind, blob);
+    } else if (!val) {
+      await api.deleteImage(id, kind); // photo removed in the drawer
     }
-    // Deleting an image from the UI is not synced yet (no delete endpoint).
   }
   if (Object.keys(fields).length) await api.patchRecord(id, fields);
 }
@@ -217,3 +224,53 @@ export async function inlineImages(records) {
 
 // True for a viewer on the server: edit controls are disabled or hidden.
 export const isReadOnly = () => remoteState.active && !canWrite();
+
+// ---------- import (merge) + undo on the server ----------
+// Applies a planMerge() result: refreshes matched comments, optionally closes
+// the ones missing from the new report, adds the new ones (with their before
+// photos), and stores what it did as the review's "lastImport" so it can be
+// undone later — from the toast or the review's menu.
+export async function applyMergeRemote(rid, plan, { missingAction, doneLabel }) {
+  const updates = [];
+  const restore = [];
+  const newBefore = [];
+  for (const { old, patch } of plan.matched) {
+    const { imageData, ...fields } = patch;
+    if (Object.keys(fields).length) {
+      updates.push({ id: old.ID, patch: fields });
+      restore.push({ id: old.ID, patch: Object.fromEntries(Object.keys(fields).map((f) => [f, old[f] ?? ''])) });
+    }
+    if (imageData) newBefore.push([old.ID, imageData]);
+  }
+  if (missingAction === 'close') {
+    const now = new Date().toISOString();
+    for (const r of plan.missing) {
+      if (r.status === doneLabel) continue;
+      updates.push({ id: r.ID, patch: { status: doneLabel, closedAt: now } });
+      restore.push({ id: r.ID, patch: { status: r.status, closedAt: r.closedAt || '' } });
+    }
+  }
+  if (updates.length) await api.bulkPatchRecords(rid, updates);
+  for (const [id, data] of newBefore) {
+    const blob = dataURLtoBlob(data);
+    if (blob) { try { await api.uploadImage(id, 'before', blob); } catch { /* keep going */ } }
+  }
+  const existingIds = new Set([...plan.matched.map((m) => m.old.ID), ...plan.missing.map((r) => r.ID)]);
+  const records = plan.added.length ? await importParsedRecords(rid, plan.added) : (await api.getRecords(rid)).map(mapServerRecord);
+  const undo = {
+    at: new Date().toISOString(),
+    added: records.filter((r) => !existingIds.has(r.ID)).map((r) => r.ID),
+    restore,
+    removeBefore: newBefore.map(([id]) => id),
+  };
+  try { await api.putReviewConfig(rid, 'lastImport', undo); } catch { /* undo then only from the toast */ }
+  return { records, undo };
+}
+
+export async function undoImportRemote(rid, undo) {
+  if (undo?.added?.length) await api.deleteRecords(rid, undo.added);
+  if (undo?.restore?.length) await api.bulkPatchRecords(rid, undo.restore);
+  for (const id of undo?.removeBefore || []) { try { await api.deleteImage(id, 'before'); } catch { /* already gone */ } }
+  try { await api.putReviewConfig(rid, 'lastImport', null); } catch { /* ignore */ }
+  return (await api.getRecords(rid)).map(mapServerRecord);
+}
