@@ -387,7 +387,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
               title={saving === 'saving' ? 'Saving…' : 'Saved'}
             />
             {remote ? (
-              <span>Shared review · saved on the server</span>
+              <span>{canWrite(remote.user) ? 'Shared review · saved on the server' : 'Shared review · view only'}</span>
             ) : (
               <>
                 <span>

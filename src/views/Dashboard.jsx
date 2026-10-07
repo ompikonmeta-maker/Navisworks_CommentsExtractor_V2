@@ -5,7 +5,7 @@ import { useSettings } from '../store/settings.jsx';
 import { statusLabels } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
-import { remoteState, importParsedRecords } from '../lib/server.js';
+import { remoteState, importParsedRecords, isReadOnly } from '../lib/server.js';
 import { computeOverview, parseDay, parseTs } from '../lib/overview.js';
 import { Icon, Button, Card, InfoTip } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
@@ -40,6 +40,7 @@ function Overview({ openDetail, goComments }) {
     try { await snapshotNode(ref.current, name); } catch (e) { notify(`Snapshot failed: ${e.message}`, 'error'); }
   };
 
+  const readOnly = isReadOnly();
   const handleImport = async (fileList) => {
     const files = Array.from(fileList || []);
     if (!files.length) return;
@@ -103,9 +104,9 @@ function Overview({ openDetail, goComments }) {
     <div ref={overviewRef} className="canvas-w space-y-4">
       {/* Toolbar: target + actions (one strong action, the rest quiet) */}
       <div className="flex flex-wrap items-center justify-between gap-2" data-nosnap>
-        <TargetChip value={settings.reviewTarget} onChange={(v) => update({ reviewTarget: v })} />
+        <TargetChip value={settings.reviewTarget} onChange={(v) => update({ reviewTarget: v })} readOnly={readOnly} />
         <div className="flex flex-wrap items-center gap-1">
-          <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import</Button>
+          {!readOnly && <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import</Button>}
           <input ref={fileInputRef} type="file" multiple accept=".html,.htm,.jpg,.jpeg,.png,.zip" className="hidden" onChange={(e) => handleImport(e.target.files)} />
           <Button variant="text" icon="image" onClick={() => snap(overviewRef, 'overview')} disabled={!records.length} title="Save the whole Overview as an image">Snapshot</Button>
           <Button variant="text" icon="download" onClick={handleExport} disabled={!records.length} title="Excel with every comment plus this Overview">Excel</Button>
@@ -118,7 +119,7 @@ function Overview({ openDetail, goComments }) {
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
           <Icon name="upload_file" className="text-[32px] text-primary" />
           <div className="text-base font-semibold">No comments yet</div>
-          <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import a Navisworks report</Button>
+          {!readOnly && <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import a Navisworks report</Button>}
         </Card>
       ) : (
         <>
@@ -238,7 +239,7 @@ function NoPace() {
   );
 }
 
-function TargetChip({ value, onChange }) {
+function TargetChip({ value, onChange, readOnly }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value || '');
   const ref = useRef(null);
@@ -250,6 +251,14 @@ function TargetChip({ value, onChange }) {
     return () => document.removeEventListener('mousedown', off);
   }, [open]);
   const t = parseDay(value);
+  if (readOnly) {
+    if (!t) return null;
+    return (
+      <span className="inline-flex h-10 items-center gap-2 rounded-control bg-secondary-container px-4 text-sm font-semibold text-on-secondary-container" title="Review close-out target">
+        <Icon name="flag" className="text-[19px]" />Target {fmtDayY(t)}
+      </span>
+    );
+  }
   return (
     <div ref={ref} className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)}

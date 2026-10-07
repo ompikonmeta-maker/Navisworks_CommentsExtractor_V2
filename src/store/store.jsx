@@ -3,7 +3,7 @@
 // no server call and no persistence — reloading returns to the sample data
 // (per spec "Batasan sistem").
 // =====================================================================
-import { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
+import { createContext, useContext, useReducer, useCallback, useMemo, useRef, useEffect } from 'react';
 import { detectCommenter } from '../lib/parser.js';
 import { extract } from '../lib/detect.js';
 import { useSettings } from './settings.jsx';
@@ -11,6 +11,15 @@ import { doneLabel as doneLabelOf, resolveStatus } from '../lib/status.js';
 import { remoteState, syncRecord } from '../lib/server.js';
 
 const StoreContext = createContext(null);
+
+// Fields typed into a text box — their server saves are batched.
+const TEXT_KEYS = new Set(['resolution', 'commentText', 'extra']);
+
+function saveErrorMessage(e) {
+  if (e?.code === 403) return 'You have view-only access, so this change wasn’t saved.';
+  if (e?.code === 401) return 'You were signed out. Sign in again to save changes.';
+  return 'Couldn’t reach the Tabelin server, so this change wasn’t saved.';
+}
 
 // Backfill fields for records loaded from an older session: the raw comment
 // source (`commentRaw`, kept so detection can re-run against the un-cleaned
@@ -135,24 +144,51 @@ export function StoreProvider({ children }) {
     (records, source, stats) => dispatch({ type: 'SET_DATA', records, source, stats, statuses: settings.statuses }),
     [settings.statuses]
   );
+  // ---- server sync (remote mode) ----
+  // Edits are saved per record. Typing in a text field is batched into one save
+  // after a short pause; any other change saves at once. If a save fails, the
+  // record goes back to what the server has and the user is told why.
+  const recordsRef = useRef(state.records);
+  recordsRef.current = state.records;
+  const pending = useRef(new Map()); // id → { fields, before, timer }
+
+  const flush = useCallback((id) => {
+    const p = pending.current.get(id);
+    if (!p) return;
+    clearTimeout(p.timer);
+    pending.current.delete(id);
+    syncRecord(id, p.fields).catch((e) => {
+      dispatch({ type: 'UPDATE_RECORD', id, patch: p.before });
+      dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
+    });
+  }, []);
+
+  useEffect(() => {
+    const flushAll = () => [...pending.current.keys()].forEach(flush);
+    window.addEventListener('pagehide', flushAll);
+    return () => window.removeEventListener('pagehide', flushAll);
+  }, [flush]);
+
   const updateRecord = useCallback(
     (id, patch) => {
       dispatch({ type: 'UPDATE_RECORD', id, patch, doneLabel });
-      // In remote mode, persist the same edit to the server. Mirror the
-      // reducer's closedAt auto-stamp so the server stays consistent when a
-      // status button (not the manual editor) closes/reopens a record.
-      if (remoteState.active) {
-        let sync = patch;
-        if ('status' in patch && !('closedAt' in patch)) {
-          sync = { ...patch, closedAt: patch.status === doneLabel ? new Date().toISOString() : '' };
-        }
-        syncRecord(id, sync).catch((e) => dispatch({
-          type: 'TOAST',
-          toast: { message: `Couldn’t save to server: ${e.message}`, kind: 'error', ts: Date.now() },
-        }));
+      if (!remoteState.active) return;
+      // Mirror the reducer's closedAt auto-stamp so the server stays consistent
+      // when a status button (not the manual editor) closes/reopens a record.
+      let sync = patch;
+      if ('status' in patch && !('closedAt' in patch)) {
+        sync = { ...patch, closedAt: patch.status === doneLabel ? new Date().toISOString() : '' };
       }
+      const rec = recordsRef.current.find((r) => r.ID === id) || {};
+      const p = pending.current.get(id) || { fields: {}, before: {}, timer: null };
+      for (const k of Object.keys(sync)) if (!(k in p.before)) p.before[k] = rec[k] ?? '';
+      Object.assign(p.fields, sync);
+      pending.current.set(id, p);
+      clearTimeout(p.timer);
+      if (Object.keys(sync).every((k) => TEXT_KEYS.has(k))) p.timer = setTimeout(() => flush(id), 700);
+      else flush(id);
     },
-    [doneLabel]
+    [doneLabel, flush]
   );
   const applyDetect = useCallback(
     (field, config, allowed, mode) => dispatch({ type: 'APPLY_DETECT', field, config, allowed, mode }),

@@ -6,6 +6,7 @@ import { attrFields, attrType } from '../lib/templateExcel.js';
 import { chipStyle, doneLabel as doneLabelOf } from '../lib/status.js';
 import { Icon, Select, StatusBadge, DisciplineBadge } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
+import { isReadOnly } from '../lib/server.js';
 import Lightbox from './Lightbox.jsx';
 
 // ISO ⇄ <input type="datetime-local"> (which works in the viewer's local time).
@@ -122,6 +123,8 @@ export default function DetailPanel({ record, onClose }) {
   // exit slide, when `record` has already gone null.
   const rec = record || shown;
   const set = (patch) => rec && updateRecord(rec.ID, patch);
+  // Viewers on the server see everything but can't change it.
+  const readOnly = isReadOnly();
   const beforeInputRef = useRef(null);
   const afterInputRef = useRef(null);
   const [crop, setCrop] = useState(null); // { src, target: 'before'|'after' }
@@ -147,6 +150,7 @@ export default function DetailPanel({ record, onClose }) {
   // Any image source (file picker, drop, or paste) opens the crop dialog for
   // the given slot; the crop result is written on "Use photo".
   const pickImage = async (fileList, target) => {
+    if (readOnly) return;
     const file = Array.from(fileList || []).find((f) => f.type.startsWith('image/'));
     if (!file || !rec) return;
     try {
@@ -269,6 +273,11 @@ export default function DetailPanel({ record, onClose }) {
                       </div>
                     ) : slot.src ? (
                       <Thumb src={slot.src} alt={slot.alt} onEnlarge={enlarge} />
+                    ) : readOnly ? (
+                      <div className="ba-thumb flex flex-col items-center justify-center gap-1 text-on-surface-variant">
+                        <Icon name="image_not_supported" className="text-[24px]" />
+                        <span className="text-xs">No photo</span>
+                      </div>
                     ) : (
                       <button
                         className={`ba-thumb flex flex-col items-center justify-center gap-1 text-on-surface-variant ${dropOver === slot.target ? 'drop-over' : ''}`}
@@ -279,7 +288,7 @@ export default function DetailPanel({ record, onClose }) {
                         <span className="text-[10px]">or drop / paste</span>
                       </button>
                     )}
-                    {slot.src && undo?.target !== slot.target && (
+                    {slot.src && !readOnly && undo?.target !== slot.target && (
                       <div className="flex items-center gap-4">
                         <MiniAction onClick={() => slot.inputRef.current?.click()}>
                           <Icon name="restart_alt" className="text-[15px]" /> Replace
@@ -300,7 +309,7 @@ export default function DetailPanel({ record, onClose }) {
                 ))}
               </div>
 
-              {!rec.afterImageData && (
+              {!rec.afterImageData && !readOnly && (
                 <p className="text-xs text-on-surface-variant">An after photo is cropped to a uniform size and marks this comment Closed.</p>
               )}
               {rec.cameraPosition && (
@@ -318,6 +327,7 @@ export default function DetailPanel({ record, onClose }) {
               </div>
             )}
 
+            <fieldset disabled={readOnly} className="contents">
             <div className="grid grid-cols-2 gap-3">
               <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
                 Discipline
@@ -429,6 +439,7 @@ export default function DetailPanel({ record, onClose }) {
                 </div>
               </details>
             )}
+            </fieldset>
           </div>
         </>
       )}

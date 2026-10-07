@@ -664,6 +664,23 @@
 .dd-trigger:hover {
   background: var(--md-sys-color-surface-container-high);
 }
+/* Read-only (viewer) areas: controls show their value without inviting a click. */
+fieldset:disabled .dd-trigger,
+fieldset:disabled .dd-trigger:hover {
+  cursor: default;
+  background: var(--md-sys-color-surface-container);
+}
+fieldset:disabled .dd-chev {
+  visibility: hidden;
+}
+fieldset:disabled button,
+fieldset:disabled input,
+fieldset:disabled textarea {
+  cursor: default;
+}
+fieldset:disabled textarea {
+  resize: none;
+}
 .dd-trigger:focus-visible {
   outline: 2px solid var(--md-sys-color-primary);
   outline-offset: 2px;

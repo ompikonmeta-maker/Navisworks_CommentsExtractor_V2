@@ -10,6 +10,7 @@ import StatusEditor from '../components/StatusEditor.jsx';
 import UsersEditor from '../components/UsersEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
+import { remoteState, isReadOnly } from '../lib/server.js';
 
 const APP_VERSION = '1.1.0';
 
@@ -53,6 +54,11 @@ export default function Settings({ section = 'template', setSection = () => {}, 
     return [...names].sort().map((name) => ({ name, custom: !builtin.has(name), count: records.filter((r) => r.discipline === name).length }));
   }, [records, settings.customDisciplines]);
 
+  // Viewers on the server can look but not change shared settings; the theme
+  // (this browser only) stays theirs.
+  const readOnly = isReadOnly();
+  const locked = readOnly && (section === 'labels' || section === 'detection');
+
   const addNewDisc = () => { const c = newDisc.trim().toUpperCase(); if (c) addDiscipline(c); setNewDisc(''); };
   const addNewComm = () => { const c = newComm.trim(); if (c) addCommenter(c); setNewComm(''); };
 
@@ -79,7 +85,14 @@ export default function Settings({ section = 'template', setSection = () => {}, 
         })}
       </nav>
 
+      {locked && (
+        <p className="mb-3 flex items-center gap-2 text-xs text-on-surface-variant">
+          <Icon name="info" className="text-[16px]" /> View only. An admin or editor can change these settings.
+        </p>
+      )}
+
       {/* Panel — card reveal re-plays on every section change */}
+      <fieldset disabled={locked} className="contents">
       <Reveal className="space-y-6" deps={[section]}>
         {section === 'users' && (
           <Card className="p-6">
@@ -196,9 +209,11 @@ export default function Settings({ section = 'template', setSection = () => {}, 
             <Card className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm">
                 <div className="font-semibold">Tabelin v{APP_VERSION}</div>
-                <p className="mt-0.5 text-xs text-on-surface-variant">Runs fully in your browser · settings saved locally · nothing uploaded.</p>
+                <p className="mt-0.5 text-xs text-on-surface-variant">
+                  {remoteState.active ? 'Shared on your office Tabelin server · settings saved per project.' : 'Runs fully in your browser · settings saved locally · nothing uploaded.'}
+                </p>
               </div>
-              <Button variant="outlined" icon="restart_alt" onClick={() => { if (window.confirm('Restore all settings to defaults?')) resetSettings(); }}>Restore defaults</Button>
+              {!readOnly && <Button variant="outlined" icon="restart_alt" onClick={() => { if (window.confirm('Restore all settings to defaults?')) resetSettings(); }}>Restore defaults</Button>}
             </Card>
 
             <Card className="p-6">
@@ -255,6 +270,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
           </div>
         )}
       </Reveal>
+      </fieldset>
     </div>
   );
 }

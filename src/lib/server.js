@@ -6,7 +6,8 @@
 // V1 behaviour is untouched.
 
 async function req(method, path, body) {
-  const init = { method, headers: {}, credentials: 'same-origin' };
+  // keepalive lets a small save finish even if the tab is closing.
+  const init = { method, headers: {}, credentials: 'same-origin', keepalive: method === 'PATCH' };
   if (body instanceof Blob) {
     init.body = body;
     init.headers['Content-Type'] = body.type || 'application/octet-stream';
@@ -212,3 +213,6 @@ export async function inlineImages(records) {
   await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, worker));
   return out;
 }
+
+// True for a viewer on the server: edit controls are disabled or hidden.
+export const isReadOnly = () => remoteState.active && !canWrite();

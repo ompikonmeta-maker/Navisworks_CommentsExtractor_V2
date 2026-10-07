@@ -13,7 +13,7 @@ import {
   CUSTOM_PREFIX,
 } from '../lib/templateExcel.js';
 import { saveTemplate, loadTemplate, clearTemplate } from '../lib/persist.js';
-import { inlineImages } from '../lib/server.js';
+import { inlineImages, isReadOnly } from '../lib/server.js';
 
 const BY_OPTS = [
   { value: 'header', label: 'By header' },
@@ -254,9 +254,16 @@ export default function TemplateExportPanel() {
     </button>
   );
 
+  const readOnly = isReadOnly();
   return (
     <div className="space-y-5 pb-4">
       {stepper}
+      {readOnly && (
+        <p className="flex items-center gap-2 text-xs text-on-surface-variant">
+          <Icon name="info" className="text-[16px]" /> View only. You can export; an admin or editor sets up the template.
+        </p>
+      )}
+      <fieldset disabled={readOnly} className="contents">
 
       {/* ---------- STEP 1 · TEMPLATE & SHEETS ---------- */}
       {step === 0 && (
@@ -505,6 +512,8 @@ export default function TemplateExportPanel() {
           </div>
         </div>
       )}
+
+      </fieldset>
 
       {/* Sticky export action bar — solid so it reads as a pinned bar, not a
           translucent overlay, and stays reachable while configuring. */}
