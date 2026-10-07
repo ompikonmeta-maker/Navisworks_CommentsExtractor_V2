@@ -9,6 +9,9 @@
 // after-photo) is kept. A before-photo is filled in only when it was missing.
 // =====================================================================
 
+// `source` of a comment typed in by hand (Viewpoints › Add comment).
+export const MANUAL = 'manual';
+
 export const SOURCE_FIELDS = ['commentRaw', 'viewpoint', 'commentDate', 'authorCode', 'cameraPosition', 'imageRef'];
 
 export const recordKey = (r) =>
@@ -43,7 +46,8 @@ export function planMerge(existing, incoming) {
       added.push(inc);
     }
   }
-  const missing = existing.filter((r) => !seen.has(recordKey(r)));
+  // Comments added by hand in Tabelin are never in a report — not "missing".
+  const missing = existing.filter((r) => r.source !== MANUAL && !seen.has(recordKey(r)));
   const changed = matched.filter((m) => Object.keys(m.patch).some((f) => f !== 'imageData')).length;
   return { matched, added, missing, changed };
 }

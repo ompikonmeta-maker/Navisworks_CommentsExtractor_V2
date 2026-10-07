@@ -211,12 +211,18 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
     clearUndo();
   };
 
-  // Paste an image anywhere in the drawer → treat it as an after photo.
+  // Paste an image anywhere in the drawer (Ctrl+V after a snapshot). It goes
+  // to the photo slot last pointed at or focused — After by default.
+  const [pasteTo, setPasteTo] = useState('after');
+  const pasteRef = useRef('after');
+  pasteRef.current = pasteTo;
+  useEffect(() => { setPasteTo('after'); }, [record?.ID]);
   useEffect(() => {
     if (!open) return undefined;
     const onPaste = (e) => {
+      if (document.querySelector('.t-dlg, .crop-card')) return; // a dialog has it
       const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
-      if (item) pickImage([item.getAsFile()], 'after');
+      if (item) { e.preventDefault(); pickImage([item.getAsFile()], pasteRef.current); }
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -297,8 +303,12 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                   { target: 'before', caption: 'Before', src: rec.imageData, alt: `Before — ${rec.viewpoint}`, inputRef: beforeInputRef },
                   { target: 'after', caption: 'After', src: rec.afterImageData, alt: 'After', inputRef: afterInputRef },
                 ].map((slot) => (
-                  <div key={slot.target} className="ba-cell" {...dropProps(slot.target)}>
-                    <span className="ba-cap">{slot.caption}</span>
+                  <div key={slot.target} className="ba-cell" {...dropProps(slot.target)}
+                    onMouseEnter={() => setPasteTo(slot.target)} onFocus={() => setPasteTo(slot.target)}>
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="ba-cap">{slot.caption}</span>
+                      {!readOnly && <kbd className={`ba-kbd ${pasteTo === slot.target ? 'on' : ''}`} title={`Ctrl+V pastes a snapshot here`}>Ctrl V</kbd>}
+                    </span>
                     {undo?.target === slot.target ? (
                       <div className="ba-thumb ba-undo">
                         <span className="ba-undo-msg">Photo removed</span>
@@ -321,7 +331,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                       >
                         <Icon name="cloud_upload" className="text-[26px] text-primary" />
                         <span className="text-xs font-medium">Upload</span>
-                        <span className="text-[10px]">or drop / paste</span>
+                        <span className="text-[10px]">or drop a file</span>
                       </button>
                     )}
                     {slot.src && !readOnly && undo?.target !== slot.target && (

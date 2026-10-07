@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
-import { statusLabels, doneLabel } from '../lib/status.js';
+import { statusLabels, doneLabel, openLabel } from '../lib/status.js';
 import { DISCIPLINES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
 import ExportButton from '../components/ExportButton.jsx';
+import AddCommentDialog from '../components/AddCommentDialog.jsx';
 import { isReadOnly } from '../lib/server.js';
 import { exportLogSheet } from '../lib/logsheet.js';
 import { parseTs } from '../lib/overview.js';
@@ -27,7 +28,7 @@ function FilterChip({ on, onClick, icon, label, count }) {
 }
 
 export default function Comments({ detailId, setDetailId, initialFilter, goSettings }) {
-  const { status, records, notify, removeRecords, bulkUpdate } = useStore();
+  const { status, records, notify, removeRecords, bulkUpdate, addRecord } = useStore();
   const canEdit = !isReadOnly();
   const { settings } = useSettings();
   const loading = status === 'loading';
@@ -136,6 +137,21 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
     notify(`${label} set on ${visiblePicked.length} comment${visiblePicked.length === 1 ? '' : 's'}.`, 'success');
   };
 
+  // Add a comment by hand; it then opens in the drawer (filters cleared so
+  // it is in the list).
+  const [adding, setAdding] = useState(false);
+  const addOne = async (rec) => {
+    try {
+      const r = await addRecord(rec);
+      setAdding(false);
+      resetFilters();
+      setDetailId(r.ID);
+      notify('Comment added.', 'success');
+    } catch (e) {
+      notify(`Could not add the comment: ${e.message}`, 'error');
+    }
+  };
+
   const deleteOne = async (id) => {
     const n = filtered[index + 1] || filtered[index - 1];
     setDetailId(n && n.ID !== id ? n.ID : null);
@@ -209,6 +225,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
                 Reset
               </Button>
             )}
+            {canEdit && <Button variant="text" icon="add" onClick={() => setAdding(true)} disabled={loading}>Add</Button>}
             <ExportButton onLogSheet={logSheet} onQuick={handleExport} quickNote="The comments shown here" disabled={!filtered.length} />
           </div>
         </div>
@@ -315,6 +332,9 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
           <button type="button" onClick={() => setPicked(new Set())} className="t-press rounded-full px-3 py-1.5 font-medium text-inverse-primary hover:bg-white/10">Clear</button>
         </div>
       )}
+
+      <AddCommentDialog open={adding} onClose={() => setAdding(false)} onAdd={addOne} records={records}
+        customCommenters={settings.customCommenters} openStatus={openLabel(settings.statuses)} />
 
       <DetailPanel record={active} onClose={() => setDetailId(null)} onClosedOut={onClosedOut} onDelete={deleteOne}
         nav={{ index, total: filtered.length, prev: () => go(-1), next: () => go(1), autoNext, setAutoNext }} />

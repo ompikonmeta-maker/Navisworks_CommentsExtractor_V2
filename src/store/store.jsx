@@ -8,7 +8,7 @@ import { detectCommenter } from '../lib/parser.js';
 import { extract } from '../lib/detect.js';
 import { useSettings } from './settings.jsx';
 import { doneLabel as doneLabelOf, resolveStatus } from '../lib/status.js';
-import { api, remoteState, syncRecord } from '../lib/server.js';
+import { api, remoteState, syncRecord, importParsedRecords } from '../lib/server.js';
 
 const StoreContext = createContext(null);
 
@@ -146,6 +146,8 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'ADD_RECORD':
+      return { ...state, records: [...state.records, action.record] };
     case 'REMOVE_RECORDS': {
       const ids = new Set(action.ids);
       return { ...state, records: state.records.filter((r) => !ids.has(r.ID)) };
@@ -275,6 +277,22 @@ export function StoreProvider({ children }) {
       throw e;
     });
   }, []);
+  // Add one comment typed in by hand (not from a Navisworks report). On the
+  // server it is created first so it carries the server's ID. Resolves to it.
+  const addRecord = useCallback(async (rec) => {
+    let record;
+    if (remoteState.active) {
+      const list = await importParsedRecords(remoteState.reviewId, [rec]);
+      const known = new Set(recordsRef.current.map((r) => r.ID));
+      record = list.filter((r) => !known.has(r.ID)).pop();
+      if (!record) throw new Error('The server did not return the new comment.');
+    } else {
+      const max = recordsRef.current.reduce((m, r) => Math.max(m, Number(r.ID) || 0), 0);
+      record = { ...rec, ID: max + 1 };
+    }
+    dispatch({ type: 'ADD_RECORD', record });
+    return record;
+  }, []);
   const applyDetect = useCallback(
     (field, config, allowed, mode) => bulk({ type: 'APPLY_DETECT', field, config, allowed, mode }),
     [bulk]
@@ -294,8 +312,8 @@ export function StoreProvider({ children }) {
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);
 
   const value = useMemo(
-    () => ({ ...state, setLoading, setError, setData, updateRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast }),
-    [state, setLoading, setError, setData, updateRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast]
+    () => ({ ...state, setLoading, setError, setData, updateRecord, addRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast }),
+    [state, setLoading, setError, setData, updateRecord, addRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

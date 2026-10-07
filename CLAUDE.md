@@ -217,6 +217,13 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   checkboxes open the `.t-bulk` bar (discipline / status / commenter → store `bulkUpdate`).
   The drawer has prev/next (J/K), "Next after closing" (localStorage `tabelin.autoNext`),
   delete, and "Changed by" (`changedBy`/`changedAt` from the server's `updated_by`/`updated_at`).
+- **Manual comments**: Viewpoints › Add (`components/AddCommentDialog.jsx`, writers only) →
+  store `addRecord` (server: created via the import endpoint so it gets the server ID). They
+  carry `source: 'manual'` (`merge.MANUAL`), so a re-import never lists them as missing.
+  Blank discipline/commenter follow the text (`inferDiscipline`/`detectCommenter`); a chosen
+  commenter is prefixed into `commentRaw`. A pasted/dropped snapshot becomes the before photo.
+- **Paste a snapshot (Ctrl+V)** in the drawer goes to the photo slot last hovered/focused
+  (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
 - **Overview setup checklist** (import · target · template · invite team), dismissible per
   review in localStorage `tabelin.setupDone.<reviewId|local>`. **Settings › Users** shows an
   invite card with the LAN address from `GET /api/server-info` and a copyable message.
