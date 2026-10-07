@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   username     TEXT NOT NULL UNIQUE,              -- AD account, normalized lower-case (e.g. domain\jdoe)
   display_name TEXT NOT NULL DEFAULT '',
-  role         TEXT NOT NULL DEFAULT 'viewer',    -- admin | editor | viewer
+  role         TEXT NOT NULL DEFAULT 'reviewer',  -- admin | reviewer
   active       INTEGER NOT NULL DEFAULT 1,
   pin_hash     TEXT NOT NULL DEFAULT '',          -- bcrypt of the PIN (empty = not set; claimed on first login)
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))

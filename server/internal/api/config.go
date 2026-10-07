@@ -38,7 +38,7 @@ func (a *API) getProjectConfig(w http.ResponseWriter, r *http.Request) {
 	a.writeConfigMap(w, projectScope(pid))
 }
 
-// putProjectConfig sets one config entry for a project (admins/editors only).
+// putProjectConfig sets one config entry for a project (admins only).
 func (a *API) putProjectConfig(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	pid, ok := pathID(r, "pid")
@@ -46,7 +46,7 @@ func (a *API) putProjectConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad project id")
 		return
 	}
-	if !canWriteRole(u) {
+	if !isAdminRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot write project config")
 		return
 	}
@@ -64,7 +64,7 @@ func (a *API) getReviewConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // putReviewConfig sets one config entry for a review, e.g. its target date
-// (admins/editors only).
+// (admins only).
 func (a *API) putReviewConfig(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	rid, ok := pathID(r, "rid")
@@ -72,7 +72,7 @@ func (a *API) putReviewConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
-	if !canWriteRole(u) {
+	if !isAdminRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot write review config")
 		return
 	}

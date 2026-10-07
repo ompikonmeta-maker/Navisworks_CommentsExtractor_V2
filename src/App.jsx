@@ -16,7 +16,7 @@ import {
   writeSessionToFolder,
 } from './lib/persist.js';
 import { Icon, Button } from './components/ui.jsx';
-import { loadReviewRecords, canWrite } from './lib/server.js';
+import { loadReviewRecords, canWrite, canReview } from './lib/server.js';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
@@ -391,7 +391,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
               title={saving === 'saving' ? 'Saving…' : 'Saved'}
             />
             {remote ? (
-              <span title="Shared review, saved on the Tabelin server">{saving === 'saving' ? 'Saving…' : canWrite(remote.user) ? 'Saved' : 'View only'}</span>
+              <span title="Shared review, saved on the Tabelin server">{saving === 'saving' ? 'Saving…' : canReview(remote.user) ? 'Saved' : 'View only'}</span>
             ) : (
               <>
                 <span>

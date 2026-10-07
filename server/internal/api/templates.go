@@ -18,7 +18,7 @@ const xlsxMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sh
 
 // The Excel log-sheet template is stored once per project (its column mapping
 // lives in the project config). Any signed-in user may download it; admins and
-// editors replace or remove it.
+// admins replace or remove it.
 
 func (a *API) getTemplate(w http.ResponseWriter, r *http.Request) {
 	pid, ok := pathID(r, "pid")
@@ -47,7 +47,7 @@ func (a *API) putTemplate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad project id")
 		return
 	}
-	if !canWriteRole(auth.FromContext(r.Context())) {
+	if !isAdminRole(auth.FromContext(r.Context())) {
 		writeErr(w, http.StatusForbidden, "cannot change template")
 		return
 	}
@@ -80,7 +80,7 @@ func (a *API) deleteTemplate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad project id")
 		return
 	}
-	if !canWriteRole(auth.FromContext(r.Context())) {
+	if !isAdminRole(auth.FromContext(r.Context())) {
 		writeErr(w, http.StatusForbidden, "cannot change template")
 		return
 	}

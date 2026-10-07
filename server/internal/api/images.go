@@ -23,7 +23,7 @@ var extForMime = map[string]string{
 
 // uploadImage stores a before/after photo for a record on disk and records its
 // key. Body is the raw image bytes; Content-Type gives the mime. Replaces any
-// existing image of the same kind. Owners/editors only.
+// existing image of the same kind. Admins and reviewers.
 func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	id, ok := pathID(r, "id")
@@ -35,7 +35,7 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
-	if !canWriteRole(u) {
+	if !canReviewRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot upload to record")
 		return
 	}
@@ -81,14 +81,14 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"key": key, "url": "/api/files/" + key, "kind": kind})
 }
 
-// deleteImage removes a record's before/after photo (owners/editors only).
+// deleteImage removes a record's before/after photo (admins and reviewers).
 func (a *API) deleteImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(r, "id")
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	if !canWriteRole(auth.FromContext(r.Context())) {
+	if !canReviewRole(auth.FromContext(r.Context())) {
 		writeErr(w, http.StatusForbidden, "cannot change record")
 		return
 	}

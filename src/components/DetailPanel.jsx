@@ -6,7 +6,7 @@ import { attrFields, attrType } from '../lib/templateExcel.js';
 import { chipStyle, doneLabel as doneLabelOf } from '../lib/status.js';
 import { Icon, Select, StatusBadge, DisciplineBadge, Dialog, Button } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
-import { isReadOnly, remoteState } from '../lib/server.js';
+import { isReadOnly, isRecordReadOnly, remoteState } from '../lib/server.js';
 const remoteActive = () => remoteState.active;
 import Lightbox from './Lightbox.jsx';
 
@@ -144,7 +144,8 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
   const rec = record || shown;
   const set = (patch) => rec && updateRecord(rec.ID, patch);
   // Viewers on the server see everything but can't change it.
-  const readOnly = isReadOnly();
+  const readOnly = isRecordReadOnly();
+  const canDelete = !isReadOnly(); // deleting a comment is for admins
   const beforeInputRef = useRef(null);
   const afterInputRef = useRef(null);
   const [crop, setCrop] = useState(null); // { src, target: 'before'|'after' }
@@ -503,7 +504,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                 Next after closing
               </label>
             )}
-            {onDelete && !readOnly && (
+            {onDelete && canDelete && (
               <button type="button" onClick={() => setAskDelete(true)} aria-label="Delete this comment" title="Delete this comment"
                 className="t-press rounded-full p-1.5 hover:bg-surface-container hover:text-error focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 <Icon name="delete" className="text-[18px]" />

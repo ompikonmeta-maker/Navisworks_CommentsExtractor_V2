@@ -83,7 +83,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
 
       {locked && (
         <p className="mb-3 flex items-center gap-2 text-xs text-on-surface-variant">
-          <Icon name="info" className="text-[16px]" /> View only. An admin or editor can change these settings.
+          <Icon name="info" className="text-[16px]" /> View only. An admin can change these settings.
         </p>
       )}
 

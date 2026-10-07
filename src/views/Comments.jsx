@@ -8,7 +8,7 @@ import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } 
 import DetailPanel from '../components/DetailPanel.jsx';
 import ExportButton from '../components/ExportButton.jsx';
 import AddCommentDialog from '../components/AddCommentDialog.jsx';
-import { isReadOnly } from '../lib/server.js';
+import { isReadOnly, isRecordReadOnly } from '../lib/server.js';
 import { exportLogSheet } from '../lib/logsheet.js';
 import { parseTs } from '../lib/overview.js';
 
@@ -29,7 +29,8 @@ function FilterChip({ on, onClick, icon, label, count }) {
 
 export default function Comments({ detailId, setDetailId, initialFilter, goSettings }) {
   const { status, records, notify, removeRecords, bulkUpdate, addRecord } = useStore();
-  const canEdit = !isReadOnly();
+  const canEdit = !isRecordReadOnly(); // edit / bulk-edit comments
+  const canAdmin = !isReadOnly(); // add / delete comments
   const { settings } = useSettings();
   const loading = status === 'loading';
 
@@ -225,7 +226,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
                 Reset
               </Button>
             )}
-            {canEdit && <Button variant="text" icon="add" onClick={() => setAdding(true)} disabled={loading}>Add</Button>}
+            {canAdmin && <Button variant="text" icon="add" onClick={() => setAdding(true)} disabled={loading}>Add</Button>}
             <ExportButton onLogSheet={logSheet} onQuick={handleExport} quickNote="The comments shown here" disabled={!filtered.length} />
           </div>
         </div>
@@ -336,7 +337,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
       <AddCommentDialog open={adding} onClose={() => setAdding(false)} onAdd={addOne} records={records}
         customCommenters={settings.customCommenters} openStatus={openLabel(settings.statuses)} />
 
-      <DetailPanel record={active} onClose={() => setDetailId(null)} onClosedOut={onClosedOut} onDelete={deleteOne}
+      <DetailPanel record={active} onClose={() => setDetailId(null)} onClosedOut={onClosedOut} onDelete={canAdmin ? deleteOne : undefined}
         nav={{ index, total: filtered.length, prev: () => go(-1), next: () => go(1), autoNext, setAutoNext }} />
     </div>
   );

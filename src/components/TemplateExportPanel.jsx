@@ -259,7 +259,7 @@ export default function TemplateExportPanel() {
       {stepper}
       {readOnly && (
         <p className="flex items-center gap-2 text-xs text-on-surface-variant">
-          <Icon name="info" className="text-[16px]" /> View only. You can export; an admin or editor sets up the template.
+          <Icon name="info" className="text-[16px]" /> View only. You can export; an admin sets up the template.
         </p>
       )}
       <fieldset disabled={readOnly} className="contents">

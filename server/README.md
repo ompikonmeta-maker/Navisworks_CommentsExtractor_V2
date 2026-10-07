@@ -7,7 +7,7 @@ no admin install. Users are identified by their office (AD) account.
 ## Status
 
 Working: SQLite schema + migrations, sign-in (username + PIN session cookie),
-users and roles (admin / editor / viewer), the **Project › Review** hierarchy
+users and roles (admin / reviewer), the **Project › Review** hierarchy
 (admins create projects and reviews; every signed-in user sees all of them),
 records, before/after images, and config at global / project / review scope:
 the project holds the Excel template file + its column mapping, statuses,

@@ -73,8 +73,13 @@ export const api = {
 // App, the store, and the import path to branch behaviour without prop-drilling.
 export const remoteState = { active: false, projectId: null, reviewId: null, user: null };
 
-// Admins and editors write; viewers are read-only (the server enforces it too).
-export const canWrite = (user = remoteState.user) => user?.role === 'admin' || user?.role === 'editor';
+// Two roles (the server enforces the same rules):
+// - admin: everything — import, add/delete comments, settings, template, projects, users;
+// - reviewer: works the comments — status, resolution, discipline, commenter,
+//   custom fields, photos, bulk edit — and exports.
+// `canWrite` = may change the review's setup (admin); `canReview` = may edit comments.
+export const canWrite = (user = remoteState.user) => user?.role === 'admin';
+export const canReview = (user = remoteState.user) => user?.role === 'admin' || user?.role === 'reviewer';
 
 let _isRemote = null;
 export async function detectRemote() {
@@ -222,8 +227,11 @@ export async function inlineImages(records) {
   return out;
 }
 
-// True for a viewer on the server: edit controls are disabled or hidden.
+// True for a reviewer on the server: setup controls (import, settings,
+// template, add/delete comments) are disabled or hidden.
 export const isReadOnly = () => remoteState.active && !canWrite();
+// True when the comments themselves can't be edited (no review role).
+export const isRecordReadOnly = () => remoteState.active && !canReview();
 
 // ---------- import (merge) + undo on the server ----------
 // Applies a planMerge() result: refreshes matched comments, optionally closes

@@ -20,10 +20,16 @@ type API struct {
 	ServerURLs func() []string
 }
 
-// canWriteRole is the small-team access rule: any signed-in user may READ every
-// review; admins and editors may WRITE (import, edit, upload, config); viewers
-// are read-only.
-func canWriteRole(u *auth.User) bool { return u.Role == "admin" || u.Role == "editor" }
+// The small-team access rule has two roles. Everyone signed in may READ every
+// review and export. A reviewer may also work the comments — status,
+// resolution, discipline, commenter, custom fields, photos — one at a time or
+// in bulk. Everything else (import, add/delete comments, settings, template,
+// projects, reviews, users) is for admins.
+func isAdminRole(u *auth.User) bool   { return u.Role == "admin" }
+func canReviewRole(u *auth.User) bool { return u.Role == "admin" || u.Role == "reviewer" }
+
+// validRole reports whether r is a role users can be given.
+func validRole(r string) bool { return r == "admin" || r == "reviewer" }
 
 // ResolveUser looks up an active, admin-provisioned user by normalized name.
 // Wired into the auth middleware.
@@ -148,8 +154,8 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	role := body.Role
-	if role != "admin" && role != "editor" && role != "viewer" {
-		role = "viewer"
+	if !validRole(role) {
+		role = "reviewer"
 	}
 	_, err := a.DB.Exec(`INSERT INTO users(username, display_name, role) VALUES(?, ?, ?)`, username, body.DisplayName, role)
 	if err != nil {

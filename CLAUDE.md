@@ -139,7 +139,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   On the V2 server, `bindRemote` (called by `App` when a review opens) swaps the shared keys
   for the server's copy — labels, detection, template mapping and statuses per **project**,
   `reviewTarget` per **review** — and syncs edits back; only `themeMode` stays per browser. A
-  project with nothing saved starts from the admin/editor's browser settings. The template
+  project with nothing saved starts from the admin's browser settings. The template
   file follows the same rule (`persist.saveTemplate`/`loadTemplate` go to
   `/api/projects/{id}/template` in remote mode).
   Commenters are a **record field**, not an author mapping: `record.commenter` is the person
@@ -196,6 +196,13 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   (`ui.jsx`), the editable `DetailPanel.jsx`, and the `Toast.jsx` notifier.
 
 ### Review workflow (V2)
+
+- **Roles** are `admin` and `reviewer` (older `editor`/`viewer` accounts are migrated to
+  reviewer in `db.Open`). Server: `isAdminRole` / `canReviewRole` in `api/api.go`; a reviewer
+  may PATCH only `commenter, discipline, resolution, status, closedAt, extra` (`buildPatch`
+  `admin` flag) and upload/remove photos; import, add/delete comments, config, template,
+  projects, reviews and users are admin-only. Client: `canWrite`/`isReadOnly` = setup
+  (admin), `canReview`/`isRecordReadOnly` = editing comments (`lib/server.js`).
 
 - **Re-import merges** (`lib/merge.js`): importing into a review that already has comments
   opens `ImportDialog` with `planMerge(existing, incoming)` — matched by Navisworks comment ID

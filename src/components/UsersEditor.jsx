@@ -4,10 +4,9 @@ import { Icon, Button, Select, InfoTip } from './ui.jsx';
 
 const ROLE_OPTS = [
   { value: 'admin', label: 'Admin' },
-  { value: 'editor', label: 'Editor' },
-  { value: 'viewer', label: 'Viewer' },
+  { value: 'reviewer', label: 'Reviewer' },
 ];
-const ROLE_HELP = 'Admin manages users & everything · Editor imports and edits · Viewer read-only.';
+const ROLE_HELP = 'Admin sets up and manages everything · Reviewer works the comments (status, resolution, photos) and exports.';
 
 // Admin-only: manage who can sign in and what they can do. Shown as a Settings
 // section in remote mode. Accounts are the office (AD) usernames.
@@ -15,7 +14,7 @@ export default function UsersEditor({ me }) {
   const [users, setUsers] = useState(null);
   const [uname, setUname] = useState('');
   const [dname, setDname] = useState('');
-  const [role, setRole] = useState('editor');
+  const [role, setRole] = useState('reviewer');
   const [err, setErr] = useState('');
 
   const load = async () => {
@@ -60,7 +59,7 @@ export default function UsersEditor({ me }) {
     const u = uname.trim();
     if (!u) return;
     await api.createUser(u, dname.trim(), role);
-    setUname(''); setDname(''); setRole('editor');
+    setUname(''); setDname(''); setRole('reviewer');
   });
 
   return (

@@ -119,7 +119,7 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 }
 
 // importRecords bulk-inserts parsed records into a review (metadata only;
-// images are uploaded separately). Owners/editors only.
+// images are uploaded separately). Admins only.
 func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	rid, ok := pathID(r, "rid")
@@ -127,7 +127,7 @@ func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
-	if !canWriteRole(u) {
+	if !isAdminRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot write to review")
 		return
 	}
@@ -173,7 +173,8 @@ func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"imported": len(body.Records)})
 }
 
-// patchRecord updates the editable fields of one record (owners/editors only).
+// patchRecord updates the editable fields of one record. Reviewers may change
+// the review fields; admins also the report fields.
 func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	id, ok := pathID(r, "id")
@@ -185,7 +186,7 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
-	if !canWriteRole(u) {
+	if !canReviewRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot edit record")
 		return
 	}
@@ -194,7 +195,7 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad body")
 		return
 	}
-	set, args := buildPatch(patch, u.ID)
+	set, args := buildPatch(patch, u.ID, isAdminRole(u))
 	if set == "" {
 		writeErr(w, http.StatusBadRequest, "nothing to update")
 		return
@@ -208,7 +209,8 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 
 // bulkPatchRecords applies many record edits in one transaction — used when a
 // change touches lots of records at once (detection re-run, status or custom
-// field rename). Only records of this review are touched. Owners/editors only.
+// field rename, bulk edit). Only records of this review are touched; same
+// field rules as patchRecord.
 func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	rid, ok := pathID(r, "rid")
@@ -216,7 +218,7 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
-	if !canWriteRole(u) {
+	if !canReviewRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot edit records")
 		return
 	}
@@ -238,7 +240,7 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	n := 0
 	for _, up := range body.Updates {
-		set, args := buildPatch(up.Patch, u.ID)
+		set, args := buildPatch(up.Patch, u.ID, isAdminRole(u))
 		if set == "" {
 			continue
 		}
@@ -260,14 +262,22 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 
 // buildPatch turns a JSON patch into "col=?, …" plus args for the editable
 // fields, stamping who changed it and when. Empty set = nothing editable.
-func buildPatch(patch map[string]json.RawMessage, userID int64) (string, []any) {
+// Reviewers get the review fields only; admins also the report fields.
+func buildPatch(patch map[string]json.RawMessage, userID int64, admin bool) (string, []any) {
 	// Only these fields are editable; column ← jsonKey.
 	allowed := map[string]string{
 		"commenter": "commenter", "discipline": "discipline", "resolution": "resolution",
-		"status": "status", "closed_at": "closedAt", "comment_text": "commentText", "extra": "extra",
-		// refreshed from a newer Navisworks report when a review is re-imported
-		"comment_raw": "commentRaw", "viewpoint": "viewpoint", "comment_date": "commentDate",
-		"author_code": "authorCode", "camera_position": "cameraPosition", "image_ref": "imageRef",
+		"status": "status", "closed_at": "closedAt", "extra": "extra",
+	}
+	if admin {
+		for col, key := range map[string]string{
+			"comment_text": "commentText",
+			// refreshed from a newer Navisworks report when a review is re-imported
+			"comment_raw": "commentRaw", "viewpoint": "viewpoint", "comment_date": "commentDate",
+			"author_code": "authorCode", "camera_position": "cameraPosition", "image_ref": "imageRef",
+		} {
+			allowed[col] = key
+		}
 	}
 	set, args := "", []any{}
 	for col, key := range allowed {
@@ -295,14 +305,14 @@ func buildPatch(patch map[string]json.RawMessage, userID int64) (string, []any) 
 }
 
 // bulkDeleteRecords removes many records of a review (and their photos) in
-// one go — used to undo an import. Owners/editors only.
+// one go — used to undo an import. Admins only.
 func (a *API) bulkDeleteRecords(w http.ResponseWriter, r *http.Request) {
 	rid, ok := pathID(r, "rid")
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
-	if !canWriteRole(auth.FromContext(r.Context())) {
+	if !isAdminRole(auth.FromContext(r.Context())) {
 		writeErr(w, http.StatusForbidden, "cannot delete records")
 		return
 	}
@@ -325,7 +335,7 @@ func (a *API) bulkDeleteRecords(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
 }
 
-// deleteRecord removes a record and its image files (owners/editors only).
+// deleteRecord removes a record and its image files (admins only).
 func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	id, ok := pathID(r, "id")
@@ -337,7 +347,7 @@ func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
-	if !canWriteRole(u) {
+	if !isAdminRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot delete record")
 		return
 	}

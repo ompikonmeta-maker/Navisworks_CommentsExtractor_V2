@@ -58,12 +58,13 @@ const T = {
       ['download', 'Export', 'Excel log sheet'],
     ],
     server: 'Server',
+    adminOnly: 'Admin',
     steps: [
       { icon: 'login', c: C.slate, server: true, title: 'Sign in and pick a review', shot: shotPicker, alt: 'Projects list',
         pts: ['Sign in with your name and PIN.', 'Open a project, then a review.', 'Switch review any time from the chip at the top.'] },
-      { icon: 'upload_file', c: C.blue, title: 'Import the Navisworks report', shot: shotOverview, alt: 'Overview with setup checklist',
+      { icon: 'upload_file', c: C.blue, admin: true, title: 'Import the Navisworks report', shot: shotOverview, alt: 'Overview with setup checklist',
         pts: ['In Navisworks export Viewpoints as HTML (with its images, or as one .zip).', 'Overview › Import and pick the file.', 'Follow the checklist: target date, log-sheet template, team.'] },
-      { icon: 'merge', c: C.violet, title: 'Got a newer report? Import again', shot: shotReimport, alt: 'Update from a new report',
+      { icon: 'merge', c: C.violet, admin: true, title: 'Got a newer report? Import again', shot: shotReimport, alt: 'Update from a new report',
         pts: ['Comments are matched by their ID — no duplicates.', 'Your status, photos and notes stay.', 'Decide what happens to comments no longer in the report.'],
         tip: 'Changed your mind? Press Undo on the message, or ⋯ › Undo last import.' },
       { icon: 'search', c: C.teal, title: 'Find what needs work', shot: shotList, alt: 'Viewpoints list with filters',
@@ -71,7 +72,7 @@ const T = {
       { icon: 'photo_camera', c: C.green, title: 'Close a comment', shot: shotDrawer, alt: 'Comment details with before and after photos',
         pts: ['Click a row to open it.', 'Add the After photo — it marks the comment Closed.', 'Write the resolution. J / K jump to the next / previous comment.'],
         tip: 'Snapshot (Win+Shift+S), point at Before or After, press Ctrl+V.' },
-      { icon: 'add', c: C.pink, title: 'Add a comment by hand', shot: shotAdd, alt: 'Add comment dialog',
+      { icon: 'add', c: C.pink, admin: true, title: 'Add a comment by hand', shot: shotAdd, alt: 'Add comment dialog',
         pts: ['Viewpoints › Add, for issues found outside Navisworks.', 'Discipline and commenter are read from the text.', 'Paste a snapshot as the Before photo.'] },
       { icon: 'fact_check', c: C.orange, title: 'Change many at once', shot: shotBulk, alt: 'Several comments selected',
         pts: ['Tick the rows.', 'Set discipline, status or commenter for all of them from the bar.'] },
@@ -87,24 +88,24 @@ const T = {
       ['image', C.green, 'Snapshot PNG', 'The Snapshot button saves a picture to your Downloads folder.'],
     ],
     // roles
-    rolesTitle: 'Three roles',
+    rolesTitle: 'Two roles',
     roles: [
-      { k: 'admin', icon: 'admin_panel_settings', c: C.blue, name: 'Admin', line: 'Runs the server and the team.', can: ['Everything an editor can', 'Projects & reviews', 'Users & PINs'] },
-      { k: 'editor', icon: 'edit', c: C.green, name: 'Editor', line: 'Does the review work.', can: ['Import & update', 'Edit, close, add, delete', 'Settings & template'] },
-      { k: 'viewer', icon: 'visibility', c: C.slate, name: 'Viewer', line: 'Follows progress.', can: ['See everything', 'Export & snapshot', 'No changes'] },
+      { k: 'admin', icon: 'admin_panel_settings', c: C.blue, name: 'Admin', line: 'Sets up the review and the team.', can: [['Everything a reviewer can', 1], ['Import, add & delete comments', 1], ['Settings, projects, users', 1]] },
+      { k: 'reviewer', icon: 'edit', c: C.green, name: 'Reviewer', line: 'Works the comments.', can: [['Status, resolution, photos', 1], ['Bulk edit & export', 1], ['No import, delete or settings', 0]] },
     ],
     matrixTitle: 'Who can do what',
-    cols: ['Admin', 'Editor', 'Viewer'],
+    cols: ['Admin', 'Reviewer'],
     matrix: [
-      ['See projects, comments, photos, charts', 1, 1, 1],
-      ['Export log sheet / Excel, snapshot', 1, 1, 1],
-      ['Import, update from a new report, undo import', 1, 1, 0],
-      ['Edit, close, add, delete comments · photos', 1, 1, 0],
-      ['Change many at once', 1, 1, 0],
-      ['Labels, detection, template, statuses, target', 1, 1, 0],
-      ['Create · rename projects and reviews', 1, 0, 0],
-      ['Delete a review or an (empty) project', 1, 0, 0],
-      ['Add users, set roles, reset PINs', 1, 0, 0],
+      ['See projects, comments, photos, charts', 1, 1],
+      ['Export log sheet / Excel, snapshot', 1, 1],
+      ['Edit status, resolution, discipline, commenter, custom fields', 1, 1],
+      ['Add · replace · remove photos', 1, 1],
+      ['Change many at once', 1, 1],
+      ['Import, update from a new report, undo import', 1, 0],
+      ['Add or delete comments', 1, 0],
+      ['Labels, detection, template, statuses, target', 1, 0],
+      ['Create · rename · delete projects and reviews', 1, 0],
+      ['Add users, set roles, reset PINs', 1, 0],
     ],
     offlineNote: 'Offline file: one person, no sign-in — whoever opens it can edit.',
     safeTitle: 'Built-in safety',
@@ -112,7 +113,7 @@ const T = {
       'An admin can’t remove or demote themselves.',
       'Deleting a review with comments asks you to type its name.',
       'A project can only be deleted once it is empty.',
-      'Viewers are blocked by the server, not just by hidden buttons.',
+      'A reviewer’s limits are enforced by the server, not just hidden buttons.',
     ],
     limitsTitle: 'Good to know',
     limits: [
@@ -155,12 +156,13 @@ const T = {
       ['download', 'Export', 'Log sheet Excel'],
     ],
     server: 'Server',
+    adminOnly: 'Admin',
     steps: [
       { icon: 'login', c: C.slate, server: true, title: 'Login dan pilih review', shot: shotPicker, alt: 'Daftar project',
         pts: ['Login dengan nama dan PIN.', 'Buka project, lalu review.', 'Ganti review kapan saja lewat chip di atas.'] },
-      { icon: 'upload_file', c: C.blue, title: 'Import laporan Navisworks', shot: shotOverview, alt: 'Overview dengan checklist',
+      { icon: 'upload_file', c: C.blue, admin: true, title: 'Import laporan Navisworks', shot: shotOverview, alt: 'Overview dengan checklist',
         pts: ['Di Navisworks, export Viewpoints sebagai HTML (beserta gambar, atau satu .zip).', 'Overview › Import, pilih filenya.', 'Ikuti checklist: tanggal target, template log sheet, tim.'] },
-      { icon: 'merge', c: C.violet, title: 'Ada laporan baru? Import lagi', shot: shotReimport, alt: 'Update dari laporan baru',
+      { icon: 'merge', c: C.violet, admin: true, title: 'Ada laporan baru? Import lagi', shot: shotReimport, alt: 'Update dari laporan baru',
         pts: ['Komentar dicocokkan lewat ID — tidak ada duplikat.', 'Status, foto, dan catatan Anda tetap aman.', 'Pilih nasib komentar yang hilang dari laporan.'],
         tip: 'Berubah pikiran? Tekan Undo di pesan, atau ⋯ › Undo last import.' },
       { icon: 'search', c: C.teal, title: 'Cari yang perlu dikerjakan', shot: shotList, alt: 'Daftar viewpoint dengan filter',
@@ -168,7 +170,7 @@ const T = {
       { icon: 'photo_camera', c: C.green, title: 'Menutup komentar', shot: shotDrawer, alt: 'Detail komentar dengan foto before dan after',
         pts: ['Klik baris untuk membukanya.', 'Tambah foto After — komentar otomatis Closed.', 'Tulis resolusi. J / K pindah ke komentar berikut / sebelumnya.'],
         tip: 'Snapshot (Win+Shift+S), arahkan ke Before atau After, tekan Ctrl+V.' },
-      { icon: 'add', c: C.pink, title: 'Tambah komentar manual', shot: shotAdd, alt: 'Dialog tambah komentar',
+      { icon: 'add', c: C.pink, admin: true, title: 'Tambah komentar manual', shot: shotAdd, alt: 'Dialog tambah komentar',
         pts: ['Viewpoints › Add, untuk temuan di luar Navisworks.', 'Discipline dan commenter terbaca dari teks.', 'Paste snapshot sebagai foto Before.'] },
       { icon: 'fact_check', c: C.orange, title: 'Ubah banyak sekaligus', shot: shotBulk, alt: 'Beberapa komentar dipilih',
         pts: ['Centang baris-barisnya.', 'Atur discipline, status, atau commenter untuk semuanya dari bar.'] },
@@ -183,24 +185,24 @@ const T = {
       ['storage', C.violet, 'File offline', 'Di browser PC ini. Pilih folder sesi agar ada salinan berupa file.'],
       ['image', C.green, 'Snapshot PNG', 'Tombol Snapshot menyimpan gambar ke folder Downloads.'],
     ],
-    rolesTitle: 'Tiga peran',
+    rolesTitle: 'Dua peran',
     roles: [
-      { k: 'admin', icon: 'admin_panel_settings', c: C.blue, name: 'Admin', line: 'Mengelola server dan tim.', can: ['Semua yang bisa editor', 'Project & review', 'User & PIN'] },
-      { k: 'editor', icon: 'edit', c: C.green, name: 'Editor', line: 'Mengerjakan review.', can: ['Import & update', 'Edit, tutup, tambah, hapus', 'Settings & template'] },
-      { k: 'viewer', icon: 'visibility', c: C.slate, name: 'Viewer', line: 'Memantau progres.', can: ['Lihat semuanya', 'Export & snapshot', 'Tidak bisa mengubah'] },
+      { k: 'admin', icon: 'admin_panel_settings', c: C.blue, name: 'Admin', line: 'Menyiapkan review dan tim.', can: [['Semua yang bisa reviewer', 1], ['Import, tambah & hapus komentar', 1], ['Settings, project, user', 1]] },
+      { k: 'reviewer', icon: 'edit', c: C.green, name: 'Reviewer', line: 'Mengerjakan komentar.', can: [['Status, resolusi, foto', 1], ['Edit massal & export', 1], ['Tanpa import, hapus, settings', 0]] },
     ],
     matrixTitle: 'Siapa boleh apa',
-    cols: ['Admin', 'Editor', 'Viewer'],
+    cols: ['Admin', 'Reviewer'],
     matrix: [
-      ['Lihat project, komentar, foto, grafik', 1, 1, 1],
-      ['Export log sheet / Excel, snapshot', 1, 1, 1],
-      ['Import, update dari laporan baru, undo import', 1, 1, 0],
-      ['Edit, tutup, tambah, hapus komentar · foto', 1, 1, 0],
-      ['Ubah banyak sekaligus', 1, 1, 0],
-      ['Label, deteksi, template, status, target', 1, 1, 0],
-      ['Buat · ganti nama project dan review', 1, 0, 0],
-      ['Hapus review atau project (kosong)', 1, 0, 0],
-      ['Tambah user, atur peran, reset PIN', 1, 0, 0],
+      ['Lihat project, komentar, foto, grafik', 1, 1],
+      ['Export log sheet / Excel, snapshot', 1, 1],
+      ['Edit status, resolusi, discipline, commenter, custom field', 1, 1],
+      ['Tambah · ganti · hapus foto', 1, 1],
+      ['Ubah banyak sekaligus', 1, 1],
+      ['Import, update dari laporan baru, undo import', 1, 0],
+      ['Tambah atau hapus komentar', 1, 0],
+      ['Label, deteksi, template, status, target', 1, 0],
+      ['Buat · ganti nama · hapus project dan review', 1, 0],
+      ['Tambah user, atur peran, reset PIN', 1, 0],
     ],
     offlineNote: 'File offline: satu orang, tanpa login — siapa pun yang membuka bisa mengedit.',
     safeTitle: 'Pengaman bawaan',
@@ -208,7 +210,7 @@ const T = {
       'Admin tidak bisa menghapus atau menurunkan perannya sendiri.',
       'Hapus review yang berisi komentar wajib ketik namanya.',
       'Project hanya bisa dihapus jika sudah kosong.',
-      'Viewer diblokir oleh server, bukan sekadar tombol disembunyikan.',
+      'Batasan reviewer dijaga oleh server, bukan sekadar tombol disembunyikan.',
     ],
     limitsTitle: 'Perlu diketahui',
     limits: [
@@ -263,7 +265,7 @@ function Flow({ t }) {
   );
 }
 
-function Step({ s, n, flip, serverLabel }) {
+function Step({ s, n, flip, serverLabel, adminLabel }) {
   return (
     <Card className="overflow-hidden p-5 sm:p-6">
       <div className={`grid items-center gap-5 ${flip ? 'lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:[&>*:first-child]:order-2' : 'lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]'}`}>
@@ -271,7 +273,11 @@ function Step({ s, n, flip, serverLabel }) {
           <div className="flex items-center gap-3">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-white tabular-nums" style={{ background: s.c }}>{n}</span>
             <h3 className="min-w-0 text-[17px] font-semibold leading-snug">{s.title}</h3>
-            {s.server && <span className="ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ background: tint(s.c, 16), color: s.c }}>{serverLabel}</span>}
+            {(s.server || s.admin) && (
+              <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ background: tint(s.admin ? C.blue : s.c, 16), color: s.admin ? C.blue : s.c }}>
+                {s.admin && <Icon name="admin_panel_settings" className="text-[14px]" />}{s.admin ? adminLabel : serverLabel}
+              </span>
+            )}
           </div>
           <ul className="mt-4 space-y-2.5">
             {s.pts.map((p) => (
@@ -298,7 +304,7 @@ function HowTo({ t }) {
   return (
     <>
       <Flow t={t} />
-      {t.steps.map((s, i) => <Step key={s.title} s={s} n={i + 1} flip={i % 2 === 1} serverLabel={t.server} />)}
+      {t.steps.map((s, i) => <Step key={s.title} s={s} n={i + 1} flip={i % 2 === 1} serverLabel={t.server} adminLabel={t.adminOnly} />)}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <Card className="flex flex-col p-5 sm:p-6">
           <h2 className="mb-4 flex items-center gap-2 text-base font-semibold"><Icon name="keyboard" className="text-[20px] text-primary" />{t.keysTitle}</h2>
@@ -329,10 +335,10 @@ function HowTo({ t }) {
 }
 
 function Roles({ t }) {
-  const colC = [C.blue, C.green, C.slate];
+  const colC = [C.blue, C.green];
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {t.roles.map((r) => (
           <Card key={r.k} className="flex flex-col overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-4" style={{ background: `linear-gradient(135deg, ${tint(r.c, 22)}, ${tint(r.c, 6)})` }}>
@@ -343,9 +349,9 @@ function Roles({ t }) {
               </div>
             </div>
             <ul className="flex flex-1 flex-col justify-between gap-2 px-5 py-4">
-              {r.can.map((x, i) => (
+              {r.can.map(([x, ok]) => (
                 <li key={x} className="flex items-center gap-2 text-sm">
-                  <Icon name={r.k === 'viewer' && i === 2 ? 'block' : 'check_circle'} className="shrink-0 text-[18px]" style={{ color: r.k === 'viewer' && i === 2 ? 'var(--tabelin-bad)' : r.c }} />{x}
+                  <Icon name={ok ? 'check_circle' : 'block'} className="shrink-0 text-[18px]" style={{ color: ok ? r.c : 'var(--tabelin-bad)' }} />{x}
                 </li>
               ))}
             </ul>
@@ -356,7 +362,7 @@ function Roles({ t }) {
       <Card className="p-5 sm:p-6">
         <h2 className="mb-3 text-base font-semibold">{t.matrixTitle}</h2>
         <div className="-mx-2 overflow-x-auto">
-          <table className="w-full min-w-[480px] border-separate border-spacing-x-2 text-sm">
+          <table className="w-full min-w-[420px] border-separate border-spacing-x-2 text-sm">
             <thead>
               <tr>
                 <th />

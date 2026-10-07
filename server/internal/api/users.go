@@ -46,7 +46,7 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Role != nil {
 		role := *body.Role
-		if role == "admin" || role == "editor" || role == "viewer" {
+		if validRole(role) {
 			a.DB.Exec(`UPDATE users SET role=? WHERE id=?`, role, id)
 		}
 	}

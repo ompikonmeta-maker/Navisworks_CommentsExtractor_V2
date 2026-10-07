@@ -37,6 +37,12 @@ func Open(path string) (*sql.DB, error) {
 		d.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	// Roles were simplified to admin | reviewer; older editor/viewer accounts
+	// become reviewers.
+	if _, err := d.Exec(`UPDATE users SET role='reviewer' WHERE role NOT IN ('admin','reviewer')`); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("migrate roles: %w", err)
+	}
 	return d, nil
 }
 

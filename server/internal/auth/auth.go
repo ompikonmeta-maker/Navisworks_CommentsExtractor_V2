@@ -20,7 +20,7 @@ type User struct {
 	ID          int64  `json:"id"`
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
-	Role        string `json:"role"` // admin | editor | viewer
+	Role        string `json:"role"` // admin | reviewer
 	Active      bool   `json:"active"`
 }
 
