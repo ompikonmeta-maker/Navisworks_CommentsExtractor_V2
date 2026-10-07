@@ -44,7 +44,7 @@ export default function Login({ onSuccess }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              placeholder="e.g. DOMAIN\\yourname"
+              placeholder="e.g. DOMAIN\yourname"
               className="mt-1 block w-full rounded-control border border-outline bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
           </label>

@@ -445,7 +445,8 @@ export function PaceHeadline({ ov }) {
   const tp = useTipProps();
   const w = ov.weeks, cur = w[w.length - 1]?.value ?? 0, prev = w[w.length - 2]?.value ?? 0, d = cur - prev;
   const need = ov.needed != null ? Math.ceil(ov.needed * 7) : null;
-  const up = d >= 0;
+  const up = d > 0;
+  const chip = d === 0 ? 'var(--md-sys-color-on-surface-variant)' : up ? 'var(--tabelin-status-closed)' : 'var(--tabelin-status-open)';
   return (
     <div className="mb-1 flex items-end justify-between gap-3">
       <div tabIndex={0} {...tp(<TipRows title={`Week to ${fmtDay(w[w.length - 1]?.end)}`} rows={[['Closed', cur], ['Week before', prev]]} />)}>
@@ -453,8 +454,8 @@ export function PaceHeadline({ ov }) {
           <span className="text-[40px] font-bold leading-none tracking-[-0.03em] tabular-nums">{cur}</span>
           {w.length > 1 && (
             <span className="rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums"
-              style={{ background: tint(up ? 'var(--tabelin-status-closed)' : 'var(--tabelin-status-open)', 16), color: up ? 'var(--tabelin-status-closed)' : 'var(--tabelin-status-open)' }}>
-              {up ? '▲' : '▼'} {Math.abs(d)}
+              style={{ background: tint(chip, 16), color: chip }}>
+              {d === 0 ? '±0' : `${up ? '▲' : '▼'} ${Math.abs(d)}`}
             </span>
           )}
         </div>
