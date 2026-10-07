@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"os"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -16,7 +17,8 @@ const sessionTTL = 30 * 24 * time.Hour
 
 // Identify supplies the caller's account name to the auth middleware. Order:
 //  1. a valid login-session cookie (the browser path used off-domain);
-//  2. the dev header (development only).
+//  2. the dev header — only when TABELIN_DEV_AUTH=1, otherwise anyone on the
+//     network could claim any account by sending it.
 //
 // On the office network a Windows Integrated Auth check would be added ahead of
 // these; the rest of the pipeline is unchanged.
@@ -31,7 +33,10 @@ func (a *API) Identify(r *http.Request) string {
 			return username
 		}
 	}
-	return r.Header.Get(auth.DevUserHeader)
+	if os.Getenv("TABELIN_DEV_AUTH") == "1" {
+		return r.Header.Get(auth.DevUserHeader)
+	}
+	return ""
 }
 
 // Login authenticates a provisioned account with its PIN and starts a session.
