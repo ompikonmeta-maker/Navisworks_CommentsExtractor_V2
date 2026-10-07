@@ -267,7 +267,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-on-surface md:flex-row md:gap-3 md:p-3">
+    <div className="flex min-h-screen flex-col bg-background text-on-surface md:flex-row md:gap-5 md:p-3 lg:gap-7">
       {/* Floating sidebar panel */}
       <aside
         data-rail
@@ -337,7 +337,10 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
       </aside>
 
       {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col md:gap-3">
+      {/* Gutters: the canvas sits further from the sidebar than cards sit from
+          each other (16px), and the right edge mirrors that gap so the work
+          area reads balanced. */}
+      <div className="flex min-w-0 flex-1 flex-col md:gap-3 md:pr-2 lg:pr-4">
         {/* Floating title over the canvas — no border/fill on desktop,
             aligned with the content column (.canvas-w) below. */}
         <header className="t-appbar sticky top-0 z-10 border-b border-outline-variant/60 px-5 py-3 backdrop-blur md:top-3 md:rounded-card md:border-0 md:px-4 md:py-2.5">
