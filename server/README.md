@@ -9,7 +9,9 @@ no admin install. Users are identified by their office (AD) account.
 Working: SQLite schema + migrations, sign-in (username + PIN session cookie),
 users and roles (admin / editor / viewer), the **Project › Review** hierarchy
 (admins create projects and reviews; every signed-in user sees all of them),
-records, before/after images, and config at global / project / review scope.
+records, before/after images, and config at global / project / review scope:
+the project holds the Excel template file + its column mapping, statuses,
+detection rules, labels and custom fields; the review holds its target date.
 Not yet: the Windows (AD) handshake.
 
 Data model: `projects` → `reviews` → `records` → `images`. A database from

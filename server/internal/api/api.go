@@ -70,6 +70,9 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/config", a.putGlobalConfig)
 	mux.HandleFunc("GET /api/projects/{pid}/config", a.getProjectConfig)
 	mux.HandleFunc("PUT /api/projects/{pid}/config", a.putProjectConfig)
+	mux.HandleFunc("GET /api/projects/{pid}/template", a.getTemplate)
+	mux.HandleFunc("PUT /api/projects/{pid}/template", a.putTemplate)
+	mux.HandleFunc("DELETE /api/projects/{pid}/template", a.deleteTemplate)
 	mux.HandleFunc("GET /api/reviews/{rid}/config", a.getReviewConfig)
 	mux.HandleFunc("PUT /api/reviews/{rid}/config", a.putReviewConfig)
 	return mux

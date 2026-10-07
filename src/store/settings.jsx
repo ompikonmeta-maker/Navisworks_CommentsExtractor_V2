@@ -8,6 +8,7 @@ import { loadSettings, saveSettings } from '../lib/persist.js';
 import { DEFAULT_DETECT } from '../lib/detect.js';
 import { DEFAULT_TEMPLATE_MAPPING, migrateMapping } from '../lib/templateExcel.js';
 import { DEFAULT_STATUSES, normalizeStatuses } from '../lib/status.js';
+import { api } from '../lib/server.js';
 
 const slugKey = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'status';
 
@@ -39,6 +40,24 @@ const DEFAULTS = {
   reviewTarget: '',
 };
 
+// On the server, these settings belong to the open project or review instead of
+// the browser, so every user sees the same ones. Theme stays per browser.
+const PROJECT_KEYS = ['disciplineColors', 'customDisciplines', 'customCommenters', 'detect', 'templateExport', 'statuses'];
+const REVIEW_KEYS = ['reviewTarget'];
+
+// Fill defaults and upgrade older shapes for the keys that need it.
+function normalize(saved) {
+  return {
+    ...DEFAULTS,
+    ...saved,
+    disciplineColors: { ...saved.disciplineColors },
+    customCommenters: [...(saved.customCommenters || [])],
+    detect: cloneDetect(saved.detect),
+    templateExport: migrateMapping({ ...DEFAULT_TEMPLATE_MAPPING, ...(saved.templateExport || {}) }),
+    statuses: normalizeStatuses(saved.statuses),
+  };
+}
+
 const SettingsContext = createContext(null);
 
 // system → let the media query decide (no attribute); else force it.
@@ -50,26 +69,88 @@ export function applyThemeMode(mode) {
 
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULTS);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const [ready, setReady] = useState(false);
   const loaded = useRef(false);
+  // remote: { pid, rid, canWrite, sent: { key: lastSavedJSON } } while a server
+  // review is open; local: this browser's own settings, restored on leaving.
+  const remote = useRef(null);
+  const local = useRef(null);
 
   // Load once on startup, then apply the saved theme.
   useEffect(() => {
     (async () => {
       const saved = await loadSettings();
-      if (saved) setSettings({ ...DEFAULTS, ...saved, disciplineColors: { ...saved.disciplineColors }, customCommenters: [...(saved.customCommenters || [])], detect: cloneDetect(saved.detect), templateExport: migrateMapping({ ...DEFAULT_TEMPLATE_MAPPING, ...(saved.templateExport || {}) }), statuses: normalizeStatuses(saved.statuses) });
+      if (saved) setSettings(normalize(saved));
       applyThemeMode(saved?.themeMode || DEFAULTS.themeMode);
       loaded.current = true;
       setReady(true);
     })();
   }, []);
 
-  // Persist (debounced) on every change once loaded.
+  // Persist (debounced) on every change once loaded. With a server review open,
+  // shared keys go to the server and only the theme is kept in this browser.
   useEffect(() => {
     if (!loaded.current) return undefined;
-    const t = setTimeout(() => saveSettings(settings), 400);
+    const t = setTimeout(() => {
+      const r = remote.current;
+      if (!r) {
+        saveSettings(settings);
+        return;
+      }
+      saveSettings({ ...local.current, themeMode: settings.themeMode });
+      if (!r.canWrite) return;
+      const push = (keys, put) => {
+        for (const k of keys) {
+          const json = JSON.stringify(settings[k]);
+          if (r.sent[k] === json) continue;
+          r.sent[k] = json;
+          put(k, settings[k]).catch(() => { delete r.sent[k]; }); // retried on the next change
+        }
+      };
+      push(PROJECT_KEYS, (k, v) => api.putProjectConfig(r.pid, k, v));
+      push(REVIEW_KEYS, (k, v) => api.putReviewConfig(r.rid, k, v));
+    }, 400);
     return () => clearTimeout(t);
   }, [settings]);
+
+  // Switch to a server review's settings. A project with nothing saved yet
+  // starts from this browser's settings (written up by an admin/editor), so an
+  // existing setup carries over; a review starts with no target.
+  const bindRemote = useCallback(async ({ projectId, reviewId, canWrite }) => {
+    if (!remote.current) local.current = settingsRef.current;
+    remote.current = null; // pause syncing while loading
+    let pc = {};
+    let rc = {};
+    try {
+      [pc, rc] = await Promise.all([api.getProjectConfig(projectId), api.getReviewConfig(reviewId)]);
+    } catch { /* fall back to defaults below */ }
+    const base = local.current;
+    const sent = {};
+    const next = { ...settingsRef.current };
+    for (const k of PROJECT_KEYS) {
+      if (k in pc) { next[k] = pc[k]; sent[k] = JSON.stringify(pc[k]); }
+      else next[k] = canWrite ? base[k] : DEFAULTS[k];
+    }
+    for (const k of REVIEW_KEYS) {
+      if (k in rc) { next[k] = rc[k]; sent[k] = JSON.stringify(rc[k]); }
+      else { next[k] = DEFAULTS[k]; sent[k] = JSON.stringify(DEFAULTS[k]); }
+    }
+    const normalized = normalize(next);
+    // Keys whose stored shape was upgraded count as unsent, so they're saved back.
+    for (const k of PROJECT_KEYS) if (sent[k] !== undefined && JSON.stringify(normalized[k]) !== sent[k]) delete sent[k];
+    remote.current = { pid: projectId, rid: reviewId, canWrite, sent };
+    setSettings(normalized);
+  }, []);
+
+  const unbindRemote = useCallback(() => {
+    if (!remote.current && !local.current) return;
+    remote.current = null;
+    const back = local.current;
+    local.current = null;
+    if (back) setSettings((s) => ({ ...back, themeMode: s.themeMode }));
+  }, []);
 
   const update = useCallback((patch) => setSettings((s) => ({ ...s, ...patch })), []);
   const setThemeMode = useCallback((mode) => {
@@ -153,8 +234,8 @@ export function SettingsProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, addStatus, updateStatus, removeStatus, moveStatus, resetSettings }),
-    [settings, ready, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, addStatus, updateStatus, removeStatus, moveStatus, resetSettings]
+    () => ({ settings, ready, bindRemote, unbindRemote, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, addStatus, updateStatus, removeStatus, moveStatus, resetSettings }),
+    [settings, ready, bindRemote, unbindRemote, update, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, setDetect, setTemplateExport, addStatus, updateStatus, removeStatus, moveStatus, resetSettings]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

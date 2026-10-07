@@ -53,6 +53,9 @@ export const api = {
   getGlobalConfig: () => req('GET', '/api/config'),
   getProjectConfig: (pid) => req('GET', `/api/projects/${pid}/config`),
   putProjectConfig: (pid, key, json) => req('PUT', `/api/projects/${pid}/config`, { key, json }),
+  getTemplate: (pid) => req('GET', `/api/projects/${pid}/template`),
+  putTemplate: (pid, name, blob) => req('PUT', `/api/projects/${pid}/template?name=${encodeURIComponent(name)}`, blob),
+  deleteTemplate: (pid) => req('DELETE', `/api/projects/${pid}/template`),
   getReviewConfig: (rid) => req('GET', `/api/reviews/${rid}/config`),
   putReviewConfig: (rid, key, json) => req('PUT', `/api/reviews/${rid}/config`, { key, json }),
   putGlobalConfig: (key, json) => req('PUT', '/api/config', { key, json }),
@@ -61,6 +64,9 @@ export const api = {
 // Session-wide remote flag + the open Project › Review. Set by Root; read by
 // App, the store, and the import path to branch behaviour without prop-drilling.
 export const remoteState = { active: false, projectId: null, reviewId: null, user: null };
+
+// Admins and editors write; viewers are read-only (the server enforces it too).
+export const canWrite = (user = remoteState.user) => user?.role === 'admin' || user?.role === 'editor';
 
 let _isRemote = null;
 export async function detectRemote() {

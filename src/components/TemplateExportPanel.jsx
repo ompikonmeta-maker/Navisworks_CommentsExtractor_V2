@@ -183,12 +183,15 @@ export default function TemplateExportPanel() {
     setErr('');
     const bytes = new Uint8Array(await f.arrayBuffer());
     setTpl({ name: f.name, bytes });
-    await saveTemplate(f.name, bytes);
+    try { await saveTemplate(f.name, bytes); } catch { notify('Couldn’t save the template for this project. It is used for this export only.', 'error'); }
     // A fresh template should re-map from its own columns.
     setTemplateExport(() => JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_MAPPING)));
     try { setInfo(await inspectTemplate(bytes, cfg.logSheet.headerRow)); } catch (er) { setErr(`Couldn’t read template: ${er.message}`); setInfo(null); }
   };
-  const removeTpl = async () => { await clearTemplate(); setTpl(null); setInfo(null); };
+  const removeTpl = async () => {
+    try { await clearTemplate(); } catch { notify('Couldn’t remove the template.', 'error'); return; }
+    setTpl(null); setInfo(null);
+  };
 
   const doExport = async () => {
     if (!tpl) return;

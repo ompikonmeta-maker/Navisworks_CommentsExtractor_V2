@@ -16,7 +16,7 @@ import {
   writeSessionToFolder,
 } from './lib/persist.js';
 import { Icon, Button } from './components/ui.jsx';
-import { loadReviewRecords } from './lib/server.js';
+import { loadReviewRecords, canWrite } from './lib/server.js';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
@@ -40,7 +40,7 @@ const RAIL = 96;
 
 export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   const store = useStore();
-  const { settings, update } = useSettings();
+  const { settings, update, ready: settingsReady, bindRemote, unbindRemote } = useSettings();
   const [effTheme, setEffTheme] = useState(effectiveTheme);
   const [route, setRoute] = useState('dashboard');
   const [detailId, setDetailId] = useState(null);
@@ -84,6 +84,15 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [saving, setSaving] = useState('idle'); // 'idle' | 'saving' | 'saved'
   const folderHandleRef = useRef(null);
+
+  // On the server, use the open project's / review's shared settings.
+  const reviewId = remote?.review.id;
+  useEffect(() => {
+    if (!remote || !settingsReady) return undefined;
+    bindRemote({ projectId: remote.project.id, reviewId, canWrite: canWrite(remote.user) });
+    return unbindRemote;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewId, settingsReady]);
 
   // Startup: restore the saved session (IndexedDB) if any, else the sample.
   // In remote mode, load the chosen review's records from the server instead —

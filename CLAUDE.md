@@ -136,6 +136,12 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   **commenter master list** (`customCommenters`: names the user adds on top of those detected
   in the data). The header theme toggle and the Settings page both write here; `DisciplineBadge`
   reads the colour map. Wrapped around the app in `main.jsx`, outside `StoreProvider`.
+  On the V2 server, `bindRemote` (called by `App` when a review opens) swaps the shared keys
+  for the server's copy — labels, detection, template mapping and statuses per **project**,
+  `reviewTarget` per **review** — and syncs edits back; only `themeMode` stays per browser. A
+  project with nothing saved starts from the admin/editor's browser settings. The template
+  file follows the same rule (`persist.saveTemplate`/`loadTemplate` go to
+  `/api/projects/{id}/template` in remote mode).
   Commenters are a **record field**, not an author mapping: `record.commenter` is the person
   who wrote the comment, auto-detected by `parser.detectCommenter` from the leading `Name:`
   token in the comment text (e.g. `CPY_Dito:`, `OPS(Teguh):`); `store.setData` backfills it for
