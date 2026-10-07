@@ -66,7 +66,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
     <div className="canvas-w">
       {/* Section switcher — sidebar-nested on desktop; a compact horizontal
           strip here on phones, where the sidebar is a top bar with no room. */}
-      <nav className="mb-4 flex gap-1 overflow-x-auto rounded-card border border-outline-variant/60 bg-surface-low p-2 md:hidden">
+      <nav className="mb-4 flex gap-1 overflow-x-auto t-card rounded-card bg-surface p-2 md:hidden">
         {sections.map((s) => {
           const on = section === s.id;
           return (

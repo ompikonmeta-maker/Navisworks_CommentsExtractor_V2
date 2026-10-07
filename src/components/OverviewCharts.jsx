@@ -18,10 +18,10 @@ export const fmtDayY = (t) => (t == null ? '—' : new Date(t).toLocaleDateStrin
 
 // Verdict → theme-aware status colours (good / warning / critical / neutral).
 export const VERDICT = {
-  ok: { fg: 'var(--tabelin-status-closed)', icon: 'check_circle', label: 'On track' },
-  done: { fg: 'var(--tabelin-status-closed)', icon: 'check_circle', label: 'Done' },
-  risk: { fg: 'var(--tabelin-status-review)', icon: 'warning', label: 'At risk' },
-  bad: { fg: 'var(--tabelin-status-open)', icon: 'error', label: 'Behind' },
+  ok: { fg: 'var(--tabelin-good)', icon: 'check_circle', label: 'On track' },
+  done: { fg: 'var(--tabelin-good)', icon: 'check_circle', label: 'Done' },
+  risk: { fg: 'var(--tabelin-warn)', icon: 'warning', label: 'At risk' },
+  bad: { fg: 'var(--tabelin-bad)', icon: 'error', label: 'Behind' },
   triage: { fg: 'var(--md-sys-color-outline)', icon: 'help', label: 'Needs triage' },
   unknown: { fg: 'var(--md-sys-color-outline)', icon: 'help', label: 'No pace yet' },
 };
@@ -158,8 +158,8 @@ export function ForecastRunway({ ov, onPick }) {
         <svg width={W} height={H} role="img" aria-label="Forecast finish per discipline">
           <defs>
             <pattern id="ovLate" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="8" height="8" style={{ fill: 'var(--tabelin-status-open)' }} opacity=".035" />
-              <rect width="2" height="8" style={{ fill: 'var(--tabelin-status-open)' }} opacity=".1" />
+              <rect width="8" height="8" style={{ fill: 'var(--tabelin-bad)' }} opacity=".035" />
+              <rect width="2" height="8" style={{ fill: 'var(--tabelin-bad)' }} opacity=".1" />
             </pattern>
             <pattern id="ovChk" width="8" height="8" patternUnits="userSpaceOnUse">
               <rect width="8" height="8" style={{ fill: 'var(--md-sys-color-surface)' }} />
@@ -291,8 +291,8 @@ export function BurnUp({ ov, height = 290 }) {
         <svg width={W} height={H} role="img" aria-label={`Raised ${ov.total}, closed ${ov.done}`}>
           {yt.map((v) => <g key={v}><line x1={m.l} x2={W - m.r} y1={Y(v)} y2={Y(v)} className="ov-grid" /><text x={m.l - 8} y={Y(v) + 4} textAnchor="end" className="ov-tick">{v}</text></g>)}
           {months.map((t) => <text key={t} x={X(t)} y={H - 8} textAnchor="middle" className="ov-tick">{new Date(t).toLocaleDateString('en-GB', { month: 'short' })}{new Date(t).getMonth() === 0 ? ` ’${String(new Date(t).getFullYear()).slice(2)}` : ''}</text>)}
-          {tg != null && <><line x1={X(tg)} x2={X(tg)} y1={m.t} y2={H - m.b} strokeWidth="1.5" style={{ stroke: 'var(--tabelin-status-review)' }} />
-            <text x={X(tg) - 4} y={m.t - 8} textAnchor="end" fontSize="11" fontWeight="700" style={{ fill: 'var(--tabelin-status-review)' }}>{fmtDay(tg)}</text></>}
+          {tg != null && <><line x1={X(tg)} x2={X(tg)} y1={m.t} y2={H - m.b} strokeWidth="1.5" strokeDasharray="4 4" style={{ stroke: ov.late > 0 ? 'var(--tabelin-bad)' : 'var(--md-sys-color-on-surface-variant)' }} />
+            <text x={X(tg) - 4} y={m.t - 8} textAnchor="end" fontSize="11" fontWeight="700" style={{ fill: ov.late > 0 ? 'var(--tabelin-bad)' : 'var(--md-sys-color-on-surface-variant)' }}>{fmtDay(tg)}</text></>}
           <line x1={X(T)} x2={X(T)} y1={m.t} y2={H - m.b} className="ov-today" />
           <path d={area} style={{ fill: 'color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent)' }} />
           <path d={`${line('raised')}L${X(x1)},${Y(pts[pts.length - 1].raised)}`} fill="none" strokeWidth="2" strokeLinejoin="round" style={{ stroke: 'var(--md-sys-color-outline)' }} />
@@ -369,7 +369,7 @@ export function Pipeline({ ov, onPick }) {
           <div key={s.key}>
             {drop > 0 && (
               <div className="ml-[132px] flex items-center gap-1 py-0.5 text-[11.5px] text-on-surface-variant sm:ml-[152px]">
-                <span className="font-semibold tabular-nums" style={{ color: 'var(--tabelin-status-open)' }}>−{drop}</span> {s.drop}
+                <span className="font-semibold tabular-nums" style={{ color: 'var(--tabelin-warn)' }}>−{drop}</span> {s.drop}
               </div>
             )}
             <button type="button" onClick={() => onPick?.(s.key)} className="grid w-full grid-cols-[120px_1fr_48px] items-center gap-3 rounded-control text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:grid-cols-[140px_1fr_56px]"
@@ -446,7 +446,7 @@ export function PaceHeadline({ ov }) {
   const w = ov.weeks, cur = w[w.length - 1]?.value ?? 0, prev = w[w.length - 2]?.value ?? 0, d = cur - prev;
   const need = ov.needed != null ? Math.ceil(ov.needed * 7) : null;
   const up = d > 0;
-  const chip = d === 0 ? 'var(--md-sys-color-on-surface-variant)' : up ? 'var(--tabelin-status-closed)' : 'var(--tabelin-status-open)';
+  const chip = d === 0 ? 'var(--md-sys-color-on-surface-variant)' : up ? 'var(--tabelin-good)' : 'var(--tabelin-bad)';
   return (
     <div className="mb-1 flex items-end justify-between gap-3">
       <div tabIndex={0} {...tp(<TipRows title={`Week to ${fmtDay(w[w.length - 1]?.end)}`} rows={[['Closed', cur], ['Week before', prev]]} />)}>
@@ -478,7 +478,7 @@ export function PaceCoverage({ ov }) {
   const avg = last4.reduce((a, x) => a + x.value, 0) / Math.max(1, last4.length);
   if (need == null || need <= 0) return null;
   const pct = Math.round((avg / need) * 100);
-  const col = pct >= 100 ? 'var(--tabelin-status-closed)' : pct >= 80 ? 'var(--tabelin-status-review)' : 'var(--tabelin-status-open)';
+  const col = pct >= 100 ? 'var(--tabelin-good)' : pct >= 80 ? 'var(--tabelin-warn)' : 'var(--tabelin-bad)';
   return (
     <div className="mt-3 border-t border-outline-variant/40 pt-3" tabIndex={0}
       {...tp(<TipRows title="4-week average vs needed" rows={[['Average', `${Math.round(avg)} / week`], ['Needed', `${Math.ceil(need)} / week`]]} />)}>

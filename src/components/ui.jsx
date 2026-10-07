@@ -3,6 +3,7 @@ import { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSettings } from '../store/settings.jsx';
 import { statusColor, chipStyle } from '../lib/status.js';
+import { DISCIPLINES } from '../lib/parser.js';
 
 // Icons not in the embedded Material Symbols subset render as inline SVG so we
 // don't have to re-subset the font. Sized in `em` to follow the text size set
@@ -131,15 +132,22 @@ export function StatusBadge({ status }) {
   );
 }
 
+// Fixed discipline palette (checked for colour-blind separation). Colours go
+// by the discipline's place in DISCIPLINES, never by rank, so a discipline
+// keeps its colour across filters. Custom disciplines take the spare slot;
+// the user can override any of them in Settings › Labels.
+export const DISC_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#0e7c86', '#8a94a8'];
+const DISC_DEFAULT = Object.fromEntries(DISCIPLINES.map((d, i) => [d, d === 'OTHER' ? '#8a94a8' : DISC_PALETTE[i]]));
+export function discColor(name, overrides) {
+  return overrides?.[name] || DISC_DEFAULT[name] || '#0e7c86';
+}
+
 export function DisciplineBadge({ discipline }) {
   const { settings } = useSettings();
-  const c = settings.disciplineColors?.[discipline];
-  const style = c ? { background: `color-mix(in srgb, ${c} 16%, transparent)`, color: c } : undefined;
+  const c = discColor(discipline, settings.disciplineColors);
   return (
-    <span
-      style={style}
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${c ? '' : 'bg-tertiary-container text-on-tertiary-container'}`}
-    >
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-on-surface-variant">
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c }} />
       {discipline}
     </span>
   );
@@ -147,7 +155,7 @@ export function DisciplineBadge({ discipline }) {
 
 export const Card = forwardRef(function Card({ children, className = '' }, ref) {
   return (
-    <div ref={ref} className={`rounded-card bg-surface-low border border-outline-variant/60 ${className}`}>
+    <div ref={ref} className={`t-card rounded-card bg-surface ${className}`}>
       {children}
     </div>
   );
@@ -322,7 +330,7 @@ export function SegmentedButtons({ value, onChange, options, 'aria-label': ariaL
 
 export function EmptyState({ icon = 'inbox', title, children, action }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-card border border-dashed border-outline-variant bg-surface-low p-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 t-card rounded-card bg-surface p-10 text-center">
       <Icon name={icon} className="text-[48px] text-on-surface-variant" />
       <h3 className="text-lg font-medium">{title}</h3>
       <p className="max-w-md text-sm text-on-surface-variant">{children}</p>

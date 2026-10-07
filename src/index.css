@@ -36,104 +36,104 @@
   --md-sys-elevation-level3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
 
   /* Color — light, seeded from #1768f7 (MD3 Expressive) */
-  --md-sys-color-primary: #0056d2;
+  --md-sys-color-primary: #1764f0;
   --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #e0e0ff;
-  --md-sys-color-on-primary-container: #0040a1;
+  --md-sys-color-primary-container: #e2ebff;
+  --md-sys-color-on-primary-container: #0b3fa8;
 
-  --md-sys-color-secondary: #545a92;
+  --md-sys-color-secondary: #4b5873;
   --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #e0e0ff;
-  --md-sys-color-on-secondary-container: #3b4378;
+  --md-sys-color-secondary-container: #e2ebff;
+  --md-sys-color-on-secondary-container: #123a8c;
 
-  --md-sys-color-tertiary: #b71e3b;
+  --md-sys-color-tertiary: #6a4fd8;
   --md-sys-color-on-tertiary: #ffffff;
-  --md-sys-color-tertiary-container: #ffdad9;
-  --md-sys-color-on-tertiary-container: #920028;
+  --md-sys-color-tertiary-container: #ece8fd;
+  --md-sys-color-on-tertiary-container: #3b2a8f;
 
-  --md-sys-color-error: #bf0031;
+  --md-sys-color-error: #d92d20;
   --md-sys-color-on-error: #ffffff;
-  --md-sys-color-error-container: #ffdad8;
-  --md-sys-color-on-error-container: #920023;
+  --md-sys-color-error-container: #fee4e2;
+  --md-sys-color-on-error-container: #912018;
 
-  --md-sys-color-background: #f9f9ff;
-  --md-sys-color-on-background: #1a1b25;
+  --md-sys-color-background: #eef1f6;
+  --md-sys-color-on-background: #101828;
 
-  --md-sys-color-surface: #f9f9ff;
-  --md-sys-color-on-surface: #1a1b25;
-  --md-sys-color-surface-variant: #e0e0ff;
-  --md-sys-color-on-surface-variant: #434460;
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-on-surface: #101828;
+  --md-sys-color-surface-variant: #e6e9f0;
+  --md-sys-color-on-surface-variant: #4b5565;
 
-  --md-sys-color-surface-dim: #d9d9e8;
-  --md-sys-color-surface-bright: #f9f9ff;
+  --md-sys-color-surface-dim: #dde2ea;
+  --md-sys-color-surface-bright: #ffffff;
   --md-sys-color-surface-container-lowest: #ffffff;
-  --md-sys-color-surface-container-low: #f3f2ff;
-  --md-sys-color-surface-container: #edecfc;
-  --md-sys-color-surface-container-high: #e7e7f6;
-  --md-sys-color-surface-container-highest: #e2e1f0;
+  --md-sys-color-surface-container-low: #f8f9fc;
+  --md-sys-color-surface-container: #f2f4f8;
+  --md-sys-color-surface-container-high: #e9ecf2;
+  --md-sys-color-surface-container-highest: #e1e5ed;
 
-  --md-sys-color-outline: #747493;
-  --md-sys-color-outline-variant: #c4c4e5;
+  --md-sys-color-outline: #8b93a3;
+  --md-sys-color-outline-variant: #dde1e8;
 
-  --md-sys-color-inverse-surface: #2f2f3b;
-  --md-sys-color-inverse-on-surface: #f0efff;
-  --md-sys-color-inverse-primary: #c0c1ff;
+  --md-sys-color-inverse-surface: #1d2433;
+  --md-sys-color-inverse-on-surface: #eef1f6;
+  --md-sys-color-inverse-primary: #9dbcff;
 
   /* Status accents */
-  --tabelin-status-open: #bf0031;
-  --tabelin-status-review: #9a6800;
-  --tabelin-status-closed: #1f7a4d;
+  --tabelin-status-open: #e8590c;
+  --tabelin-status-review: #6a4fd8;
+  --tabelin-status-closed: #12946a;
 
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --md-sys-color-primary: #c0c1ff;
-  --md-sys-color-on-primary: #002b73;
-  --md-sys-color-primary-container: #0040a1;
-  --md-sys-color-on-primary-container: #e0e0ff;
+  --md-sys-color-primary: #7aa7ff;
+  --md-sys-color-on-primary: #002a6b;
+  --md-sys-color-primary-container: #1e3a75;
+  --md-sys-color-on-primary-container: #dbe6ff;
 
-  --md-sys-color-secondary: #c0c1ff;
-  --md-sys-color-on-secondary: #212d5f;
-  --md-sys-color-secondary-container: #3b4378;
-  --md-sys-color-on-secondary-container: #e0e0ff;
+  --md-sys-color-secondary: #b7c3dc;
+  --md-sys-color-on-secondary: #22304a;
+  --md-sys-color-secondary-container: #24365c;
+  --md-sys-color-on-secondary-container: #d9e4ff;
 
-  --md-sys-color-tertiary: #ffb3b2;
-  --md-sys-color-on-tertiary: #68001a;
-  --md-sys-color-tertiary-container: #920028;
-  --md-sys-color-on-tertiary-container: #ffdad9;
+  --md-sys-color-tertiary: #b3a5ff;
+  --md-sys-color-on-tertiary: #2a1a7a;
+  --md-sys-color-tertiary-container: #3b2d86;
+  --md-sys-color-on-tertiary-container: #e6e0ff;
 
-  --md-sys-color-error: #ffb3b0;
-  --md-sys-color-on-error: #680016;
-  --md-sys-color-error-container: #920023;
-  --md-sys-color-on-error-container: #ffdad8;
+  --md-sys-color-error: #ff8a80;
+  --md-sys-color-on-error: #5c0b06;
+  --md-sys-color-error-container: #7a1d16;
+  --md-sys-color-on-error-container: #ffdad6;
 
-  --md-sys-color-background: #13121d;
-  --md-sys-color-on-background: #e2e1f0;
+  --md-sys-color-background: #0c1017;
+  --md-sys-color-on-background: #e8ecf3;
 
-  --md-sys-color-surface: #13121d;
-  --md-sys-color-on-surface: #e2e1f0;
-  --md-sys-color-surface-variant: #434460;
-  --md-sys-color-on-surface-variant: #c4c4e5;
+  --md-sys-color-surface: #171c26;
+  --md-sys-color-on-surface: #e8ecf3;
+  --md-sys-color-surface-variant: #2a3242;
+  --md-sys-color-on-surface-variant: #a8b1c2;
 
-  --md-sys-color-surface-dim: #13121d;
-  --md-sys-color-surface-bright: #383844;
-  --md-sys-color-surface-container-lowest: #0e0d19;
-  --md-sys-color-surface-container-low: #1a1b25;
-  --md-sys-color-surface-container: #1e1f2a;
-  --md-sys-color-surface-container-high: #292934;
-  --md-sys-color-surface-container-highest: #343440;
+  --md-sys-color-surface-dim: #0c1017;
+  --md-sys-color-surface-bright: #2d3546;
+  --md-sys-color-surface-container-lowest: #10141c;
+  --md-sys-color-surface-container-low: #1c2230;
+  --md-sys-color-surface-container: #212836;
+  --md-sys-color-surface-container-high: #283041;
+  --md-sys-color-surface-container-highest: #30394b;
 
-  --md-sys-color-outline: #8e8eae;
-  --md-sys-color-outline-variant: #434460;
+  --md-sys-color-outline: #7c8698;
+  --md-sys-color-outline-variant: #2c3445;
 
-  --md-sys-color-inverse-surface: #e2e1f0;
-  --md-sys-color-inverse-on-surface: #2f2f3b;
-  --md-sys-color-inverse-primary: #0056d2;
+  --md-sys-color-inverse-surface: #e8ecf3;
+  --md-sys-color-inverse-on-surface: #1d2433;
+  --md-sys-color-inverse-primary: #1764f0;
 
-  --tabelin-status-open: #ffb3b0;
-  --tabelin-status-review: #ffca7a;
-  --tabelin-status-closed: #7fd6a6;
+  --tabelin-status-open: #f07a3e;
+  --tabelin-status-review: #9d8cf0;
+  --tabelin-status-closed: #3cbf8c;
 
   color-scheme: dark;
 }
@@ -141,42 +141,216 @@
 /* Follow OS preference only when no explicit theme is chosen */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
-    --md-sys-color-primary: #c0c1ff;
-    --md-sys-color-on-primary: #002b73;
-    --md-sys-color-primary-container: #0040a1;
-    --md-sys-color-on-primary-container: #e0e0ff;
-    --md-sys-color-secondary: #c0c1ff;
-    --md-sys-color-on-secondary: #212d5f;
-    --md-sys-color-secondary-container: #3b4378;
-    --md-sys-color-on-secondary-container: #e0e0ff;
-    --md-sys-color-tertiary: #ffb3b2;
-    --md-sys-color-tertiary-container: #920028;
-    --md-sys-color-on-tertiary-container: #ffdad9;
-    --md-sys-color-error: #ffb3b0;
-    --md-sys-color-error-container: #920023;
-    --md-sys-color-on-error-container: #ffdad8;
-    --md-sys-color-background: #13121d;
-    --md-sys-color-on-background: #e2e1f0;
-    --md-sys-color-surface: #13121d;
-    --md-sys-color-on-surface: #e2e1f0;
-    --md-sys-color-surface-variant: #434460;
-    --md-sys-color-on-surface-variant: #c4c4e5;
-    --md-sys-color-surface-bright: #383844;
-    --md-sys-color-surface-container-lowest: #0e0d19;
-    --md-sys-color-surface-container-low: #1a1b25;
-    --md-sys-color-surface-container: #1e1f2a;
-    --md-sys-color-surface-container-high: #292934;
-    --md-sys-color-surface-container-highest: #343440;
-    --md-sys-color-outline: #8e8eae;
-    --md-sys-color-outline-variant: #434460;
-    --tabelin-status-open: #ffb3b0;
-    --tabelin-status-review: #ffca7a;
-    --tabelin-status-closed: #7fd6a6;
+    --md-sys-color-primary: #7aa7ff;
+    --md-sys-color-on-primary: #002a6b;
+    --md-sys-color-primary-container: #1e3a75;
+    --md-sys-color-on-primary-container: #dbe6ff;
+    --md-sys-color-secondary: #b7c3dc;
+    --md-sys-color-on-secondary: #22304a;
+    --md-sys-color-secondary-container: #24365c;
+    --md-sys-color-on-secondary-container: #d9e4ff;
+    --md-sys-color-tertiary: #b3a5ff;
+    --md-sys-color-tertiary-container: #3b2d86;
+    --md-sys-color-on-tertiary-container: #e6e0ff;
+    --md-sys-color-error: #ff8a80;
+    --md-sys-color-error-container: #7a1d16;
+    --md-sys-color-on-error-container: #ffdad6;
+    --md-sys-color-background: #0c1017;
+    --md-sys-color-on-background: #e8ecf3;
+    --md-sys-color-surface: #171c26;
+    --md-sys-color-on-surface: #e8ecf3;
+    --md-sys-color-surface-variant: #2a3242;
+    --md-sys-color-on-surface-variant: #a8b1c2;
+    --md-sys-color-surface-bright: #2d3546;
+    --md-sys-color-surface-container-lowest: #10141c;
+    --md-sys-color-surface-container-low: #1c2230;
+    --md-sys-color-surface-container: #212836;
+    --md-sys-color-surface-container-high: #283041;
+    --md-sys-color-surface-container-highest: #30394b;
+    --md-sys-color-outline: #7c8698;
+    --md-sys-color-outline-variant: #2c3445;
+    --tabelin-status-open: #f07a3e;
+    --tabelin-status-review: #9d8cf0;
+    --tabelin-status-closed: #3cbf8c;
+    --md-sys-color-on-tertiary: #2a1a7a;
+    --md-sys-color-on-error: #5c0b06;
+    --md-sys-color-surface-dim: #0c1017;
+    --md-sys-color-inverse-surface: #e8ecf3;
+    --md-sys-color-inverse-on-surface: #1d2433;
+    --md-sys-color-inverse-primary: #1764f0;
     color-scheme: dark;
   }
 }
 
+/* Elevation, status ink and verdict colours. Cards are white on a cool-grey
+   canvas and lift with a soft shadow instead of a border. Status text inside
+   tinted chips mixes toward the surface ink in dark mode so it stays
+   readable. Verdicts (on track / at risk / behind) have their own colours so
+   red only ever means late. */
+:root {
+  --tabelin-elev-card: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 14px rgba(16, 24, 40, 0.06);
+  --tabelin-elev-hover: 0 2px 4px rgba(16, 24, 40, 0.06), 0 10px 24px rgba(16, 24, 40, 0.09);
+  --tabelin-card-ring: transparent;
+  --tabelin-status-ink: 100%;
+  --tabelin-ease: cubic-bezier(0.2, 0, 0, 1);
+  --tabelin-good: #12946a;
+  --tabelin-warn: #b54708;
+  --tabelin-bad: #d92d20;
+}
+:root[data-theme="dark"] {
+  --tabelin-elev-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.22);
+  --tabelin-elev-hover: 0 2px 6px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.3);
+  --tabelin-card-ring: rgba(255, 255, 255, 0.04);
+  --tabelin-status-ink: 62%;
+  --tabelin-good: #3cbf8c;
+  --tabelin-warn: #f5a35c;
+  --tabelin-bad: #ff7a70;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --tabelin-elev-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.22);
+    --tabelin-elev-hover: 0 2px 6px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.3);
+    --tabelin-card-ring: rgba(255, 255, 255, 0.04);
+    --tabelin-status-ink: 62%;
+    --tabelin-good: #3cbf8c;
+    --tabelin-warn: #f5a35c;
+    --tabelin-bad: #ff7a70;
+  }
+}
+
+/* The sidebar (and its collapsed-rail flyout) keeps its original lavender
+   look: its tokens are pinned here so the app-wide palette doesn't reach it. */
+[data-rail],
+.t-flyout {
+  --md-sys-color-primary: #0056d2;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-secondary-container: #e0e0ff;
+  --md-sys-color-on-secondary-container: #3b4378;
+  --md-sys-color-background: #f9f9ff;
+  --md-sys-color-surface: #f9f9ff;
+  --md-sys-color-on-surface: #1a1b25;
+  --md-sys-color-on-surface-variant: #434460;
+  --md-sys-color-surface-container-low: #f3f2ff;
+  --md-sys-color-surface-container: #edecfc;
+  --md-sys-color-surface-container-high: #e7e7f6;
+  --md-sys-color-surface-container-highest: #e2e1f0;
+  --md-sys-color-outline: #747493;
+  --md-sys-color-outline-variant: #c4c4e5;
+}
+:root[data-theme="dark"] [data-rail],
+:root[data-theme="dark"] .t-flyout {
+  --md-sys-color-primary: #c0c1ff;
+  --md-sys-color-on-primary: #002b73;
+  --md-sys-color-secondary-container: #3b4378;
+  --md-sys-color-on-secondary-container: #e0e0ff;
+  --md-sys-color-background: #13121d;
+  --md-sys-color-surface: #13121d;
+  --md-sys-color-on-surface: #e2e1f0;
+  --md-sys-color-on-surface-variant: #c4c4e5;
+  --md-sys-color-surface-container-low: #1a1b25;
+  --md-sys-color-surface-container: #1e1f2a;
+  --md-sys-color-surface-container-high: #292934;
+  --md-sys-color-surface-container-highest: #343440;
+  --md-sys-color-outline: #8e8eae;
+  --md-sys-color-outline-variant: #434460;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) [data-rail],
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .t-flyout {
+  --md-sys-color-primary: #c0c1ff;
+  --md-sys-color-on-primary: #002b73;
+  --md-sys-color-secondary-container: #3b4378;
+  --md-sys-color-on-secondary-container: #e0e0ff;
+  --md-sys-color-background: #13121d;
+  --md-sys-color-surface: #13121d;
+  --md-sys-color-on-surface: #e2e1f0;
+  --md-sys-color-on-surface-variant: #c4c4e5;
+  --md-sys-color-surface-container-low: #1a1b25;
+  --md-sys-color-surface-container: #1e1f2a;
+  --md-sys-color-surface-container-high: #292934;
+  --md-sys-color-surface-container-highest: #343440;
+  --md-sys-color-outline: #8e8eae;
+  --md-sys-color-outline-variant: #434460;
+  }
+}
+
+/* Press feedback for chips/buttons that aren't the shared Button. */
+.t-press:active {
+  transform: scale(0.96);
+}
+
+/* Cards: lift by shadow (plus a hairline ring in dark mode, where shadows
+   barely read). */
+.t-card {
+  box-shadow: 0 0 0 1px var(--tabelin-card-ring), var(--tabelin-elev-card);
+}
+.t-card.t-press:hover,
+.t-card.t-lift:hover {
+  box-shadow: 0 0 0 1px var(--tabelin-card-ring), var(--tabelin-elev-hover);
+}
+.t-card.t-lift:hover {
+  transform: translateY(-1px);
+}
+
+/* Small anchored menus/popovers: fade + spring scale from their corner. */
+.t-pop {
+  box-shadow: 0 0 0 1px var(--tabelin-card-ring), 0 12px 32px -6px rgba(16, 24, 40, 0.22), 0 2px 6px rgba(16, 24, 40, 0.08);
+  opacity: 0;
+  transform: scale(0.94) translateY(-4px);
+  transform-origin: top right;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 160ms var(--tabelin-ease), transform 280ms cubic-bezier(0.34, 1.56, 0.42, 1), visibility 0s linear 280ms;
+}
+.t-pop.show {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity 160ms var(--tabelin-ease), transform 280ms cubic-bezier(0.34, 1.56, 0.42, 1), visibility 0s;
+}
+.t-menuitem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--md-sys-color-on-surface);
+  text-align: left;
+}
+.t-menuitem:hover,
+.t-menuitem:focus-visible {
+  background: var(--md-sys-color-surface-container);
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-pop,
+  .t-pop.show {
+    transition: none;
+  }
+  .t-press:active,
+  .t-card.t-lift:hover {
+    transform: none;
+  }
+}
+
 @layer base {
+  /* One easing for every state change (hover, press, focus, theme), so the
+     whole app responds the same way. Utilities that set their own transition
+     still win (this sits in the base layer). */
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  summary,
+  [role='button'] {
+    transition: background-color 180ms var(--tabelin-ease), color 180ms var(--tabelin-ease),
+      border-color 180ms var(--tabelin-ease), box-shadow 220ms var(--tabelin-ease),
+      opacity 180ms var(--tabelin-ease), transform 220ms var(--tabelin-ease);
+  }
   html,
   body,
   #root {
@@ -555,7 +729,7 @@
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 70%, transparent);
 }
 .vp-row.selected {
-  background: var(--md-sys-color-secondary-container);
+  background: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface));
 }
 .vp-row.selected > td:first-child {
   box-shadow: inset 3px 0 0 0 var(--md-sys-color-primary);
@@ -651,8 +825,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border: 1px solid var(--md-sys-color-outline);
-  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-low);
   color: var(--md-sys-color-on-surface);
   border-radius: var(--tabelin-radius-control);
   padding: 0 10px 0 12px;
@@ -662,13 +836,15 @@
   transition: background 140ms ease, border-color 140ms ease;
 }
 .dd-trigger:hover {
-  background: var(--md-sys-color-surface-container-high);
+  background: var(--md-sys-color-surface-container);
+  border-color: var(--md-sys-color-outline);
 }
 /* Read-only (viewer) areas: controls show their value without inviting a click. */
 fieldset:disabled .dd-trigger,
 fieldset:disabled .dd-trigger:hover {
   cursor: default;
-  background: var(--md-sys-color-surface-container);
+  background: var(--md-sys-color-surface-container-low);
+  border-color: var(--md-sys-color-outline-variant);
 }
 fieldset:disabled .dd-chev {
   visibility: hidden;
