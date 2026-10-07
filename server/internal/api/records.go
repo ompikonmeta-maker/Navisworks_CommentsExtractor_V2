@@ -1,0 +1,373 @@
+package api
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"time"
+
+	"tabelin/server/internal/auth"
+)
+
+// Record mirrors the V1 parser shape (camelCase JSON) plus server fields.
+type Record struct {
+	ID             int64           `json:"id"`
+	ReviewID       int64           `json:"reviewId"`
+	CommentID      string          `json:"commentId"`
+	Viewpoint      string          `json:"viewpoint"`
+	Commenter      string          `json:"commenter"`
+	Discipline     string          `json:"discipline"`
+	CommentRaw     string          `json:"commentRaw"`
+	CommentText    string          `json:"commentText"`
+	Resolution     string          `json:"resolution"`
+	Status         string          `json:"status"`
+	ClosedAt       string          `json:"closedAt"`
+	CommentDate    string          `json:"commentDate"`
+	AuthorCode     string          `json:"authorCode"`
+	CameraPosition string          `json:"cameraPosition"`
+	ImageRef       string          `json:"imageRef"`
+	Source         string          `json:"source"`
+	Extra          json.RawMessage `json:"extra"`
+	BeforeURL      string          `json:"beforeUrl,omitempty"`
+	AfterURL       string          `json:"afterUrl,omitempty"`
+	ChangedBy      string          `json:"changedBy,omitempty"`
+	ChangedAt      string          `json:"changedAt,omitempty"`
+}
+
+func pathID(r *http.Request, name string) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue(name), 10, 64)
+	return id, err == nil && id > 0
+}
+
+// listRecords returns a review's records (with image URLs) to any signed-in user.
+func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	rows, err := a.DB.Query(`
+		SELECT r.id, r.review_id, r.comment_id, r.viewpoint, r.commenter, r.discipline, r.comment_raw,
+		       r.comment_text, r.resolution, r.status, r.closed_at, r.comment_date, r.author_code,
+		       r.camera_position, r.image_ref, r.source, r.extra,
+		       COALESCE(NULLIF(u.display_name, ''), u.username, ''), r.updated_at
+		FROM records r LEFT JOIN users u ON u.id = r.updated_by
+		WHERE r.review_id=? ORDER BY r.id`, rid)
+	if err != nil {
+		writeErr(w, 500, "query records")
+		return
+	}
+	defer rows.Close()
+	out := []Record{}
+	for rows.Next() {
+		var rec Record
+		var extra string
+		var closed, cdate, changedAt sql.NullString
+		if err := rows.Scan(&rec.ID, &rec.ReviewID, &rec.CommentID, &rec.Viewpoint, &rec.Commenter,
+			&rec.Discipline, &rec.CommentRaw, &rec.CommentText, &rec.Resolution, &rec.Status,
+			&closed, &cdate, &rec.AuthorCode, &rec.CameraPosition, &rec.ImageRef, &rec.Source, &extra,
+			&rec.ChangedBy, &changedAt); err != nil {
+			writeErr(w, 500, "scan record")
+			return
+		}
+		rec.ClosedAt, rec.CommentDate = closed.String, cdate.String
+		// Imported rows carry no edit stamp; only real edits report who/when.
+		if changedAt.String != "" {
+			rec.ChangedAt = changedAt.String
+		} else {
+			rec.ChangedBy = ""
+		}
+		if extra == "" {
+			extra = "{}"
+		}
+		rec.Extra = json.RawMessage(extra)
+		out = append(out, rec)
+	}
+	// Attach image URLs (before/after) in one pass.
+	imgs, _ := a.DB.Query(`
+		SELECT i.record_id, i.kind, i.file_key FROM images i
+		JOIN records r ON r.id = i.record_id WHERE r.review_id=?`, rid)
+	if imgs != nil {
+		defer imgs.Close()
+		byRec := map[int64][2]string{} // [before, after]
+		for imgs.Next() {
+			var rid int64
+			var kind, key string
+			if imgs.Scan(&rid, &kind, &key) == nil {
+				pair := byRec[rid]
+				if kind == "after" {
+					pair[1] = key
+				} else {
+					pair[0] = key
+				}
+				byRec[rid] = pair
+			}
+		}
+		for i := range out {
+			if p, ok := byRec[out[i].ID]; ok {
+				if p[0] != "" {
+					out[i].BeforeURL = "/api/files/" + p[0]
+				}
+				if p[1] != "" {
+					out[i].AfterURL = "/api/files/" + p[1]
+				}
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// importRecords bulk-inserts parsed records into a review (metadata only;
+// images are uploaded separately). Admins only.
+func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	if !isAdminRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot write to review")
+		return
+	}
+	var body struct {
+		Records []Record `json:"records"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad body")
+		return
+	}
+	tx, err := a.DB.Begin()
+	if err != nil {
+		writeErr(w, 500, "begin")
+		return
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`
+		INSERT INTO records(review_id, comment_id, viewpoint, commenter, discipline, comment_raw,
+			comment_text, resolution, status, closed_at, comment_date, author_code, camera_position,
+			image_ref, source, extra, updated_by, updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'')`)
+	if err != nil {
+		writeErr(w, 500, "prepare")
+		return
+	}
+	defer stmt.Close()
+	for _, rec := range body.Records {
+		extra := string(rec.Extra)
+		if extra == "" {
+			extra = "{}"
+		}
+		if _, err := stmt.Exec(rid, rec.CommentID, rec.Viewpoint, rec.Commenter, rec.Discipline,
+			rec.CommentRaw, rec.CommentText, rec.Resolution, rec.Status, nullStr(rec.ClosedAt),
+			rec.CommentDate, rec.AuthorCode, rec.CameraPosition, rec.ImageRef, rec.Source, extra, u.ID); err != nil {
+			writeErr(w, 500, "insert record")
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 500, "commit")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"imported": len(body.Records)})
+}
+
+// patchRecord updates the editable fields of one record. Reviewers may change
+// the review fields; admins also the report fields.
+func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	id, ok := pathID(r, "id")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad id")
+		return
+	}
+	if _, err := a.recordReview(id); err != nil {
+		writeErr(w, http.StatusNotFound, "record not found")
+		return
+	}
+	if !canReviewRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot edit record")
+		return
+	}
+	var patch map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad body")
+		return
+	}
+	set, args := buildPatch(patch, u.ID, isAdminRole(u))
+	if set == "" {
+		writeErr(w, http.StatusBadRequest, "nothing to update")
+		return
+	}
+	if _, err := a.DB.Exec(`UPDATE records SET `+set+` WHERE id=?`, append(args, id)...); err != nil {
+		writeErr(w, 500, "update record")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// bulkPatchRecords applies many record edits in one transaction — used when a
+// change touches lots of records at once (detection re-run, status or custom
+// field rename, bulk edit). Only records of this review are touched; same
+// field rules as patchRecord.
+func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	if !canReviewRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot edit records")
+		return
+	}
+	var body struct {
+		Updates []struct {
+			ID    int64                      `json:"id"`
+			Patch map[string]json.RawMessage `json:"patch"`
+		} `json:"updates"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad body")
+		return
+	}
+	tx, err := a.DB.Begin()
+	if err != nil {
+		writeErr(w, 500, "begin")
+		return
+	}
+	defer tx.Rollback()
+	n := 0
+	for _, up := range body.Updates {
+		set, args := buildPatch(up.Patch, u.ID, isAdminRole(u))
+		if set == "" {
+			continue
+		}
+		res, err := tx.Exec(`UPDATE records SET `+set+` WHERE id=? AND review_id=?`, append(args, up.ID, rid)...)
+		if err != nil {
+			writeErr(w, 500, "update record")
+			return
+		}
+		if c, _ := res.RowsAffected(); c > 0 {
+			n++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 500, "commit")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"updated": n})
+}
+
+// buildPatch turns a JSON patch into "col=?, …" plus args for the editable
+// fields, stamping who changed it and when. Empty set = nothing editable.
+// Reviewers get the review fields only; admins also the report fields.
+func buildPatch(patch map[string]json.RawMessage, userID int64, admin bool) (string, []any) {
+	// Only these fields are editable; column ← jsonKey.
+	allowed := map[string]string{
+		"commenter": "commenter", "discipline": "discipline", "resolution": "resolution",
+		"status": "status", "closed_at": "closedAt", "extra": "extra",
+	}
+	if admin {
+		for col, key := range map[string]string{
+			"comment_text": "commentText",
+			// refreshed from a newer Navisworks report when a review is re-imported
+			"comment_raw": "commentRaw", "viewpoint": "viewpoint", "comment_date": "commentDate",
+			"author_code": "authorCode", "camera_position": "cameraPosition", "image_ref": "imageRef",
+		} {
+			allowed[col] = key
+		}
+	}
+	set, args := "", []any{}
+	for col, key := range allowed {
+		raw, present := patch[key]
+		if !present {
+			continue
+		}
+		if set != "" {
+			set += ", "
+		}
+		set += col + "=?"
+		if col == "extra" {
+			args = append(args, string(raw)) // store JSON text as-is
+		} else {
+			var s string
+			json.Unmarshal(raw, &s) // string value; null/other → empty
+			args = append(args, s)
+		}
+	}
+	if set == "" {
+		return "", nil
+	}
+	set += ", updated_by=?, updated_at=?"
+	return set, append(args, userID, time.Now().UTC().Format(time.RFC3339))
+}
+
+// bulkDeleteRecords removes many records of a review (and their photos) in
+// one go — used to undo an import. Admins only.
+func (a *API) bulkDeleteRecords(w http.ResponseWriter, r *http.Request) {
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	if !isAdminRole(auth.FromContext(r.Context())) {
+		writeErr(w, http.StatusForbidden, "cannot delete records")
+		return
+	}
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad body")
+		return
+	}
+	n := 0
+	for _, id := range body.IDs {
+		a.unlinkFilesWhere(`r.id=? AND r.review_id=?`, id, rid)
+		if res, err := a.DB.Exec(`DELETE FROM records WHERE id=? AND review_id=?`, id, rid); err == nil {
+			if c, _ := res.RowsAffected(); c > 0 {
+				n++
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
+}
+
+// deleteRecord removes a record and its image files (admins only).
+func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	id, ok := pathID(r, "id")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad id")
+		return
+	}
+	if _, err := a.recordReview(id); err != nil {
+		writeErr(w, http.StatusNotFound, "record not found")
+		return
+	}
+	if !isAdminRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot delete record")
+		return
+	}
+	a.unlinkRecordFiles(id)
+	if _, err := a.DB.Exec(`DELETE FROM records WHERE id=?`, id); err != nil {
+		writeErr(w, 500, "delete record")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) recordReview(id int64) (int64, error) {
+	var rid int64
+	err := a.DB.QueryRow(`SELECT review_id FROM records WHERE id=?`, id).Scan(&rid)
+	return rid, err
+}
+
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}

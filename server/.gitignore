@@ -1,0 +1,11 @@
+# Runtime data (SQLite db + uploaded files) — never commit
+/data/
+
+# Built SPA copied in at release time (placeholder index.html is kept)
+/web/*
+!/web/index.html
+
+# Compiled binaries
+/tabelin-server
+/tabelin-server.exe
+*.exe

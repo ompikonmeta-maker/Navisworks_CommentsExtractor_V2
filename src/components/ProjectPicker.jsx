@@ -1,0 +1,298 @@
+import { useEffect, useRef, useState } from 'react';
+import { api, undoImportRemote } from '../lib/server.js';
+import { Icon, Card, Button, Dialog } from './ui.jsx';
+
+// After sign-in: choose Project › Review. Everyone signed in sees every project;
+// only admins create or rename projects and reviews.
+export default function ProjectPicker({ user, initialProject = null, onPick, onSignOut }) {
+  const [project, setProject] = useState(initialProject); // null = project list
+  const [items, setItems] = useState(null);
+  const [err, setErr] = useState('');
+  const isAdmin = user.role === 'admin';
+
+  const load = async (p = project) => {
+    setItems(null);
+    setErr('');
+    try {
+      setItems(p ? await api.listReviews(p.id) : await api.listProjects());
+    } catch (e) {
+      if (p && e.code === 404) {
+        setProject(null); // project was removed — back to the list
+        return;
+      }
+      setErr(p ? 'Could not load reviews.' : 'Could not load projects.');
+      setItems([]);
+    }
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(project); }, [project?.id]);
+
+  const open = (row) => {
+    if (project) onPick({ project, review: { id: row.id, name: row.name } });
+    else setProject({ id: row.id, name: row.name });
+  };
+
+  const create = async (name) => {
+    try {
+      if (project) {
+        const r = await api.createReview(project.id, name);
+        onPick({ project, review: { id: r.id, name: r.name } });
+      } else {
+        const p = await api.createProject(name);
+        setProject({ id: p.id, name: p.name });
+      }
+      return true;
+    } catch {
+      setErr(project ? 'Could not create the review.' : 'Could not create the project.');
+      return false;
+    }
+  };
+
+  const rename = async (row, name) => {
+    try {
+      if (project) await api.renameReview(row.id, name);
+      else await api.renameProject(row.id, name);
+      setItems((list) => list.map((x) => (x.id === row.id ? { ...x, name } : x)));
+    } catch {
+      setErr('Could not rename.');
+    }
+  };
+
+  // Admin actions from the row menu: undo the last import, delete.
+  const [confirm, setConfirm] = useState(null); // { kind: 'delete'|'undo', row, undo? }
+  const [typed, setTyped] = useState('');
+  const [working, setWorking] = useState(false);
+  const askUndo = async (row) => {
+    try {
+      const cfg = await api.getReviewConfig(row.id);
+      if (!cfg.lastImport) { setErr(`Nothing to undo in “${row.name}”.`); return; }
+      setConfirm({ kind: 'undo', row, undo: cfg.lastImport });
+    } catch { setErr('Could not read the last import.'); }
+  };
+  const askDelete = (row) => { setTyped(''); setConfirm({ kind: 'delete', row }); };
+  const runConfirm = async () => {
+    const { kind, row, undo } = confirm;
+    setWorking(true);
+    try {
+      if (kind === 'undo') await undoImportRemote(row.id, undo);
+      else if (project) await api.deleteReview(row.id);
+      else await api.deleteProject(row.id);
+      setConfirm(null);
+      await load(project);
+    } catch {
+      setErr(kind === 'undo' ? 'Could not undo the import.' : `Could not delete the ${project ? 'review' : 'project'}.`);
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const noun = project ? 'review' : 'project';
+  const meta = (row) =>
+    project
+      ? `${row.comments} comment${row.comments === 1 ? '' : 's'}`
+      : `${row.reviews} review${row.reviews === 1 ? '' : 's'}`;
+
+  return (
+    <div className="flex min-h-screen items-start justify-center bg-background p-4 pt-[8vh] text-on-surface">
+      <Card className="w-full max-w-lg p-7">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            {project ? (
+              <button
+                onClick={() => setProject(null)}
+                aria-label="All projects"
+                title="All projects"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Icon name="arrow_back" className="text-[24px]" />
+              </button>
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-primary text-on-primary">
+                <Icon name="table_view" className="text-[24px]" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="truncate text-lg font-semibold tracking-tight">{project ? project.name : 'Projects'}</div>
+              <div className="truncate text-xs text-on-surface-variant">
+                {user.displayName || user.username} · {user.role}
+              </div>
+            </div>
+          </div>
+          <Button variant="text" onClick={onSignOut}>Sign out</Button>
+        </div>
+
+        {items === null ? (
+          <p className="py-6 text-center text-sm text-on-surface-variant">Loading…</p>
+        ) : items.length === 0 ? (
+          <p className="rounded-control bg-surface-container px-4 py-6 text-center text-sm text-on-surface-variant">
+            No {noun}s yet.{isAdmin ? ` Create the first one below.` : ' Ask an admin to create one.'}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {items.map((row) => (
+              <Row
+                key={row.id}
+                row={row}
+                icon={project ? 'description' : 'folder'}
+                meta={meta(row)}
+                canEdit={isAdmin}
+                onOpen={() => open(row)}
+                onRename={(n) => rename(row, n)}
+                onUndo={project ? () => askUndo(row) : null}
+                onDelete={() => askDelete(row)}
+                deleteBlocked={!project && row.reviews > 0}
+              />
+            ))}
+          </ul>
+        )}
+
+        {isAdmin && <NewItem key={project?.id ?? 'root'} noun={noun} onCreate={create} />}
+        {err && <p className="mt-3 text-xs text-error">{err}</p>}
+        <ConfirmDialog confirm={confirm} noun={noun} typed={typed} setTyped={setTyped} working={working}
+          onCancel={() => setConfirm(null)} onConfirm={runConfirm} />
+      </Card>
+    </div>
+  );
+}
+
+function ConfirmDialog({ confirm, noun, typed, setTyped, working, onCancel, onConfirm }) {
+  const row = confirm?.row;
+  const isUndo = confirm?.kind === 'undo';
+  const u = confirm?.undo;
+  const needsName = !isUndo && noun === 'review' && row?.comments > 0;
+  const ok = !needsName || typed.trim() === row?.name;
+  return (
+    <Dialog open={!!confirm} onClose={working ? undefined : onCancel} labelledBy="cf-title" width={460}>
+      {row && (
+        <>
+          <h2 id="cf-title" className="text-lg font-semibold">{isUndo ? `Undo the last import into “${row.name}”?` : `Delete “${row.name}”?`}</h2>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            {isUndo
+              ? `Removes the ${u.added?.length || 0} comments it added and puts back what it changed on ${u.restore?.length || 0}. Work done on the added comments is lost.`
+              : noun === 'review'
+                ? `Its ${row.comments} comment${row.comments === 1 ? '' : 's'} and their photos are removed for everyone. This can’t be undone.`
+                : 'The empty project is removed for everyone.'}
+          </p>
+          {needsName && (
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Type the review name to confirm" placeholder="Type the review name to confirm" data-autofocus
+              className="mt-4 block w-full rounded-control border border-outline-variant bg-surface-low px-3 py-2.5 text-sm hover:border-outline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="text" onClick={onCancel} disabled={working}>Cancel</Button>
+            <Button variant={isUndo ? 'filled' : 'danger'} onClick={onConfirm} disabled={working || !ok}>
+              {working ? 'Working…' : isUndo ? 'Undo import' : `Delete ${noun}`}
+            </Button>
+          </div>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
+function Row({ row, icon, meta, canEdit, onOpen, onRename, onUndo, onDelete, deleteBlocked }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(row.name);
+  const inputRef = useRef(null);
+  useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!menu) return undefined;
+    const off = (e) => { if (!menuRef.current?.contains(e.target)) setMenu(false); };
+    const esc = (e) => e.key === 'Escape' && setMenu(false);
+    document.addEventListener('mousedown', off);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+  }, [menu]);
+  const pick = (fn) => () => { setMenu(false); fn(); };
+
+  const commit = () => {
+    const n = val.trim();
+    setEditing(false);
+    if (n && n !== row.name) onRename(n);
+    else setVal(row.name);
+  };
+
+  if (editing) {
+    return (
+      <li className="flex items-center gap-3 rounded-control bg-surface-container px-4 py-2">
+        <Icon name={icon} className="text-[22px] text-primary" />
+        <input
+          ref={inputRef}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { setVal(row.name); setEditing(false); }
+          }}
+          aria-label="Name"
+          className="min-w-0 flex-1 bg-transparent py-1 text-sm font-medium text-on-surface focus:outline-none"
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className="group relative">
+      <button
+        onClick={onOpen}
+        className="flex w-full items-center gap-3 rounded-control border border-outline-variant/50 bg-surface px-4 py-3 text-left hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        <Icon name={icon} className="text-[22px] text-primary" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</span>
+        <span className={`text-xs tabular-nums text-on-surface-variant ${canEdit ? 'mr-9' : ''}`}>{meta}</span>
+        <Icon name="chevron_right" className="text-[20px] text-on-surface-variant" />
+      </button>
+      {canEdit && (
+        <div ref={menuRef} className="absolute right-11 top-1/2 -translate-y-1/2">
+          <button
+            onClick={() => setMenu((m) => !m)}
+            aria-label={`More for ${row.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            title="More"
+            className={`t-press flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-high focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 ${menu ? 'bg-surface-high opacity-100' : 'opacity-0'}`}
+          >
+            <Icon name="more_horiz" className="text-[20px]" />
+          </button>
+          <div role="menu" className={`t-pop absolute right-0 top-10 z-20 w-56 rounded-[16px] bg-surface p-1.5 ${menu ? 'show' : ''}`}>
+            <button role="menuitem" className="t-menuitem" onClick={pick(() => setEditing(true))}><Icon name="edit" className="text-[18px]" />Rename</button>
+            {onUndo && <button role="menuitem" className="t-menuitem" onClick={pick(onUndo)}><Icon name="undo" className="text-[18px]" />Undo last import</button>}
+            <button role="menuitem" className="t-menuitem disabled:opacity-50" style={{ color: 'var(--md-sys-color-error)' }} disabled={deleteBlocked} onClick={pick(onDelete)}
+              title={deleteBlocked ? 'Delete its reviews first' : undefined}>
+              <Icon name="delete" className="text-[18px]" />{deleteBlocked ? 'Delete (empty it first)' : 'Delete…'}
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function NewItem({ noun, onCreate }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const n = name.trim();
+    if (!n || busy) return;
+    setBusy(true);
+    if (await onCreate(n)) setName('');
+    setBusy(false);
+  };
+  return (
+    <div className="mt-5 flex items-end gap-2 border-t border-outline-variant/50 pt-5">
+      <label className="flex-1 text-xs font-medium text-on-surface-variant">
+        New {noun}
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          placeholder={noun === 'project' ? 'e.g. Tower A' : 'e.g. 90% Model Review'}
+          className="mt-1 block w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        />
+      </label>
+      <Button variant="tonal" icon="add" onClick={submit} disabled={busy || !name.trim()}>Create</Button>
+    </div>
+  );
+}

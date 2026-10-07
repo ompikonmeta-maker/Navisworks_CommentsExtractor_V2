@@ -1,0 +1,132 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"tabelin/server/internal/auth"
+)
+
+// Config is stored as key -> arbitrary JSON under a scope: "global" (app-wide
+// defaults, admin-managed), "project:<id>" (template mapping, statuses,
+// detection rules, custom fields — shared by every review in the project) or
+// "review:<id>" (per-review values such as the target date).
+
+// getGlobalConfig returns every global config entry. Any signed-in user may read
+// defaults so the app can render.
+func (a *API) getGlobalConfig(w http.ResponseWriter, r *http.Request) {
+	a.writeConfigMap(w, "global")
+}
+
+// putGlobalConfig sets one global config entry (admin only).
+func (a *API) putGlobalConfig(w http.ResponseWriter, r *http.Request) {
+	if u := auth.FromContext(r.Context()); u.Role != "admin" {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	a.putConfig(w, r, "global")
+}
+
+// getProjectConfig returns every config entry for a project (any signed-in user).
+func (a *API) getProjectConfig(w http.ResponseWriter, r *http.Request) {
+	pid, ok := pathID(r, "pid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad project id")
+		return
+	}
+	a.writeConfigMap(w, projectScope(pid))
+}
+
+// putProjectConfig sets one config entry for a project (admins only).
+func (a *API) putProjectConfig(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	pid, ok := pathID(r, "pid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad project id")
+		return
+	}
+	if !isAdminRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot write project config")
+		return
+	}
+	a.putConfig(w, r, projectScope(pid))
+}
+
+// getReviewConfig returns every config entry for a review (any signed-in user).
+func (a *API) getReviewConfig(w http.ResponseWriter, r *http.Request) {
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	a.writeConfigMap(w, reviewScope(rid))
+}
+
+// putReviewConfig sets one config entry for a review, e.g. its target date
+// (admins only).
+func (a *API) putReviewConfig(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	if !isAdminRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot write review config")
+		return
+	}
+	a.putConfig(w, r, reviewScope(rid))
+}
+
+func reviewScope(rid int64) string {
+	return "review:" + strconv.FormatInt(rid, 10)
+}
+
+func projectScope(pid int64) string {
+	return "project:" + strconv.FormatInt(pid, 10)
+}
+
+func (a *API) writeConfigMap(w http.ResponseWriter, scope string) {
+	rows, err := a.DB.Query(`SELECT key, json FROM config WHERE scope=?`, scope)
+	if err != nil {
+		writeErr(w, 500, "query config")
+		return
+	}
+	defer rows.Close()
+	out := map[string]json.RawMessage{}
+	for rows.Next() {
+		var k, j string
+		if rows.Scan(&k, &j) == nil {
+			if j == "" {
+				j = "{}"
+			}
+			out[k] = json.RawMessage(j)
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// putConfig upserts one { key, json } entry under a scope. json is any JSON value.
+func (a *API) putConfig(w http.ResponseWriter, r *http.Request, scope string) {
+	var body struct {
+		Key  string          `json:"key"`
+		JSON json.RawMessage `json:"json"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Key == "" {
+		writeErr(w, http.StatusBadRequest, "key and json required")
+		return
+	}
+	val := string(body.JSON)
+	if val == "" {
+		val = "{}"
+	}
+	_, err := a.DB.Exec(`
+		INSERT INTO config(scope, key, json) VALUES(?,?,?)
+		ON CONFLICT(scope, key) DO UPDATE SET json=excluded.json`, scope, body.Key, val)
+	if err != nil {
+		writeErr(w, 500, "save config")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
