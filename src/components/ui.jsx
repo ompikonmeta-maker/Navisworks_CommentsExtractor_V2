@@ -87,6 +87,20 @@ const ICON_CODEPOINTS = {
   videocam: 'e04b',
   view_in_ar: 'e9fe',
   warning: 'f083',
+  admin_panel_settings: 'ef3d',
+  block: 'e14b',
+  keyboard: 'e312',
+  lan: 'eb2f',
+  lightbulb: 'e0f0',
+  lock: 'e897',
+  login: 'ea77',
+  menu_book: 'ea19',
+  merge: 'eb98',
+  photo_camera: 'e412',
+  shield: 'e9e0',
+  storage: 'e1db',
+  sync: 'e627',
+  visibility: 'e8f4',
 };
 
 export function Icon({ name, className = '', style }) {

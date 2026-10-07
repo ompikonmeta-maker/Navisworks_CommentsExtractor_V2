@@ -224,6 +224,12 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   commenter is prefixed into `commentRaw`. A pasted/dropped snapshot becomes the before photo.
 - **Paste a snapshot (Ctrl+V)** in the drawer goes to the photo slot last hovered/focused
   (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
+- **Help** (`views/Help.jsx`, last sidebar item): "How to use" (flow infographic + one card per
+  step with a real screenshot) and "Roles & limits" (role cards, permission matrix, safety nets,
+  limits), in EN / ID (`localStorage tabelin.helpLang`, default from the browser language).
+  Screenshots are WebP files in `src/assets/help/`, inlined at build time so Help works
+  offline — re-capture them when a pictured screen changes. Keep the matrix in sync with the
+  server's role checks (`canWriteRole` / `requireAdmin`).
 - **Overview setup checklist** (import · target · template · invite team), dismissible per
   review in localStorage `tabelin.setupDone.<reviewId|local>`. **Settings › Users** shows an
   invite card with the LAN address from `GET /api/server-info` and a copyable message.

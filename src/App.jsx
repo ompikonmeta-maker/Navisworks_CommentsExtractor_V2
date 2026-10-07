@@ -21,11 +21,13 @@ import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
 import Settings, { SECTIONS } from './views/Settings.jsx';
+import Help from './views/Help.jsx';
 
 const NAV = [
   { id: 'dashboard', label: 'Overview', icon: 'dashboard' },
   { id: 'comments', label: 'Viewpoints', icon: 'format_list_bulleted' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
+  { id: 'help', label: 'Help', icon: 'help' },
 ];
 
 function systemPrefersDark() {
@@ -587,6 +589,8 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
       return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} goSettings={setSettingsSection} />;
     case 'settings':
       return <Settings section={settingsSection} setSection={setSettingsSection} sections={settingsSections} remoteUser={remoteUser} />;
+    case 'help':
+      return <Help />;
     default:
       return null;
   }
