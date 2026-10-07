@@ -20,6 +20,8 @@ const INLINE_SVG = {
 // work fully offline. Keep this map in sync with the font subset in
 // index.css when adding a new icon.
 const ICON_CODEPOINTS = {
+  add: 'e145',
+  arrow_back: 'e5c4',
   bar_chart: 'e26b',
   check_circle: 'f0be',
   chevron_right: 'e5cc',
@@ -31,11 +33,13 @@ const ICON_CODEPOINTS = {
   description: 'e873',
   donut_large: 'e917',
   download: 'f090',
+  edit: 'e3c9',
   error: 'f8b6',
   event: 'e24f',
   fact_check: 'f0c5',
   filter_alt_off: 'eb32',
   flag: 'e153',
+  folder: 'e2c7',
   folder_open: 'e2c8',
   format_list_bulleted: 'e241',
   forum: 'e8af',

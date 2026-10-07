@@ -6,10 +6,15 @@ no admin install. Users are identified by their office (AD) account.
 
 ## Status
 
-Phase 1 scaffold. Working: SQLite schema + migrations, the identity pipeline
-(dev header now → Windows Integrated Auth later), and the first API endpoints
-(`/api/health`, `/api/me`, projects, users). Not yet: record/image/config
-endpoints, the AD handshake, and the SPA data adapter.
+Working: SQLite schema + migrations, sign-in (username + PIN session cookie),
+users and roles (admin / editor / viewer), the **Project › Review** hierarchy
+(admins create projects and reviews; every signed-in user sees all of them),
+records, before/after images, and config at global / project / review scope.
+Not yet: the Windows (AD) handshake.
+
+Data model: `projects` → `reviews` → `records` → `images`. A database from
+before Project › Review is upgraded on startup: each old "project" becomes a
+review inside a project called "General", which an admin can rename.
 
 ## Run (development)
 
@@ -26,10 +31,13 @@ Configuration (environment variables):
 | `TABELIN_DATA` | `./data` | folder for the SQLite db + uploaded files |
 | `TABELIN_BOOTSTRAP_ADMIN` | – | AD account seeded as the first admin when the users table is empty (e.g. `DOMAIN\jdoe`) |
 | `TABELIN_DEV_CORS` | – | set to `1` to allow the Vite dev server (5173) to call the API cross-origin |
+| `TABELIN_DEV_AUTH` | – | set to `1` to accept the `X-Tabelin-Dev-User` header (development only — never on the office server) |
 
 ### Identity during development
 
-Real Windows auth is not wired yet. Send the caller identity with a header:
+Real Windows auth is not wired yet. With `TABELIN_DEV_AUTH=1` set, send the
+caller identity with a header (without it the header is ignored and only a
+signed-in session counts):
 
 ```bash
 curl -H 'X-Tabelin-Dev-User: DOMAIN\jdoe' http://localhost:8787/api/me

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"tabelin/server/internal/auth"
 )
@@ -20,7 +19,7 @@ type API struct {
 
 // canWriteRole is the small-team access rule: any signed-in user may READ every
 // review; admins and editors may WRITE (import, edit, upload, config); viewers
-// are read-only. Per-project membership is recorded but not required for access.
+// are read-only.
 func canWriteRole(u *auth.User) bool { return u.Role == "admin" || u.Role == "editor" }
 
 // ResolveUser looks up an active, admin-provisioned user by normalized name.
@@ -47,16 +46,21 @@ func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", a.health)
 	mux.HandleFunc("GET /api/me", a.me)
+	// Project > Review (admins create both; everyone signed in can read)
 	mux.HandleFunc("GET /api/projects", a.listProjects)
-	mux.HandleFunc("POST /api/projects", a.createProject)
-	mux.HandleFunc("GET /api/users", a.listUsers)                // admin
-	mux.HandleFunc("POST /api/users", a.createUser)              // admin
-	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)        // admin
-	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)       // admin
-	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin) // admin
+	mux.HandleFunc("POST /api/projects", a.createProject)        // admin
+	mux.HandleFunc("PATCH /api/projects/{pid}", a.renameProject) // admin
+	mux.HandleFunc("GET /api/projects/{pid}/reviews", a.listReviews)
+	mux.HandleFunc("POST /api/projects/{pid}/reviews", a.createReview) // admin
+	mux.HandleFunc("PATCH /api/reviews/{rid}", a.renameReview)         // admin
+	mux.HandleFunc("GET /api/users", a.listUsers)                      // admin
+	mux.HandleFunc("POST /api/users", a.createUser)                    // admin
+	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)              // admin
+	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)             // admin
+	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin)       // admin
 	// records + images
-	mux.HandleFunc("GET /api/projects/{pid}/records", a.listRecords)
-	mux.HandleFunc("POST /api/projects/{pid}/records", a.importRecords)
+	mux.HandleFunc("GET /api/reviews/{rid}/records", a.listRecords)
+	mux.HandleFunc("POST /api/reviews/{rid}/records", a.importRecords)
 	mux.HandleFunc("PATCH /api/records/{id}", a.patchRecord)
 	mux.HandleFunc("DELETE /api/records/{id}", a.deleteRecord)
 	mux.HandleFunc("POST /api/records/{id}/images", a.uploadImage)
@@ -66,6 +70,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/config", a.putGlobalConfig)
 	mux.HandleFunc("GET /api/projects/{pid}/config", a.getProjectConfig)
 	mux.HandleFunc("PUT /api/projects/{pid}/config", a.putProjectConfig)
+	mux.HandleFunc("GET /api/reviews/{rid}/config", a.getReviewConfig)
+	mux.HandleFunc("PUT /api/reviews/{rid}/config", a.putReviewConfig)
 	return mux
 }
 
@@ -75,65 +81,6 @@ func (a *API) health(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, auth.FromContext(r.Context()))
-}
-
-// listProjects returns every review to any signed-in user (small-team model).
-func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.DB.Query(`SELECT id, name, created_at FROM projects ORDER BY id DESC`)
-	if err != nil {
-		writeErr(w, 500, "query projects")
-		return
-	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var id int64
-		var name, created string
-		if err := rows.Scan(&id, &name, &created); err != nil {
-			writeErr(w, 500, "scan project")
-			return
-		}
-		out = append(out, map[string]any{"id": id, "name": name, "createdAt": created})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// createProject makes a project and records the creator as its owner. Viewers
-// may not create projects.
-func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
-	u := auth.FromContext(r.Context())
-	if u.Role == "viewer" {
-		writeErr(w, http.StatusForbidden, "viewers cannot create projects")
-		return
-	}
-	var body struct {
-		Name string `json:"name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
-		writeErr(w, http.StatusBadRequest, "name required")
-		return
-	}
-	tx, err := a.DB.Begin()
-	if err != nil {
-		writeErr(w, 500, "begin")
-		return
-	}
-	defer tx.Rollback()
-	res, err := tx.Exec(`INSERT INTO projects(name, created_by) VALUES(?, ?)`, strings.TrimSpace(body.Name), u.ID)
-	if err != nil {
-		writeErr(w, 500, "insert project")
-		return
-	}
-	pid, _ := res.LastInsertId()
-	if _, err := tx.Exec(`INSERT INTO project_members(project_id, user_id, role) VALUES(?, ?, 'owner')`, pid, u.ID); err != nil {
-		writeErr(w, 500, "insert member")
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		writeErr(w, 500, "commit")
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": pid, "name": body.Name})
 }
 
 func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {

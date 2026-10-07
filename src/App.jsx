@@ -16,7 +16,7 @@ import {
   writeSessionToFolder,
 } from './lib/persist.js';
 import { Icon, Button } from './components/ui.jsx';
-import { loadProjectRecords } from './lib/server.js';
+import { loadReviewRecords } from './lib/server.js';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
@@ -86,7 +86,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   const folderHandleRef = useRef(null);
 
   // Startup: restore the saved session (IndexedDB) if any, else the sample.
-  // In remote mode, load the chosen project's records from the server instead —
+  // In remote mode, load the chosen review's records from the server instead —
   // no local session, no sample.
   useEffect(() => {
     let cancelled = false;
@@ -94,9 +94,9 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
     if (remote) {
       (async () => {
         try {
-          const recs = await loadProjectRecords(remote.id);
+          const recs = await loadReviewRecords(remote.review.id);
           if (!cancelled) {
-            store.setData(recs, `project:${remote.id}`, { comments: recs.length, html: 0, images: 0, linked: 0 });
+            store.setData(recs, `review:${remote.review.id}`, { comments: recs.length, html: 0, images: 0, linked: 0 });
           }
         } catch (e) {
           if (!cancelled) store.setError(e.message);
@@ -333,14 +333,25 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
             aligned with the content column (.canvas-w) below. */}
         <header className="t-appbar sticky top-0 z-10 border-b border-outline-variant/60 px-5 py-3 backdrop-blur md:top-3 md:rounded-card md:border-0 md:px-4 md:py-2.5">
           <div className="canvas-w flex items-center justify-between gap-4">
-            <h1 className="truncate text-2xl font-bold tracking-tight md:text-3xl">
+            <h1 className={`${remote ? 'shrink-0' : 'truncate'} text-2xl font-bold tracking-tight md:text-3xl`}>
               {NAV.find((n) => n.id === route)?.label}
             </h1>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className={`flex items-center gap-1 ${remote ? 'min-w-0' : 'shrink-0'}`}>
               {remote && (
                 <>
-                  <Button variant="text" icon="folder_open" onClick={onExitProject} title="Switch review">{remote.name}</Button>
-                  <Button variant="text" onClick={onSignOut}>Sign out</Button>
+                  <button
+                    onClick={onExitProject}
+                    title="Switch review"
+                    className="flex h-10 min-w-0 max-w-[22rem] items-center gap-1.5 rounded-control px-3 text-sm text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <Icon name="folder_open" className="shrink-0 text-[20px]" />
+                    <span className="hidden min-w-0 items-center gap-1.5 sm:flex">
+                      <span className="truncate">{remote.project.name}</span>
+                      <Icon name="chevron_right" className="shrink-0 text-[18px] opacity-60" />
+                    </span>
+                    <span className="truncate font-medium text-on-surface">{remote.review.name}</span>
+                  </button>
+                  <Button variant="text" className="shrink-0" onClick={onSignOut}>Sign out</Button>
                 </>
               )}
               {!remote && FS_SUPPORTED &&

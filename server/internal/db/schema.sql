@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TEXT NOT NULL
 );
 
+-- Projects group reviews (Project > Review). Admins create both.
 CREATE TABLE IF NOT EXISTS projects (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT NOT NULL,
@@ -27,16 +28,19 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS project_members (
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role       TEXT NOT NULL DEFAULT 'viewer',      -- owner | editor | viewer
-  PRIMARY KEY (project_id, user_id)
+-- A review is one Navisworks comment round inside a project; records hang off it.
+CREATE TABLE IF NOT EXISTS reviews (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id);
 
 CREATE TABLE IF NOT EXISTS records (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  review_id       INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
   comment_id      TEXT,
   viewpoint       TEXT,
   commenter       TEXT,
@@ -55,7 +59,7 @@ CREATE TABLE IF NOT EXISTS records (
   updated_by      INTEGER REFERENCES users(id),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_records_project ON records(project_id);
+CREATE INDEX IF NOT EXISTS idx_records_review ON records(review_id);
 
 CREATE TABLE IF NOT EXISTS images (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +73,8 @@ CREATE TABLE IF NOT EXISTS images (
 CREATE INDEX IF NOT EXISTS idx_images_record ON images(record_id);
 
 -- Settings, detection rules, template mapping, statuses, custom-field defs.
--- scope is 'global' or 'project:<id>'.
+-- scope is 'global', 'project:<id>' (template, statuses, detection, custom
+-- fields shared by the project's reviews) or 'review:<id>' (e.g. the target).
 CREATE TABLE IF NOT EXISTS config (
   scope TEXT NOT NULL,
   key   TEXT NOT NULL,

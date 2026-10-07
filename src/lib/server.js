@@ -37,8 +37,12 @@ export const api = {
   logout: () => req('POST', '/api/logout'),
   listProjects: () => req('GET', '/api/projects'),
   createProject: (name) => req('POST', '/api/projects', { name }),
-  getRecords: (pid) => req('GET', `/api/projects/${pid}/records`),
-  importRecords: (pid, records) => req('POST', `/api/projects/${pid}/records`, { records }),
+  renameProject: (pid, name) => req('PATCH', `/api/projects/${pid}`, { name }),
+  listReviews: (pid) => req('GET', `/api/projects/${pid}/reviews`),
+  createReview: (pid, name) => req('POST', `/api/projects/${pid}/reviews`, { name }),
+  renameReview: (rid, name) => req('PATCH', `/api/reviews/${rid}`, { name }),
+  getRecords: (rid) => req('GET', `/api/reviews/${rid}/records`),
+  importRecords: (rid, records) => req('POST', `/api/reviews/${rid}/records`, { records }),
   patchRecord: (id, patch) => req('PATCH', `/api/records/${id}`, patch),
   uploadImage: (id, kind, blob) => req('POST', `/api/records/${id}/images?kind=${kind}`, blob),
   listUsers: () => req('GET', '/api/users'),
@@ -49,12 +53,14 @@ export const api = {
   getGlobalConfig: () => req('GET', '/api/config'),
   getProjectConfig: (pid) => req('GET', `/api/projects/${pid}/config`),
   putProjectConfig: (pid, key, json) => req('PUT', `/api/projects/${pid}/config`, { key, json }),
+  getReviewConfig: (rid) => req('GET', `/api/reviews/${rid}/config`),
+  putReviewConfig: (rid, key, json) => req('PUT', `/api/reviews/${rid}/config`, { key, json }),
   putGlobalConfig: (key, json) => req('PUT', '/api/config', { key, json }),
 };
 
-// Session-wide remote flag + selected project. Set once by Root; read by App,
-// the store, and the import path to branch behaviour without prop-drilling.
-export const remoteState = { active: false, projectId: null, user: null };
+// Session-wide remote flag + the open Project › Review. Set by Root; read by
+// App, the store, and the import path to branch behaviour without prop-drilling.
+export const remoteState = { active: false, projectId: null, reviewId: null, user: null };
 
 let _isRemote = null;
 export async function detectRemote() {
@@ -88,9 +94,9 @@ export function mapServerRecord(s) {
   };
 }
 
-// Load a project's records for the store.
-export async function loadProjectRecords(pid) {
-  const recs = await api.getRecords(pid);
+// Load a review's records for the store.
+export async function loadReviewRecords(rid) {
+  const recs = await api.getRecords(rid);
   return recs.map(mapServerRecord);
 }
 
@@ -103,13 +109,13 @@ function dataURLtoBlob(dataUrl) {
   return new Blob([bytes], { type: m[1] });
 }
 
-// Import parsed records (from ingestFiles) into a project: POST the metadata,
+// Import parsed records (from ingestFiles) into a review: POST the metadata,
 // then upload each linked "before" image. New rows are appended in array order,
 // so the last N server records line up with the parsed ones. Returns the fresh
 // mapped list for the store.
-export async function importParsedRecords(pid, recs) {
-  await api.importRecords(pid, recs);
-  const server = await api.getRecords(pid);
+export async function importParsedRecords(rid, recs) {
+  await api.importRecords(rid, recs);
+  const server = await api.getRecords(rid);
   const start = Math.max(0, server.length - recs.length);
   for (let i = 0; i < recs.length; i += 1) {
     const src = recs[i];
@@ -121,7 +127,7 @@ export async function importParsedRecords(pid, recs) {
       }
     }
   }
-  const finalList = await api.getRecords(pid);
+  const finalList = await api.getRecords(rid);
   return finalList.map(mapServerRecord);
 }
 
@@ -144,4 +150,22 @@ export async function syncRecord(id, patch) {
     // Deleting an image from the UI is not synced yet (no delete endpoint).
   }
   if (Object.keys(fields).length) await api.patchRecord(id, fields);
+}
+
+// The last opened Project › Review, remembered per browser so a reload goes
+// straight back to it. Only ids + names; access is still checked by the server.
+const LAST_KEY = 'tabelin.lastReview';
+export function loadLastOpened() {
+  try {
+    const v = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');
+    return v && v.project?.id ? v : null;
+  } catch {
+    return null;
+  }
+}
+export function saveLastOpened(v) {
+  try {
+    if (v) localStorage.setItem(LAST_KEY, JSON.stringify(v));
+    else localStorage.removeItem(LAST_KEY);
+  } catch { /* storage blocked — just don't remember */ }
 }

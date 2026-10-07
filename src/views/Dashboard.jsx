@@ -48,8 +48,8 @@ function Overview({ openDetail, goComments }) {
       if (recs.length === 0) {
         notify(errors[0] || 'No comments could be imported.', 'error');
       } else if (remoteState.active) {
-        const mapped = await importParsedRecords(remoteState.projectId, recs);
-        setData(mapped, `project:${remoteState.projectId}`, stats);
+        const mapped = await importParsedRecords(remoteState.reviewId, recs);
+        setData(mapped, `review:${remoteState.reviewId}`, stats);
         notify(`Imported ${stats.comments} comments to this review · ${stats.linked} images linked.`, 'success');
       } else {
         setData(recs, 'user', stats);

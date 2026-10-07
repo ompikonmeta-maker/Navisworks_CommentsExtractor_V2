@@ -13,7 +13,7 @@ import (
 // Record mirrors the V1 parser shape (camelCase JSON) plus server fields.
 type Record struct {
 	ID             int64           `json:"id"`
-	ProjectID      int64           `json:"projectId"`
+	ReviewID       int64           `json:"reviewId"`
 	CommentID      string          `json:"commentId"`
 	Viewpoint      string          `json:"viewpoint"`
 	Commenter      string          `json:"commenter"`
@@ -38,18 +38,18 @@ func pathID(r *http.Request, name string) (int64, bool) {
 	return id, err == nil && id > 0
 }
 
-// listRecords returns a project's records (with image URLs) for any member.
+// listRecords returns a review's records (with image URLs) to any signed-in user.
 func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
-	pid, ok := pathID(r, "pid")
+	rid, ok := pathID(r, "rid")
 	if !ok {
-		writeErr(w, http.StatusBadRequest, "bad project id")
+		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
 	rows, err := a.DB.Query(`
-		SELECT id, project_id, comment_id, viewpoint, commenter, discipline, comment_raw,
+		SELECT id, review_id, comment_id, viewpoint, commenter, discipline, comment_raw,
 		       comment_text, resolution, status, closed_at, comment_date, author_code,
 		       camera_position, image_ref, source, extra
-		FROM records WHERE project_id=? ORDER BY id`, pid)
+		FROM records WHERE review_id=? ORDER BY id`, rid)
 	if err != nil {
 		writeErr(w, 500, "query records")
 		return
@@ -60,7 +60,7 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 		var rec Record
 		var extra string
 		var closed, cdate sql.NullString
-		if err := rows.Scan(&rec.ID, &rec.ProjectID, &rec.CommentID, &rec.Viewpoint, &rec.Commenter,
+		if err := rows.Scan(&rec.ID, &rec.ReviewID, &rec.CommentID, &rec.Viewpoint, &rec.Commenter,
 			&rec.Discipline, &rec.CommentRaw, &rec.CommentText, &rec.Resolution, &rec.Status,
 			&closed, &cdate, &rec.AuthorCode, &rec.CameraPosition, &rec.ImageRef, &rec.Source, &extra); err != nil {
 			writeErr(w, 500, "scan record")
@@ -76,7 +76,7 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 	// Attach image URLs (before/after) in one pass.
 	imgs, _ := a.DB.Query(`
 		SELECT i.record_id, i.kind, i.file_key FROM images i
-		JOIN records r ON r.id = i.record_id WHERE r.project_id=?`, pid)
+		JOIN records r ON r.id = i.record_id WHERE r.review_id=?`, rid)
 	if imgs != nil {
 		defer imgs.Close()
 		byRec := map[int64][2]string{} // [before, after]
@@ -107,17 +107,17 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// importRecords bulk-inserts parsed records into a project (metadata only;
+// importRecords bulk-inserts parsed records into a review (metadata only;
 // images are uploaded separately). Owners/editors only.
 func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
-	pid, ok := pathID(r, "pid")
+	rid, ok := pathID(r, "rid")
 	if !ok {
-		writeErr(w, http.StatusBadRequest, "bad project id")
+		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
 	if !canWriteRole(u) {
-		writeErr(w, http.StatusForbidden, "cannot write to project")
+		writeErr(w, http.StatusForbidden, "cannot write to review")
 		return
 	}
 	var body struct {
@@ -134,7 +134,7 @@ func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 	stmt, err := tx.Prepare(`
-		INSERT INTO records(project_id, comment_id, viewpoint, commenter, discipline, comment_raw,
+		INSERT INTO records(review_id, comment_id, viewpoint, commenter, discipline, comment_raw,
 			comment_text, resolution, status, closed_at, comment_date, author_code, camera_position,
 			image_ref, source, extra, updated_by)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
@@ -148,7 +148,7 @@ func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 		if extra == "" {
 			extra = "{}"
 		}
-		if _, err := stmt.Exec(pid, rec.CommentID, rec.Viewpoint, rec.Commenter, rec.Discipline,
+		if _, err := stmt.Exec(rid, rec.CommentID, rec.Viewpoint, rec.Commenter, rec.Discipline,
 			rec.CommentRaw, rec.CommentText, rec.Resolution, rec.Status, nullStr(rec.ClosedAt),
 			rec.CommentDate, rec.AuthorCode, rec.CameraPosition, rec.ImageRef, rec.Source, extra, u.ID); err != nil {
 			writeErr(w, 500, "insert record")
@@ -170,7 +170,7 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	if _, err := a.recordProject(id); err != nil {
+	if _, err := a.recordReview(id); err != nil {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
@@ -227,7 +227,7 @@ func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	if _, err := a.recordProject(id); err != nil {
+	if _, err := a.recordReview(id); err != nil {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
@@ -243,10 +243,10 @@ func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (a *API) recordProject(id int64) (int64, error) {
-	var pid int64
-	err := a.DB.QueryRow(`SELECT project_id FROM records WHERE id=?`, id).Scan(&pid)
-	return pid, err
+func (a *API) recordReview(id int64) (int64, error) {
+	var rid int64
+	err := a.DB.QueryRow(`SELECT review_id FROM records WHERE id=?`, id).Scan(&rid)
+	return rid, err
 }
 
 func nullStr(s string) any {

@@ -31,7 +31,7 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	if _, err := a.recordProject(id); err != nil {
+	if _, err := a.recordReview(id); err != nil {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
@@ -81,7 +81,7 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"key": key, "url": "/api/files/" + key, "kind": kind})
 }
 
-// getFile streams a stored image to any member of the project it belongs to.
+// getFile streams a stored image to any signed-in user.
 func (a *API) getFile(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 	if key == "" || filepath.Base(key) != key { // no path traversal

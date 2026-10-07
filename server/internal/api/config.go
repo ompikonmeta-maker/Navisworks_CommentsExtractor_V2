@@ -8,11 +8,10 @@ import (
 	"tabelin/server/internal/auth"
 )
 
-// Config is stored as key -> arbitrary JSON, under a scope ("global" or
-// "project:<id>"). It holds what V1 kept in the browser: appearance, labels,
-// detection rules, statuses, custom-field definitions, and the template mapping.
-// Global config is app-wide defaults (admin-managed); project config overrides
-// per review.
+// Config is stored as key -> arbitrary JSON under a scope: "global" (app-wide
+// defaults, admin-managed), "project:<id>" (template mapping, statuses,
+// detection rules, custom fields — shared by every review in the project) or
+// "review:<id>" (per-review values such as the target date).
 
 // getGlobalConfig returns every global config entry. Any signed-in user may read
 // defaults so the app can render.
@@ -52,6 +51,36 @@ func (a *API) putProjectConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.putConfig(w, r, projectScope(pid))
+}
+
+// getReviewConfig returns every config entry for a review (any signed-in user).
+func (a *API) getReviewConfig(w http.ResponseWriter, r *http.Request) {
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	a.writeConfigMap(w, reviewScope(rid))
+}
+
+// putReviewConfig sets one config entry for a review, e.g. its target date
+// (admins/editors only).
+func (a *API) putReviewConfig(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
+	rid, ok := pathID(r, "rid")
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad review id")
+		return
+	}
+	if !canWriteRole(u) {
+		writeErr(w, http.StatusForbidden, "cannot write review config")
+		return
+	}
+	a.putConfig(w, r, reviewScope(rid))
+}
+
+func reviewScope(rid int64) string {
+	return "review:" + strconv.FormatInt(rid, 10)
 }
 
 func projectScope(pid int64) string {
