@@ -29,7 +29,7 @@ import (
 //go:embed all:web
 var webFS embed.FS
 
-const version = "2.0.0-dev"
+var version = "2.0.0-dev" // set at release build: -ldflags "-X main.version=…"
 
 func main() {
 	addr := env("TABELIN_ADDR", ":8787")

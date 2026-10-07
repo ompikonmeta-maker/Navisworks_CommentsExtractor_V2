@@ -231,6 +231,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   commenter is prefixed into `commentRaw`. A pasted/dropped snapshot becomes the before photo.
 - **Paste a snapshot (Ctrl+V)** in the drawer goes to the photo slot last hovered/focused
   (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
+- **Releases**: `.github/workflows/build.yml` runs only by hand (Actions → Build → Run workflow,
+  inputs `version`, `release`). It builds the web app, the Windows `tabelin-server.exe`
+  (`main.version` set via `-ldflags -X`) and attaches both exe and `tabelin-offline.html` to a
+  GitHub Release tagged `v<version>`. Never push-triggered: don't start it until the user says "build".
 - **Help** (`views/Help.jsx`, last sidebar item): "How to use" (flow infographic + one card per
   step with a real screenshot) and "Roles & limits" (role cards, permission matrix, safety nets,
   limits) and "About" (version, run mode, where each record field comes from), in EN / ID (`localStorage tabelin.helpLang`, default from the browser language).

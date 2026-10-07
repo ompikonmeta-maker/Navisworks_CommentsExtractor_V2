@@ -1,10 +1,23 @@
 name: Build
 
-# Build the Tabelin app and publish the production dist/ as a downloadable
-# artifact (Actions tab → this run → Artifacts).
+# Builds Tabelin and, when asked, publishes a GitHub Release with:
+#   - tabelin-server.exe   the office server for Windows (no install, no admin)
+#   - tabelin-offline.html the single-file app that runs in a browser alone
 # Runs only when started by hand (Actions → Build → Run workflow), never on push.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number, e.g. 2.0.0 (the release is tagged v<version>)'
+        required: true
+        default: '2.0.0'
+      release:
+        description: 'Publish a GitHub Release (off = build only, files under Artifacts)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -19,15 +32,48 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
 
-      - name: Build
-        run: npm run build
+      - name: Build the web app
+        run: |
+          npm ci
+          npm run build
+          cp dist/index.html server/web/index.html
+          mkdir -p out
+          cp dist/index.html out/tabelin-offline.html
 
-      - name: Upload dist artifact
+      - name: Build the Windows server
+        working-directory: server
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -trimpath -ldflags "-s -w -X main.version=${{ inputs.version }}" -o ../out/tabelin-server.exe .
+
+      - name: Upload build files
         uses: actions/upload-artifact@v4
         with:
-          name: tabelin-dist
-          path: dist
+          name: tabelin-${{ inputs.version }}
+          path: out
           if-no-files-found: error
+
+      - name: Publish release
+        if: ${{ inputs.release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          cat > notes.md <<NOTES
+          **Tabelin v${VERSION}**
+
+          - **tabelin-server.exe** — the office server. Put it in a folder and double-click; a \`data\` folder is created next to it. To update, close the old one and replace only the .exe — keep \`data\`.
+          - **tabelin-offline.html** — the single-file app for one person, no server needed.
+
+          Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}.
+          NOTES
+          gh release create "v${VERSION}" out/tabelin-server.exe out/tabelin-offline.html \
+            --title "Tabelin v${VERSION}" --notes-file notes.md --target "${GITHUB_SHA}"
