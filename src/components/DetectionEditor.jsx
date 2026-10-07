@@ -6,7 +6,7 @@ import { extract, RULE_MODES, DELIMITERS, BRACKETS } from '../lib/detect.js';
 import { Icon, Button, Select } from './ui.jsx';
 
 const CASES = [['none', 'as-is'], ['upper', 'UPPER'], ['lower', 'lower']];
-const inputCls = 'rounded-control border border-outline bg-surface-container px-2.5 py-1.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+const inputCls = 'rounded-control border border-outline-variant bg-surface-low hover:border-outline px-2.5 py-1.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
 // Fresh params when switching a rule to a given mode.
 function blankRule(mode) {

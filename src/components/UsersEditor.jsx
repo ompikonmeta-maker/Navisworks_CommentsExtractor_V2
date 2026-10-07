@@ -53,7 +53,7 @@ export default function UsersEditor({ me }) {
             value={uname}
             onChange={(e) => setUname(e.target.value)}
             placeholder="e.g. DOMAIN\jdoe"
-            className="mt-1 block w-full rounded-control border border-outline bg-surface px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="mt-1 block w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
         </label>
         <label className="flex-1 min-w-[140px] text-xs font-medium text-on-surface-variant">
@@ -62,7 +62,7 @@ export default function UsersEditor({ me }) {
             value={dname}
             onChange={(e) => setDname(e.target.value)}
             placeholder="e.g. Jane Doe"
-            className="mt-1 block w-full rounded-control border border-outline bg-surface px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="mt-1 block w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
         </label>
         <label className="text-xs font-medium text-on-surface-variant">

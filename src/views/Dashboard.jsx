@@ -151,11 +151,11 @@ function Overview({ openDetail, goComments }) {
           </Reveal>
 
           <Reveal className="grid gap-4 lg:grid-cols-2" deps={[status, meta.source]}>
-            <Card className="relative p-6">
+            <Card className="relative flex flex-col p-6">
               <Head icon="conversion_path" title="Pipeline" tip="Where comments sit between being raised and going into the log sheet. Red numbers are what drops out at each step. Click a step to see those comments." />
               <Pipeline ov={ov} onPick={pickStage} />
             </Card>
-            <Card className="relative p-6">
+            <Card className="relative flex flex-col p-6">
               <Head icon="priority_high" title="Needs attention" tip="What holds the target back, most urgent first. Each opens the matching comments." />
               <Attention ov={ov} statuses={statuses} goComments={goComments} openDetail={openDetail} />
             </Card>
@@ -173,7 +173,7 @@ function Overview({ openDetail, goComments }) {
               <Head icon="schedule" title="Backlog age" tip="Comments not yet closed, by how long ago they were raised. Darker = more." />
               <AgeHeatmap ov={ov} onPick={pickDisc} />
             </Card>
-            <Card className="relative min-w-0 p-6 lg:col-span-5">
+            <Card className="relative flex min-w-0 flex-col p-6 lg:col-span-5">
               <Head icon="record_voice_over" title="Raised by" tip="Share of each group's comments that are closed. Groups come from the prefix of the commenter name (CPY_, OPS, …)." />
               <RaisedBy ov={ov} />
             </Card>
@@ -270,7 +270,7 @@ function TargetChip({ value, onChange, readOnly }) {
         <div className="absolute left-0 top-12 z-30 w-64 rounded-card border border-outline-variant/60 bg-surface p-4 shadow-md-2">
           <label htmlFor="ov-target" className="text-xs font-medium text-on-surface-variant">Close all comments by</label>
           <input id="ov-target" type="date" value={draft} onChange={(e) => setDraft(e.target.value)}
-            className="mt-1.5 block w-full rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+            className="mt-1.5 block w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
           <div className="mt-3 flex justify-end gap-1">
             {value && <Button variant="text" onClick={() => { onChange(''); setOpen(false); }}>Clear</Button>}
             <Button variant="tonal" onClick={() => { onChange(draft); setOpen(false); }} disabled={!draft}>Save</Button>
@@ -297,6 +297,10 @@ function Hero({ ov, statuses, goComments }) {
             {ov.pct}<span className="text-[28px] font-semibold text-on-surface-variant">%</span>
           </div>
           <div className="text-sm text-on-surface-variant tabular-nums"><b className="text-on-surface">{ov.done}</b> / {ov.total} closed</div>
+          {ov.hasCloseDates && ov.recent > 0 && (
+            <span className="rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums" tabIndex={0} style={{ background: tint('var(--tabelin-good)', 14), color: 'var(--tabelin-good)' }}
+              {...tp(<TipRows title={`${ov.recent} closed in the last 14 days`} />)}>+{ov.recent}</span>
+          )}
         </div>
         <div className="mt-5"><StatusBar statuses={statuses} counts={ov.counts} total={ov.total} onPick={(label) => goComments({ status: label, discipline: 'all' })} /></div>
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] tabular-nums">
@@ -354,13 +358,20 @@ function Hero({ ov, statuses, goComments }) {
         </div>
         <div className="mt-3 flex items-baseline gap-2 tabular-nums"><span className="text-[34px] font-bold leading-tight tracking-[-0.02em]">{ov.ready}</span><span className="text-sm text-on-surface-variant">/ {ov.total}</span></div>
         <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-surface-high"><div className="h-full rounded-full" style={{ width: `${ov.total ? (ov.ready / ov.total) * 100 : 0}%`, background: 'var(--tabelin-status-closed)' }} /></div>
-        {ov.missingEvidence > 0 && (
-          <button type="button" onClick={() => goComments({ status: ov.doneL, discipline: 'all' })}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            style={{ background: tint('var(--tabelin-warn)', 14), color: 'var(--tabelin-warn)' }}
-            {...tp(<TipRows title={`${ov.missingEvidence} closed without full evidence`} rows={[['No after-photo', ov.noPhoto], ['No resolution', ov.noRes]]} />)}>
-            <Icon name="no_photography" className="text-[16px]" />{ov.missingEvidence} missing evidence
-          </button>
+        {ov.done > 0 && (
+          <div className="mt-4 grid gap-1">
+            {[
+              ['no_photography', ov.noPhoto, 'without an after-photo', 'Closed, but the after-photo is missing.'],
+              ['description', ov.noRes, 'without a resolution', 'Closed, but no resolution was written.'],
+            ].map(([icon, n, label, tip]) => (
+              <button key={icon} type="button" onClick={() => goComments({ status: ov.doneL, discipline: 'all' })} disabled={!n}
+                className="t-press flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-[12.5px] tabular-nums enabled:hover:bg-surface-container disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                {...tp(<TipRows title={`${n} closed ${label}`} note={tip} />)}>
+                <Icon name={icon} className="text-[17px]" style={{ color: n ? 'var(--tabelin-warn)' : 'var(--tabelin-good)' }} />
+                <b className="font-semibold">{n}</b><span className="truncate text-on-surface-variant">{label}</span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </Card>

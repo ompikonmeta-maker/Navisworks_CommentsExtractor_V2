@@ -79,7 +79,7 @@ export default function StatusEditor() {
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <label className="text-xs font-medium text-on-surface-variant">
           Add a status
-          <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="e.g. Submitted" className="mt-1 block w-48 rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+          <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="e.g. Submitted" className="mt-1 block w-48 rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
         </label>
         <Button variant="tonal" icon="upload_file" onClick={add} disabled={!newLabel.trim()}>Add</Button>
       </div>

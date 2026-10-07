@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
-import { Icon, Card, Button, SegmentedButtons, DisciplineBadge } from '../components/ui.jsx';
+import { Icon, Card, Button, SegmentedButtons, DisciplineBadge, DISC_PALETTE, discColor, InfoTip } from '../components/ui.jsx';
 import DetectionEditor from '../components/DetectionEditor.jsx';
 import TemplateExportPanel from '../components/TemplateExportPanel.jsx';
 import CustomFieldsEditor from '../components/CustomFieldsEditor.jsx';
@@ -19,7 +19,6 @@ const THEME_OPTIONS = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ];
-const SWATCHES = ['#1768f7', '#1f7a4d', '#a9730a', '#b3261e', '#7b3fe4', '#0e7490', '#c026d3', '#475569'];
 
 // The Settings sub-sections. These now live in the sidebar (nested under
 // Settings): an accordion when the rail is expanded, a flyout when collapsed.
@@ -113,12 +112,15 @@ export default function Settings({ section = 'template', setSection = () => {}, 
 
         {section === 'labels' && (
           <Card className="p-6">
-            <SectionTitle icon="table_view" title="Labels" sub="Your taxonomy — disciplines (with colours), the people who comment, and custom fields for export." />
-            <div className="mb-4 inline-flex overflow-hidden rounded-full border border-outline text-sm">
-              {[['disciplines', 'Disciplines'], ['commenters', 'Commenters'], ['status', 'Status'], ['custom', 'Custom fields']].map(([k, label]) => (
-                <button key={k} onClick={() => setLabelTab(k)} className={`px-4 py-1.5 font-medium ${labelTab === k ? 'bg-primary text-on-primary' : 'text-on-surface hover:bg-surface-container'}`}>{label}</button>
-              ))}
-            </div>
+            <SectionTitle icon="table_view" title="Labels" sub="Disciplines with their colours, the people who comment, statuses, and custom fields for the export."
+              right={
+                <div role="tablist" aria-label="Labels" className="inline-flex gap-1 rounded-[14px] bg-surface-container p-1 text-[13px]">
+                  {[['disciplines', 'Disciplines'], ['commenters', 'Commenters'], ['status', 'Status'], ['custom', 'Custom fields']].map(([k, label]) => (
+                    <button key={k} role="tab" aria-selected={labelTab === k} onClick={() => setLabelTab(k)}
+                      className={`rounded-[10px] px-3.5 py-1.5 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${labelTab === k ? 't-card bg-surface text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}`}>{label}</button>
+                  ))}
+                </div>
+              } />
 
             <div key={labelTab} className="drawer-swap">
               {labelTab === 'status' ? (
@@ -130,28 +132,21 @@ export default function Settings({ section = 'template', setSection = () => {}, 
                   <div className="mb-4 flex flex-wrap items-end gap-2">
                     <label className="text-xs font-medium text-on-surface-variant">
                       Add a discipline
-                      <input value={newDisc} onChange={(e) => setNewDisc(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addNewDisc()} placeholder="e.g. CIVIL" className="mt-1 block w-48 rounded-control border border-outline bg-surface-container px-3 py-2 text-sm uppercase text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                      <input value={newDisc} onChange={(e) => setNewDisc(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addNewDisc()} placeholder="e.g. CIVIL" className="mt-1 block w-48 rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm uppercase text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
                     </label>
-                    <Button variant="tonal" icon="upload_file" onClick={addNewDisc} disabled={!newDisc.trim()}>Add</Button>
+                    <Button variant="tonal" icon="add" onClick={addNewDisc} disabled={!newDisc.trim()}>Add</Button>
                   </div>
                   <ul className="divide-y divide-outline-variant/50">
                     {disciplines.map((d) => {
                       const color = settings.disciplineColors?.[d.name] || '';
                       return (
-                        <li key={d.name} className="flex flex-wrap items-center gap-3 py-2.5">
-                          <DisciplineBadge discipline={d.name} />
-                          <span className="text-xs text-on-surface-variant tabular-nums">{d.count} comment{d.count === 1 ? '' : 's'}</span>
-                          {d.custom && <span className="rounded-full bg-secondary-container px-2 py-0.5 text-[10px] font-medium text-on-secondary-container">custom</span>}
-                          <div className="ml-auto flex items-center gap-1.5">
-                            {SWATCHES.map((c) => (
-                              <button key={c} onClick={() => setDisciplineColor(d.name, c)} aria-label={`Set ${d.name} colour ${c}`} className={`h-5 w-5 rounded-full border transition-transform hover:scale-110 ${color.toLowerCase() === c ? 'border-on-surface ring-2 ring-primary' : 'border-outline-variant'}`} style={{ background: c }} />
-                            ))}
-                            <label className="ml-1 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-outline-variant" title="Custom colour" style={color ? { background: `color-mix(in srgb, ${color} 20%, transparent)` } : undefined}>
-                              <Icon name="image" className="text-[15px] text-on-surface-variant" />
-                              <input type="color" value={color || '#1768f7'} onChange={(e) => setDisciplineColor(d.name, e.target.value)} className="sr-only" />
-                            </label>
-                            {color && <button onClick={() => setDisciplineColor(d.name, null)} aria-label={`Clear ${d.name} colour`} className="rounded-full p-1 text-on-surface-variant hover:text-error" title="Reset to default colour"><Icon name="restart_alt" className="text-[16px]" /></button>}
-                            {d.custom && d.count === 0 && <button onClick={() => removeDiscipline(d.name)} aria-label={`Remove ${d.name}`} className="rounded-full p-1 text-on-surface-variant hover:text-error" title="Remove discipline"><Icon name="close" className="text-[16px]" /></button>}
+                        <li key={d.name} className="flex flex-wrap items-center gap-3 py-2">
+                          <span className="w-28"><DisciplineBadge discipline={d.name} /></span>
+                          <span className="text-xs text-on-surface-variant tabular-nums">{d.count}</span>
+                          {d.custom && <span className="text-[11px] font-semibold text-primary">custom</span>}
+                          <div className="ml-auto flex items-center gap-1">
+                            <DiscColorButton name={d.name} color={color || discColor(d.name)} custom={!!color} onPick={(c) => setDisciplineColor(d.name, c)} />
+                            {d.custom && d.count === 0 && <button onClick={() => removeDiscipline(d.name)} aria-label={`Remove ${d.name}`} className="t-press rounded-full p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-error" title="Remove discipline"><Icon name="close" className="text-[16px]" /></button>}
                           </div>
                         </li>
                       );
@@ -165,7 +160,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
                   <div className="mb-4 flex flex-wrap items-end gap-2">
                     <label className="text-xs font-medium text-on-surface-variant">
                       Add a commenter
-                      <input value={newComm} onChange={(e) => setNewComm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addNewComm()} placeholder="e.g. CPY_Dito" className="mt-1 block w-56 rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                      <input value={newComm} onChange={(e) => setNewComm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addNewComm()} placeholder="e.g. CPY_Dito" className="mt-1 block w-56 rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
                     </label>
                     <Button variant="tonal" icon="upload_file" onClick={addNewComm} disabled={!newComm.trim()}>Add</Button>
                   </div>
@@ -292,13 +287,54 @@ function FieldGroup({ title, sub, rows }) {
   );
 }
 
-function SectionTitle({ icon, title, sub }) {
+function SectionTitle({ icon, title, sub, right }) {
   return (
-    <div className="mb-5">
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <h2 className="flex items-center gap-2 text-base font-semibold">
         <Icon name={icon} className="text-[20px] text-primary" /> {title}
+        {sub && <InfoTip label={`About ${title}`}>{sub}</InfoTip>}
       </h2>
-      {sub && <p className="mt-1 text-xs text-on-surface-variant">{sub}</p>}
+      {right}
+    </div>
+  );
+}
+
+// One swatch per discipline; the palette opens on demand instead of a row of
+// dots on every line. "Custom" takes any colour; "Default" resets it.
+function DiscColorButton({ name, color, custom, onPick }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const off = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', off);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  const pick = (c) => { onPick(c); setOpen(false); };
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open} aria-label={`${name} colour`} title="Colour"
+        className="t-press flex h-8 items-center gap-1 rounded-full pl-1.5 pr-1 text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <span className="h-5 w-5 rounded-full" style={{ background: color }} />
+        <Icon name="expand_more" className="text-[18px]" />
+      </button>
+      <div className={`t-pop absolute right-0 top-10 z-30 w-[188px] rounded-[18px] bg-surface p-3 ${open ? 'show' : ''}`}>
+        <div className="grid grid-cols-5 gap-2">
+          {DISC_PALETTE.map((c) => (
+            <button key={c} type="button" onClick={() => pick(c)} aria-label={`Use ${c}`}
+              className={`t-press h-7 w-7 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${color.toLowerCase() === c ? 'ring-2 ring-on-surface ring-offset-2 ring-offset-surface' : ''}`} style={{ background: c }} />
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t border-outline-variant pt-2">
+          <label className="t-press inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container">
+            <Icon name="palette" className="text-[16px]" />Custom
+            <input type="color" value={color} onChange={(e) => onPick(e.target.value)} className="sr-only" />
+          </label>
+          {custom && <button type="button" onClick={() => pick(null)} className="t-press inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container"><Icon name="restart_alt" className="text-[15px]" />Default</button>}
+        </div>
+      </div>
     </div>
   );
 }

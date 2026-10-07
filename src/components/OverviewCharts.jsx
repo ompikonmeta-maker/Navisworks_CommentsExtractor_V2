@@ -361,7 +361,7 @@ export function Pipeline({ ov, onPick }) {
   const tp = useTipProps();
   const total = ov.total || 1;
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-1 flex-col justify-between gap-1">
       {ov.pipeline.map((s, i) => {
         const prev = i ? ov.pipeline[i - 1].value : null;
         const drop = prev != null ? prev - s.value : 0;
@@ -423,7 +423,7 @@ export function AgeHeatmap({ ov, onPick }) {
 export function RaisedBy({ ov }) {
   const tp = useTipProps();
   return (
-    <div className="flex flex-col gap-3.5">
+    <div className="flex flex-1 flex-col justify-around gap-3.5">
       {ov.parties.map((p) => (
         <div key={p.party} tabIndex={0} className="cursor-default rounded-control focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           {...tp(<TipRows title={p.party} rows={[[`${p.done} of ${p.total} closed`, `${p.pct}%`]]} note={p.names.slice(0, 6).join(', ') + (p.names.length > 6 ? '…' : '')} />)}>

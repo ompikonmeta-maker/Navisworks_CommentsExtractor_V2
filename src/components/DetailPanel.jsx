@@ -370,7 +370,7 @@ export default function DetailPanel({ record, onClose }) {
                   type="datetime-local"
                   value={toLocalInput(rec.closedAt)}
                   onChange={(e) => set({ closedAt: fromLocalInput(e.target.value) })}
-                  className="mt-1 w-full rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="mt-1 w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
                 <span className="mt-1 block text-[11px] font-normal text-on-surface-variant">Set automatically when closed — edit if the fix happened earlier.</span>
               </label>
@@ -383,7 +383,7 @@ export default function DetailPanel({ record, onClose }) {
                 onChange={(e) => set({ resolution: e.target.value })}
                 rows={4}
                 placeholder="Decision or follow-up…"
-                className="mt-1 w-full resize-y rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="mt-1 w-full resize-y rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
             </label>
 
@@ -399,7 +399,7 @@ export default function DetailPanel({ record, onClose }) {
                     const type = attrType(a);
                     const val = rec.extra?.[key];
                     const setExtra = (v) => set({ extra: { ...(rec.extra || {}), [key]: v } });
-                    const inputCls = 'mt-1 w-full rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+                    const inputCls = 'mt-1 w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
                     if (type === 'checkbox') {
                       const arr = Array.isArray(val) ? val : [];
                       const toggle = (opt) => setExtra(arr.includes(opt) ? arr.filter((x) => x !== opt) : [...arr, opt]);

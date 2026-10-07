@@ -347,21 +347,18 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
             </h1>
             <div className={`flex items-center gap-1 ${remote ? 'min-w-0' : 'shrink-0'}`}>
               {remote && (
-                <>
-                  <button
-                    onClick={onExitProject}
-                    title="Switch review"
-                    className="flex h-10 min-w-0 max-w-[22rem] items-center gap-1.5 rounded-control px-3 text-sm text-on-surface-variant hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <Icon name="folder_open" className="shrink-0 text-[20px]" />
-                    <span className="hidden min-w-0 items-center gap-1.5 sm:flex">
-                      <span className="truncate">{remote.project.name}</span>
-                      <Icon name="chevron_right" className="shrink-0 text-[18px] opacity-60" />
-                    </span>
-                    <span className="truncate font-medium text-on-surface">{remote.review.name}</span>
-                  </button>
-                  <Button variant="text" className="shrink-0" onClick={onSignOut}>Sign out</Button>
-                </>
+                <button
+                  onClick={onExitProject}
+                  title="Switch review"
+                  className="t-press t-card flex h-9 min-w-0 max-w-[24rem] items-center gap-1.5 rounded-full bg-surface pl-3 pr-4 text-[13px] text-on-surface-variant hover:text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Icon name="folder_open" className="shrink-0 text-[18px]" />
+                  <span className="hidden min-w-0 items-center gap-1 sm:flex">
+                    <span className="truncate">{remote.project.name}</span>
+                    <Icon name="chevron_right" className="shrink-0 text-[16px] opacity-60" />
+                  </span>
+                  <span className="truncate font-semibold text-on-surface">{remote.review.name}</span>
+                </button>
               )}
               {!remote && FS_SUPPORTED &&
                 (needsReconnect ? (
@@ -379,6 +376,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
               >
                 <Icon name={effTheme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
               </button>
+              {remote && <AccountMenu user={remote.user} onSwitch={onExitProject} onSignOut={onSignOut} />}
             </div>
           </div>
           <div className="canvas-w mt-1 flex items-center gap-2 text-xs text-on-surface-variant">
@@ -387,7 +385,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
               title={saving === 'saving' ? 'Saving…' : 'Saved'}
             />
             {remote ? (
-              <span>{canWrite(remote.user) ? 'Shared review · saved on the server' : 'Shared review · view only'}</span>
+              <span title="Shared review, saved on the Tabelin server">{saving === 'saving' ? 'Saving…' : canWrite(remote.user) ? 'Saved' : 'View only'}</span>
             ) : (
               <>
                 <span>
@@ -427,6 +425,45 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
 // expanded (children slide open below, indented under a guide line) and a
 // portalled flyout when the rail is collapsed to icons (children float beside
 // it). Matches the approved mock: emphasized-easing reveal + spring flyout.
+// Account button (initials) with a small menu: who is signed in, switch
+// review, sign out. Keeps Sign out out of the working toolbar.
+function AccountMenu({ user, onSwitch, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const off = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', off);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  const name = user?.displayName || user?.username || '';
+  const initials = name.replace(/^.*\\/, '').split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account: ${name}`}
+        title={name}
+        className="t-press flex h-9 w-9 items-center justify-center rounded-full bg-primary-container text-[13px] font-bold text-on-primary-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        {initials}
+      </button>
+      <div role="menu" className={`t-pop absolute right-0 top-11 z-40 w-60 rounded-[18px] bg-surface p-1.5 ${open ? 'show' : ''}`}>
+        <div className="px-3 pb-2 pt-2">
+          <div className="truncate text-sm font-semibold">{name}</div>
+          <div className="text-xs capitalize text-on-surface-variant">{user?.role}</div>
+        </div>
+        <button role="menuitem" onClick={() => { setOpen(false); onSwitch(); }} className="t-menuitem"><Icon name="folder_open" className="text-[19px]" />Switch review</button>
+        <button role="menuitem" onClick={() => { setOpen(false); onSignOut(); }} className="t-menuitem"><Icon name="logout" className="text-[19px]" />Sign out</button>
+      </div>
+    </div>
+  );
+}
+
 function SettingsNav({ item, i, collapsed, route, section, sections = SECTIONS, open, onToggle, onSelect }) {
   const active = route === 'settings';
   const btnRef = useRef(null);

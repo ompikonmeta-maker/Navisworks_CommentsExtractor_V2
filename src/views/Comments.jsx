@@ -6,6 +6,13 @@ import { DISCIPLINES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
 import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
+import { parseTs } from '../lib/overview.js';
+
+// "2024/12/9 04:0:23" → "9 Dec 2024"; the raw stamp stays in the tooltip.
+function fmtCommentDate(raw) {
+  const t = parseTs(raw);
+  return t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : raw || '—';
+}
 
 export default function Comments({ detailId, setDetailId, initialFilter }) {
   const { status, records, notify } = useStore();
@@ -66,10 +73,13 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search comments, viewpoints, authors…"
+              placeholder="Search comments, viewpoints, commenters…"
               aria-label="Search comments"
-              className="h-10 w-full rounded-control border border-outline bg-surface-container pl-10 pr-4 text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="h-10 w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline pl-10 pr-24 text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs tabular-nums text-on-surface-variant" aria-live="polite">
+              {loading ? '' : filtered.length === records.length ? records.length : `${filtered.length} / ${records.length}`}
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -93,9 +103,6 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
               Excel
             </Button>
           </div>
-        </div>
-        <div className="mt-2 text-xs text-on-surface-variant">
-          {loading ? 'Loading…' : `${filtered.length} of ${records.length}`}
         </div>
       </Card>
 
@@ -125,8 +132,7 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
                   <th className="px-3 py-3 font-medium">Discipline</th>
                   <th className="px-3 py-3 font-medium">Comment</th>
                   <th className="px-3 py-3 font-medium">Status</th>
-                  <th className="px-3 py-3 font-medium whitespace-nowrap">Date</th>
-                  <th className="px-3 py-3" />
+                  <th className="px-3 py-3 pr-5 font-medium whitespace-nowrap">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,13 +145,13 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {r.imageData ? (
-                          <img src={r.imageData} alt="" className="h-9 w-9 rounded-control object-cover" />
+                          <img src={r.imageData} alt="" className="h-9 w-12 shrink-0 rounded-[10px] object-cover" />
                         ) : (
-                          <span className="flex h-9 w-9 items-center justify-center rounded-control bg-surface-variant text-on-surface-variant">
-                            <Icon name="image_not_supported" className="text-[18px]" />
+                          <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-[10px] bg-surface-container text-on-surface-variant/70">
+                            <Icon name="image_not_supported" className="text-[17px]" />
                           </span>
                         )}
-                        <span className="font-medium">{r.viewpoint}</span>
+                        <span className="whitespace-nowrap font-medium">{r.viewpoint}</span>
                       </div>
                     </td>
                     <td className="px-3 py-3"><DisciplineBadge discipline={r.discipline} /></td>
@@ -153,10 +159,7 @@ export default function Comments({ detailId, setDetailId, initialFilter }) {
                       <span className="line-clamp-2 text-on-surface-variant">{r.commentText}</span>
                     </td>
                     <td className="px-3 py-3"><StatusBadge status={r.status} /></td>
-                    <td className="px-3 py-3 whitespace-nowrap text-xs text-on-surface-variant">{r.commentDate}</td>
-                    <td className="px-3 py-3 text-right">
-                      <Icon name="chevron_right" className="text-on-surface-variant" />
-                    </td>
+                    <td className="px-3 py-3 pr-5 whitespace-nowrap text-[13px] tabular-nums text-on-surface-variant" title={r.commentDate}>{fmtCommentDate(r.commentDate)}</td>
                   </tr>
                 ))}
               </tbody>

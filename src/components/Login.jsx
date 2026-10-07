@@ -45,7 +45,7 @@ export default function Login({ onSuccess }) {
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               placeholder="e.g. DOMAIN\yourname"
-              className="mt-1 block w-full rounded-control border border-outline bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="mt-1 block w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
           </label>
           <label className="text-xs font-medium text-on-surface-variant">
@@ -57,7 +57,7 @@ export default function Login({ onSuccess }) {
               onChange={(e) => setPin(e.target.value)}
               autoComplete="current-password"
               placeholder="Your PIN"
-              className="mt-1 block w-full rounded-control border border-outline bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="mt-1 block w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
           </label>
           {err && <p className="text-xs text-error">{err}</p>}

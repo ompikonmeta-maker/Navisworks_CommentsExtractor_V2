@@ -199,7 +199,7 @@ function NewItem({ noun, onCreate }) {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder={noun === 'project' ? 'e.g. Tower A' : 'e.g. 90% Model Review'}
-          className="mt-1 block w-full rounded-control border border-outline bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="mt-1 block w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2.5 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
       </label>
       <Button variant="tonal" icon="add" onClick={submit} disabled={busy || !name.trim()}>Create</Button>

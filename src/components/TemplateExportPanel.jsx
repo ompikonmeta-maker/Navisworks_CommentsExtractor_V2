@@ -45,7 +45,7 @@ const RECORD_OPTS = RECORD_FIELDS.map(([value, label]) => ({ value, label }));
 const cfHighlight = 'rounded bg-status-review/10 ring-1 ring-status-review/40';
 
 const inputCls =
-  'rounded-control border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+  'rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 // Quiet field for the dense mapping table — no resting border/fill; frames up
 // only on hover / focus so the table reads as data, not a wall of boxes.
 const quietInput =
