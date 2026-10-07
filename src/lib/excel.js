@@ -6,6 +6,7 @@
 //     images captured from the dashboard.
 // Fully client-side; SheetJS and JSZip are imported dynamically.
 // =====================================================================
+import { inlineImages } from './server.js';
 let XLSX = null;
 async function loadXLSX() {
   if (!XLSX) XLSX = await import('xlsx');
@@ -264,7 +265,7 @@ export async function exportToExcel(records, opts = {}) {
   if (overview) X.utils.book_append_sheet(wb, buildOverviewSheet(X, overview), 'Overview'); // sheet2
 
   const bytes = new Uint8Array(X.write(wb, { type: 'array', bookType: 'xlsx' }));
-  const groups = [{ sheetFile: 'sheet1.xml', drawingNo: 1, images: await commentImages(records) }];
+  const groups = [{ sheetFile: 'sheet1.xml', drawingNo: 1, images: await commentImages(await inlineImages(records)) }];
   if (overview) groups.push({ sheetFile: 'sheet2.xml', drawingNo: 2, images: overviewImages(overview) });
   const withImages = await embedDrawings(bytes, groups);
 

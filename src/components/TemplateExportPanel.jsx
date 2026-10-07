@@ -13,6 +13,7 @@ import {
   CUSTOM_PREFIX,
 } from '../lib/templateExcel.js';
 import { saveTemplate, loadTemplate, clearTemplate } from '../lib/persist.js';
+import { inlineImages } from '../lib/server.js';
 
 const BY_OPTS = [
   { value: 'header', label: 'By header' },
@@ -197,7 +198,7 @@ export default function TemplateExportPanel() {
     if (!tpl) return;
     setBusy(true); setErr('');
     try {
-      const { bytes, stats } = await fillTemplate(tpl.bytes, records, cfg, cfg.constants || {});
+      const { bytes, stats } = await fillTemplate(tpl.bytes, await inlineImages(records), cfg, cfg.constants || {});
       download(bytes, `3D-review-log-${new Date().toISOString().slice(0, 10)}.xlsx`);
       notify(`Export done: ${stats.logRows} rows · ${stats.detailSheets} detail sheets · ${stats.images} images.`, 'success');
     } catch (e) { setErr(e.message); notify(`Export failed: ${e.message}`, 'error'); } finally { setBusy(false); }
