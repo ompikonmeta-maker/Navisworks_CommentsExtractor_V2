@@ -195,6 +195,32 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `src/views/*` and `src/components/*` — screens and shared MD3-flavored primitives
   (`ui.jsx`), the editable `DetailPanel.jsx`, and the `Toast.jsx` notifier.
 
+### Review workflow (V2)
+
+- **Re-import merges** (`lib/merge.js`): importing into a review that already has comments
+  opens `ImportDialog` with `planMerge(existing, incoming)` — matched by Navisworks comment ID
+  (`recordKey`; viewpoint + raw text when a report has no IDs). Matched comments get only the
+  Navisworks fields (`SOURCE_FIELDS`) refreshed; status, resolution, photos and custom fields
+  stay. Missing comments are kept or moved to the done status. Local mode applies
+  `applyMergeLocal`; the server uses `server.applyMergeRemote`, which stores an undo record
+  in the review config key `lastImport` (`undoImportRemote`; also in the review ⋯ menu).
+- **Delete**: `DELETE /api/reviews/{rid}` and `/api/projects/{pid}` (admin; a project must be
+  empty first), `POST /api/reviews/{rid}/records/delete` (bulk), `DELETE /api/records/{id}/images`
+  (photo removal — `syncRecord` sends it when an image field becomes empty; the store delays
+  the removal 6 s so the Undo toast can cancel it). Confirmations use the shared `Dialog`
+  (`components/ui.jsx`); reviews with comments need the name typed.
+- **Export**: `components/ExportButton.jsx` is a split button — "Export log sheet"
+  (`lib/logsheet.js`, the template export; no template → toast linking to Settings › Template)
+  with Quick Excel in its menu. Used on Overview and Viewpoints.
+- **Viewpoints**: filter chips (no after-photo / no resolution / not closed > 3 months /
+  commenter, status `!done`), Overview tiles drill down into exactly the listed rows. Row
+  checkboxes open the `.t-bulk` bar (discipline / status / commenter → store `bulkUpdate`).
+  The drawer has prev/next (J/K), "Next after closing" (localStorage `tabelin.autoNext`),
+  delete, and "Changed by" (`changedBy`/`changedAt` from the server's `updated_by`/`updated_at`).
+- **Overview setup checklist** (import · target · template · invite team), dismissible per
+  review in localStorage `tabelin.setupDone.<reviewId|local>`. **Settings › Users** shows an
+  invite card with the LAN address from `GET /api/server-info` and a copyable message.
+
 ### Conventions that matter
 
 - Tailwind color utilities map to MD3 role tokens (`bg-surface`, `text-on-surface`,

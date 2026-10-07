@@ -155,7 +155,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
   const logSheet = async () => {
     try {
       const st = await exportLogSheet(filtered, settings.templateExport);
-      notify(`Log sheet ready: ${st.logRows} rows · ${st.images} photos.`, 'success');
+      notify(`Log sheet ready: ${st.logRows} rows · ${st.images} photo${st.images === 1 ? '' : 's'}.`, 'success');
     } catch (e) {
       if (e.code === 'no-template') notify(e.message, 'info', { label: 'Set up', onClick: () => goSettings?.('template') });
       else notify(`Export failed: ${e.message}`, 'error');

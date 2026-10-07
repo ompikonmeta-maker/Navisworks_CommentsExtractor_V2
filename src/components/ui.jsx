@@ -24,19 +24,23 @@ const ICON_CODEPOINTS = {
   add: 'e145',
   arrow_back: 'e5c4',
   bar_chart: 'e26b',
+  check: 'e5ca',
   check_circle: 'f0be',
   chevron_right: 'e5cc',
   close: 'e5cd',
   cloud_upload: 'e2c3',
+  content_copy: 'e14d',
   conversion_path: 'f0c1',
   dark_mode: 'e51c',
   dashboard: 'e871',
+  delete: 'e872',
   description: 'e873',
   donut_large: 'e917',
   download: 'f090',
   edit: 'e3c9',
   error: 'f8b6',
   event: 'e24f',
+  expand_less: 'e5ce',
   expand_more: 'e5cf',
   fact_check: 'f0c5',
   filter_alt_off: 'eb32',
@@ -47,6 +51,7 @@ const ICON_CODEPOINTS = {
   forum: 'e8af',
   groups: 'f233',
   help: 'e887',
+  history: 'e889',
   hourglass_bottom: 'ea5c',
   hourglass_top: 'ea5b',
   image: 'e3f4',
@@ -58,6 +63,7 @@ const ICON_CODEPOINTS = {
   link: 'e250',
   logout: 'e9ba',
   memory: 'e322',
+  more_horiz: 'e5d3',
   no_photography: 'f1a8',
   palette: 'e40a',
   pending: 'ef64',
@@ -66,6 +72,7 @@ const ICON_CODEPOINTS = {
   priority_high: 'e645',
   radio_button_unchecked: 'e836',
   record_voice_over: 'e91f',
+  remove: 'e15b',
   restart_alt: 'f053',
   schedule: 'e192',
   search: 'ef7a',
@@ -75,6 +82,7 @@ const ICON_CODEPOINTS = {
   sports_score: 'f06e',
   table_view: 'f1be',
   timeline: 'e922',
+  undo: 'e166',
   upload_file: 'e9fc',
   videocam: 'e04b',
   view_in_ar: 'e9fe',
@@ -272,7 +280,7 @@ export function Select({ value, onChange, options, className = '', 'aria-label':
           role="listbox"
           aria-label={ariaLabel}
           className={`dd-menu ${open ? 'open' : 'closing'}`}
-          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, minWidth: Math.max(pos.width, 180), maxHeight: pos.maxH ? Math.min(pos.maxH, 264) : undefined, overflowY: 'auto', transformOrigin: pos.bottom != null ? 'bottom left' : undefined }}
+          style={{ position: 'fixed', top: pos.bottom != null ? 'auto' : pos.top, bottom: pos.bottom ?? 'auto', left: pos.left, minWidth: Math.max(pos.width, 180), maxHeight: pos.maxH ? Math.min(pos.maxH, 264) : undefined, overflowY: 'auto', transformOrigin: pos.bottom != null ? 'bottom left' : undefined }}
         >
           {opts.map((o, i) => {
             const sel = o.value === value;

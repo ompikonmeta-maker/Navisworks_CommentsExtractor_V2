@@ -5,7 +5,8 @@ import { useSettings } from '../store/settings.jsx';
 import { statusLabels } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
-import { remoteState, isReadOnly, applyMergeRemote, undoImportRemote } from '../lib/server.js';
+import { api, remoteState, isReadOnly, applyMergeRemote, undoImportRemote } from '../lib/server.js';
+import { loadTemplate } from '../lib/persist.js';
 import { planMerge, applyMergeLocal } from '../lib/merge.js';
 import ImportDialog from '../components/ImportDialog.jsx';
 import ExportButton from '../components/ExportButton.jsx';
@@ -49,6 +50,7 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
   // load; into a review with comments it first shows what the new report
   // changes and then merges by comment ID. Either way it can be undone.
   const [merge, setMerge] = useState(null); // { plan, stats, fileName, missingAction }
+  const [targetSignal, setTargetSignal] = useState(0);
   const [busy, setBusy] = useState(false);
   const fresh = !records.length || (!remoteState.active && meta.source === 'sample');
 
@@ -101,7 +103,7 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
   const logSheet = async () => {
     try {
       const st = await exportLogSheet(records, settings.templateExport);
-      notify(`Log sheet ready: ${st.logRows} rows · ${st.images} photos.`, 'success');
+      notify(`Log sheet ready: ${st.logRows} rows · ${st.images} photo${st.images === 1 ? '' : 's'}.`, 'success');
     } catch (e) {
       if (e.code === 'no-template') notify(e.message, 'info', { label: 'Set up', onClick: () => goSettings('template') });
       else notify(`Export failed: ${e.message}`, 'error');
@@ -151,7 +153,7 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
     <div ref={overviewRef} className="canvas-w space-y-4">
       {/* Toolbar: target + actions (one strong action, the rest quiet) */}
       <div className="flex flex-wrap items-center justify-between gap-2" data-nosnap>
-        <TargetChip value={settings.reviewTarget} onChange={(v) => update({ reviewTarget: v })} readOnly={readOnly} />
+        <TargetChip value={settings.reviewTarget} onChange={(v) => update({ reviewTarget: v })} readOnly={readOnly} openSignal={targetSignal} />
         <div className="flex flex-wrap items-center gap-1">
           {!readOnly && <Button variant="text" icon="upload_file" onClick={() => fileInputRef.current?.click()} title="Import a Navisworks report">Import</Button>}
           <input ref={fileInputRef} type="file" multiple accept=".html,.htm,.jpg,.jpeg,.png,.zip" className="hidden" onChange={(e) => { handleImport(e.target.files); e.target.value = ''; }} />
@@ -170,6 +172,17 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
         </Card>
       ) : (
         <>
+          {!readOnly && (
+            <SetupChecklist
+              hasData={!fresh}
+              target={settings.reviewTarget}
+              isAdmin={remoteState.active && remoteUser?.role === 'admin'}
+              onImport={() => fileInputRef.current?.click()}
+              onTarget={() => setTargetSignal((n) => n + 1)}
+              onTemplate={() => goSettings('template')}
+              onInvite={() => goSettings('users')}
+            />
+          )}
           <Reveal deps={[status, meta.source]}>
             <Hero ov={ov} statuses={statuses} goComments={goComments} />
           </Reveal>
@@ -236,6 +249,60 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
 
 /* ---------------- pieces ---------------- */
 
+// "Get this review ready": the four setup steps, ticked from the real state.
+// Hidden once all are done, or for good when dismissed (per review, per
+// browser).
+function SetupChecklist({ hasData, target, isAdmin, onImport, onTarget, onTemplate, onInvite }) {
+  const key = `tabelin.setupDone.${remoteState.active ? remoteState.reviewId : 'local'}`;
+  const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(key) === '1'; } catch { return false; } });
+  const [tpl, setTpl] = useState(null); // null = checking
+  const [team, setTeam] = useState(null);
+  useEffect(() => {
+    let live = true;
+    (remoteState.active ? api.hasTemplate(remoteState.projectId) : loadTemplate().then(Boolean)).then((v) => live && setTpl(!!v)).catch(() => live && setTpl(false));
+    if (isAdmin) api.listUsers().then((u) => live && setTeam(u.filter((x) => x.id !== remoteState.user?.id).length)).catch(() => live && setTeam(0));
+    return () => { live = false; };
+  }, [isAdmin]);
+  const steps = [
+    { id: 'import', done: hasData, title: 'Import comments', sub: hasData ? 'Report loaded' : 'Navisworks .html or .zip', action: 'Import', go: onImport },
+    { id: 'target', done: !!target, title: 'Set a target', sub: target ? fmtDayY(parseDay(target)) : 'Close-out date', action: 'Set', go: onTarget },
+    { id: 'tpl', done: !!tpl, title: 'Log-sheet template', sub: tpl ? 'Ready to export' : 'Choose the .xlsx', action: 'Set up', go: onTemplate },
+    ...(isAdmin ? [{ id: 'team', done: team > 0, title: 'Invite your team', sub: team > 0 ? `${team} colleague${team === 1 ? '' : 's'}` : 'Only you so far', action: 'Invite', go: onInvite }] : []),
+  ];
+  const doneN = steps.filter((x) => x.done).length;
+  if (dismissed || tpl === null || doneN === steps.length) return null;
+  const dismiss = () => { setDismissed(true); try { localStorage.setItem(key, '1'); } catch { /* ignore */ } };
+  return (
+    <div data-nosnap><Card className="relative p-5">
+      <div className="mb-3 flex items-center gap-2 pr-8">
+        <h2 className="text-[15px] font-semibold">Get this review ready</h2>
+        <span className="rounded-full bg-surface-container px-2 py-0.5 text-[11.5px] font-semibold tabular-nums text-on-surface-variant">{doneN} of {steps.length}</span>
+      </div>
+      <button type="button" onClick={dismiss} aria-label="Hide these steps" title="Hide"
+        className="t-press absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <Icon name="close" className="text-[18px]" />
+      </button>
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+        {steps.map((x) => (
+          <div key={x.id} className="flex min-w-0 items-center gap-3 rounded-[16px] bg-surface-container px-3 py-2.5">
+            <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${x.done ? '' : 'border-2 border-dashed border-outline'}`}
+              style={x.done ? { background: tint('var(--tabelin-good)', 16), color: 'var(--tabelin-good)' } : undefined}>
+              {x.done && <Icon name="check" className="text-[17px]" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold">{x.title}</span>
+              <span className="block truncate text-[11.5px] text-on-surface-variant">{x.sub}</span>
+            </span>
+            {!x.done && (
+              <button type="button" onClick={x.go} className="t-press shrink-0 rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-primary hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">{x.action}</button>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card></div>
+  );
+}
+
 function Head({ icon, title, tip, right, snap }) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 pr-8">
@@ -289,10 +356,11 @@ function NoPace() {
   );
 }
 
-function TargetChip({ value, onChange, readOnly }) {
+function TargetChip({ value, onChange, readOnly, openSignal }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value || '');
   const ref = useRef(null);
+  useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);
   useEffect(() => { setDraft(value || ''); }, [value, open]);
   useEffect(() => {
     if (!open) return undefined;

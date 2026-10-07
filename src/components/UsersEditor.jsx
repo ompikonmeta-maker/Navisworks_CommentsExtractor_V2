@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/server.js';
-import { Icon, Button, Select } from './ui.jsx';
+import { Icon, Button, Select, InfoTip } from './ui.jsx';
 
 const ROLE_OPTS = [
   { value: 'admin', label: 'Admin' },
@@ -22,7 +22,34 @@ export default function UsersEditor({ me }) {
     try { setUsers(await api.listUsers()); setErr(''); }
     catch { setErr('Could not load users.'); }
   };
-  useEffect(() => { load(); }, []);
+  // Where colleagues open Tabelin (the server's office-network address).
+  const [urls, setUrls] = useState([]);
+  useEffect(() => {
+    load();
+    api.serverInfo().then((i) => setUrls(i.urls || [])).catch(() => setUrls([]));
+  }, []);
+  const address = urls[0] || window.location.origin;
+  const [inviteFor, setInviteFor] = useState(null);
+  const others = (users || []).filter((u) => u.id !== me?.id && u.active);
+  const target = others.find((u) => u.id === inviteFor) || others.find((u) => !u.signedIn) || others[0] || null;
+  const messageFor = (u) => {
+    const name = (u.displayName || u.username).split(/\s+/)[0];
+    return u.signedIn
+      ? `Hi ${name}, Tabelin is at ${address}. Sign in as ${u.username} with your PIN.`
+      : `Hi ${name}, you have access to Tabelin.\nOpen ${address} and sign in as ${u.username}. The PIN you type the first time becomes your PIN.`;
+  };
+  const [copied, setCopied] = useState('');
+  const copy = async (text, what) => {
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const t = document.createElement('textarea');
+      t.value = text; document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); } catch { /* nothing more to try */ }
+      t.remove();
+    }
+    setCopied(what);
+    setTimeout(() => setCopied(''), 1600);
+  };
 
   const guard = async (fn) => {
     try { await fn(); await load(); }
@@ -43,6 +70,37 @@ export default function UsersEditor({ me }) {
           <Icon name="person" className="text-[20px] text-primary" /> Users
         </h2>
         <p className="mt-1 text-xs text-on-surface-variant">Who can sign in, and what they can do. {ROLE_HELP}</p>
+      </div>
+
+      {/* Invite: the address to open + a message ready to send */}
+      <div className="mb-5 grid gap-4 rounded-[20px] bg-surface-container/60 p-4 md:grid-cols-2">
+        <div className="min-w-0">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
+            Tabelin address
+            <InfoTip label="About the address">Works for anyone on the office network or VPN. If this PC has more than one network, the other addresses are listed below it.</InfoTip>
+          </div>
+          <div className="flex h-10 items-center gap-2 rounded-control bg-surface px-3">
+            <Icon name="link" className="shrink-0 text-[18px] text-on-surface-variant" />
+            <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{address}</span>
+            <button type="button" onClick={() => copy(address, 'address')} className="t-press inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-primary hover:bg-surface-container">
+              <Icon name={copied === 'address' ? 'check' : 'content_copy'} className="text-[15px]" />{copied === 'address' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          {urls.length > 1 && <div className="mt-1.5 truncate text-[11.5px] text-on-surface-variant">Also: {urls.slice(1).join(' · ')}</div>}
+        </div>
+        <div className="min-w-0">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
+            {target ? `Message for ${target.displayName || target.username}` : 'Message'}
+          </div>
+          {target ? (
+            <>
+              <p className="whitespace-pre-line rounded-control bg-surface px-3 py-2.5 text-[13px] leading-relaxed">{messageFor(target)}</p>
+              <Button variant="tonal" icon={copied === 'msg' ? 'check' : 'content_copy'} className="mt-2 h-9" onClick={() => copy(messageFor(target), 'msg')}>
+                {copied === 'msg' ? 'Copied' : 'Copy message'}
+              </Button>
+            </>
+          ) : <p className="text-[13px] text-on-surface-variant">Add a colleague below to get a message to send them.</p>}
+        </div>
       </div>
 
       {/* Add a user */}
@@ -95,7 +153,9 @@ export default function UsersEditor({ me }) {
                   <tr key={u.id} className="border-t border-outline-variant/40">
                     <td className="py-2.5 pr-3">
                       <div className="font-medium">{u.displayName || u.username}{self && <span className="ml-2 text-[10px] uppercase text-primary">you</span>}</div>
-                      <div className="text-xs text-on-surface-variant">{u.username}</div>
+                      <div className="text-xs text-on-surface-variant">
+                        {u.username} · <span style={{ color: u.signedIn ? 'var(--tabelin-good)' : undefined }}>{u.signedIn ? 'signed in' : 'not signed in yet'}</span>
+                      </div>
                     </td>
                     <td className="py-2.5 pr-3">
                       <div className="w-[120px]">
@@ -120,6 +180,15 @@ export default function UsersEditor({ me }) {
                       </button>
                     </td>
                     <td className="py-2.5 pr-1 text-right">
+                      {!self && (
+                        <button
+                          onClick={() => { setInviteFor(u.id); copy(messageFor(u), `row${u.id}`); }}
+                          className="mr-1 rounded-control px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container hover:text-primary"
+                          title="Copy an invite message for this person"
+                        >
+                          {copied === `row${u.id}` ? 'Copied' : 'Copy invite'}
+                        </button>
+                      )}
                       <button
                         onClick={() => guard(() => api.resetPin(u.id))}
                         className="mr-1 rounded-control px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container hover:text-primary"
@@ -143,11 +212,7 @@ export default function UsersEditor({ me }) {
           </table>
         </div>
       )}
-      <p className="mt-4 text-[11px] leading-relaxed text-on-surface-variant">
-        New users sign in with their account and set a PIN on first sign-in. On
-        the office network, sign-in will become automatic from the Windows
-        account (coming next).
-      </p>
+
     </div>
   );
 }
