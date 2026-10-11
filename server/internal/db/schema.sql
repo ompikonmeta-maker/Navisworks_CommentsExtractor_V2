@@ -90,3 +90,16 @@ CREATE TABLE IF NOT EXISTS templates (
   mapping    TEXT NOT NULL DEFAULT '{}',           -- JSON
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Per-comment history: who changed what, and when. One row per save (an edit,
+-- a photo added or removed, an import). detail is JSON, e.g.
+-- {"fields":["status","resolution"],"status":"Closed"}.
+CREATE TABLE IF NOT EXISTS record_events (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+  user_id   INTEGER REFERENCES users(id),
+  at        TEXT NOT NULL,
+  action    TEXT NOT NULL,                        -- edit | photo | import
+  detail    TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_record_events_record ON record_events(record_id);

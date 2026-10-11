@@ -48,6 +48,7 @@ export const api = {
   patchRecord: (id, patch) => req('PATCH', `/api/records/${id}`, patch),
   uploadImage: (id, kind, blob) => req('POST', `/api/records/${id}/images?kind=${kind}`, blob),
   deleteImage: (id, kind) => req('DELETE', `/api/records/${id}/images?kind=${kind}`),
+  recordHistory: (id) => req('GET', `/api/records/${id}/history`),
   deleteRecords: (rid, ids) => req('POST', `/api/reviews/${rid}/records/delete`, { ids }),
   deleteReview: (rid) => req('DELETE', `/api/reviews/${rid}`),
   deleteProject: (pid) => req('DELETE', `/api/projects/${pid}`),

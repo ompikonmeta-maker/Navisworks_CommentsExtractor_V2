@@ -3,10 +3,11 @@ import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
 import { attrFields, attrType } from '../lib/templateExcel.js';
-import { chipStyle, doneLabel as doneLabelOf } from '../lib/status.js';
-import { Icon, Select, StatusBadge, DisciplineBadge, Dialog, Button } from './ui.jsx';
+import { chipStyle, statusColor, doneLabel as doneLabelOf } from '../lib/status.js';
+import { Icon, Select, StatusBadge, DisciplineBadge, Dialog, Button, discOptions, discLabel } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
-import { isReadOnly, isRecordReadOnly, remoteState } from '../lib/server.js';
+import { fmtStamp } from '../lib/overview.js';
+import { api, isReadOnly, isRecordReadOnly, remoteState } from '../lib/server.js';
 const remoteActive = () => remoteState.active;
 import Lightbox from './Lightbox.jsx';
 
@@ -143,6 +144,32 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
   // exit slide, when `record` has already gone null.
   const rec = record || shown;
   const set = (patch) => rec && updateRecord(rec.ID, patch);
+  const pickStatus = (label) => {
+    if (!rec || rec.status === label) return;
+    if (label === doneLabel) onClosedOut?.(rec.ID);
+    set({ status: label });
+  };
+
+  // Keys while the drawer is open: 1…9 pick a status (not while typing),
+  // Ctrl/⌘+Enter moves to the next comment (edits are already saved).
+  const keyRef = useRef(null);
+  keyRef.current = (e) => {
+    if (!rec || document.querySelector('.t-dlg, .crop-card')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if (nav && nav.index >= 0 && nav.index < nav.total - 1) { e.preventDefault(); nav.next(); }
+      return;
+    }
+    if (readOnly || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    const n = Number(e.key);
+    if (n >= 1 && n <= Math.min(9, settings.statuses.length)) { e.preventDefault(); pickStatus(settings.statuses[n - 1].label); }
+  };
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => keyRef.current?.(e);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [open]);
   // Viewers on the server see everything but can't change it.
   const readOnly = isRecordReadOnly();
   const canDelete = !isReadOnly(); // deleting a comment is for admins
@@ -265,31 +292,33 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                 <StatusBadge status={rec.status} />
               </div>
               <h2 className="mt-2 truncate text-lg font-semibold">{rec.viewpoint}</h2>
-              <p className="text-xs text-on-surface-variant">
-                {rec.commentId ? `#${rec.commentId} · ` : ''}{rec.commentDate}
+              <p className="text-[13px] text-on-surface-variant" title={rec.commentDate}>
+                {rec.commentId ? `#${rec.commentId} · ` : ''}{fmtStamp(rec.commentDate)}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {nav && nav.total > 1 && nav.index >= 0 && (
                 <>
-                  <span className="mr-1 text-xs tabular-nums text-on-surface-variant">{nav.index + 1} of {nav.total}</span>
-                  <button type="button" onClick={nav.prev} disabled={nav.index <= 0} aria-label="Previous comment (K)" title="Previous (K)"
-                    className="t-press rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                    <Icon name="expand_less" className="text-[22px]" />
-                  </button>
-                  <button type="button" onClick={nav.next} disabled={nav.index >= nav.total - 1} aria-label="Next comment (J)" title="Next (J)"
-                    className="t-press rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                    <Icon name="expand_more" className="text-[22px]" />
-                  </button>
+                  <span className="mr-1.5 text-[13px] tabular-nums text-on-surface-variant">{nav.index + 1} of {nav.total}</span>
+                  <span role="group" aria-label="Move between comments" className="flex gap-0.5 rounded-[14px] bg-surface-container p-[3px]">
+                    <button type="button" onClick={nav.prev} disabled={nav.index <= 0} aria-label="Previous comment (K)" title="Previous · K"
+                      className="dr-nav t-press grid h-9 w-9 place-items-center rounded-[11px] text-on-surface disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                      <Icon name="keyboard_arrow_up" className="text-[24px]" />
+                    </button>
+                    <button type="button" onClick={nav.next} disabled={nav.index >= nav.total - 1} aria-label="Next comment (J)" title="Next · J"
+                      className="dr-nav t-press grid h-9 w-9 place-items-center rounded-[11px] text-on-surface disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                      <Icon name="keyboard_arrow_down" className="text-[24px]" />
+                    </button>
+                  </span>
                 </>
               )}
               <button
                 ref={closeRef}
                 onClick={onClose}
-                aria-label="Close"
-                className="rounded-control p-2 text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Close" title="Close · Esc"
+                className="t-press ml-1 grid h-10 w-10 place-items-center rounded-[14px] text-on-surface hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                <Icon name="close" />
+                <Icon name="close" className="text-[24px]" />
               </button>
             </div>
           </div>
@@ -332,7 +361,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                       >
                         <Icon name="cloud_upload" className="text-[26px] text-primary" />
                         <span className="text-xs font-medium">Upload</span>
-                        <span className="text-[10px]">or drop a file</span>
+                        <span className="text-[12px]">or drop a file</span>
                       </button>
                     )}
                     {slot.src && !readOnly && undo?.target !== slot.target && (
@@ -378,7 +407,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
             <div className="grid grid-cols-2 gap-3">
               <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
                 Discipline
-                <Select className="mt-1 w-full" aria-label="Change discipline" value={rec.discipline} onChange={(v) => set({ discipline: v })} options={DISCIPLINES} />
+                <Select className="mt-1 w-full" aria-label="Change discipline" value={rec.discipline || 'OTHER'} onChange={(v) => set({ discipline: v })} options={discOptions(DISCIPLINES)} />
               </label>
               <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
                 Commenter
@@ -388,22 +417,24 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
 
             <div>
               <div className="mb-1 text-xs font-medium text-on-surface-variant">Status</div>
-              <div className="flex flex-wrap gap-2">
-                {settings.statuses.map((s) => {
+              <div role="group" aria-label="Status" className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(settings.statuses.length, 4)}, minmax(0, 1fr))` }}>
+                {settings.statuses.map((s, i) => {
                   const on = rec.status === s.label;
                   return (
                     <button
                       key={s.key}
                       type="button"
                       aria-pressed={on}
-                      onClick={() => { if (s.label === doneLabel && rec.status !== doneLabel) onClosedOut?.(rec.ID); set({ status: s.label }); }}
+                      aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
+                      title={i < 9 ? `${s.label} · ${i + 1}` : s.label}
+                      onClick={() => pickStatus(s.label)}
                       style={on ? chipStyle(s.color) : undefined}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        on ? '' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'
+                      className={`t-press inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-[12px] border px-2 text-[14px] font-semibold transition-colors ${
+                        on ? '' : 'border-outline-variant text-on-surface hover:bg-surface-container'
                       }`}
                     >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {s.label}
+                      {i < 9 && !readOnly && <kbd className="st-kbd">{i + 1}</kbd>}
+                      <span className="truncate">{s.label}</span>
                     </button>
                   );
                 })}
@@ -419,7 +450,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                   onChange={(e) => set({ closedAt: fromLocalInput(e.target.value) })}
                   className="mt-1 w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
-                <span className="mt-1 block text-[11px] font-normal text-on-surface-variant">Set automatically when closed — edit if the fix happened earlier.</span>
+                <span className="mt-1 block text-[12px] font-normal text-on-surface-variant">Set automatically when closed — edit if the fix happened earlier.</span>
               </label>
             )}
 
@@ -487,27 +518,29 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
               </details>
             )}
             </fieldset>
+
+            <History rec={rec} />
           </div>
 
-          {/* Footer: who changed it last, auto-advance, delete */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-outline-variant/60 px-5 py-3 text-xs text-on-surface-variant">
-            {rec.changedBy && rec.changedAt ? (
-              <span className="inline-flex min-w-0 items-center gap-1.5" title={new Date(rec.changedAt).toLocaleString()}>
-                <Icon name="history" className="text-[16px]" />
-                <span className="truncate">Changed by <b className="font-semibold text-on-surface">{rec.changedBy}</b> · {timeAgo(rec.changedAt)}</span>
-              </span>
-            ) : <span />}
-            <span className="flex-1" />
+          {/* Footer: auto-advance, delete, next */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-outline-variant/60 px-5 py-3 text-[13px] text-on-surface-variant">
             {nav && !readOnly && (
               <label className="inline-flex cursor-pointer items-center gap-2" title="After a comment is closed, open the next one in the list">
                 <input type="checkbox" checked={nav.autoNext} onChange={(e) => nav.setAutoNext(e.target.checked)} className="h-4 w-4 accent-[var(--md-sys-color-primary)]" />
                 Next after closing
               </label>
             )}
+            <span className="flex-1" />
             {onDelete && canDelete && (
               <button type="button" onClick={() => setAskDelete(true)} aria-label="Delete this comment" title="Delete this comment"
-                className="t-press rounded-full p-1.5 hover:bg-surface-container hover:text-error focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                <Icon name="delete" className="text-[18px]" />
+                className="t-press grid h-10 w-10 place-items-center rounded-[12px] hover:bg-surface-container hover:text-error focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                <Icon name="delete" className="text-[20px]" />
+              </button>
+            )}
+            {nav && nav.index >= 0 && nav.index < nav.total - 1 && (
+              <button type="button" onClick={nav.next} title="Next comment · Ctrl+Enter" aria-keyshortcuts="Control+Enter"
+                className="t-press inline-flex h-10 items-center gap-2 rounded-control bg-secondary-container pl-4 pr-3 text-[14px] font-semibold text-on-secondary-container hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                Next comment<Icon name="arrow_forward" className="text-[20px]" />
               </button>
             )}
           </div>
@@ -531,5 +564,75 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
       <Lightbox src={lightbox.src} alt={lightbox.alt} from={lightbox.from} onClose={() => setLightbox(null)} />
     )}
    </>
+  );
+}
+
+// ---- History (server only): who changed what, newest first ----
+const SOURCE_KEYS = ['commentRaw', 'commentText', 'viewpoint', 'commentDate', 'authorCode', 'cameraPosition', 'imageRef'];
+function describe(ev) {
+  const d = ev.detail || {};
+  if (ev.action === 'import') return d.source === 'manual' ? 'added this comment' : `imported it${d.source ? ` from ${d.source}` : ''}`;
+  if (ev.action === 'photo') return `${d.op === 'remove' ? 'removed' : 'added'} the ${d.kind === 'after' ? 'after' : 'before'}-photo`;
+  const f = d.fields || [];
+  const parts = [];
+  if (f.includes('status')) parts.push(`set status to ${d.status || '—'}`);
+  if (f.includes('discipline')) parts.push(`set discipline to ${discLabel(d.discipline)}`);
+  if (f.includes('commenter')) parts.push(d.commenter ? `set commenter to ${d.commenter}` : 'cleared the commenter');
+  if (f.includes('resolution')) parts.push('wrote the resolution');
+  if (f.includes('closedAt') && !f.includes('status')) parts.push('changed the close date');
+  if (f.includes('extra')) parts.push('filled in custom fields');
+  if (f.some((k) => SOURCE_KEYS.includes(k))) parts.push('updated it from a new report');
+  return parts.join(', ') || 'edited it';
+}
+function History({ rec }) {
+  const { settings } = useSettings();
+  const [items, setItems] = useState(null);
+  const [all, setAll] = useState(false);
+  const lastId = useRef(null);
+  const id = rec?.ID;
+  useEffect(() => { setItems(null); setAll(false); }, [id]);
+  useEffect(() => {
+    if (!remoteState.active || id == null) return undefined;
+    let live = true;
+    // Wait a moment after an edit so the batched save has reached the server.
+    const sameRecord = lastId.current === id;
+    lastId.current = id;
+    const t = setTimeout(() => { api.recordHistory(id).then((x) => live && setItems(x)).catch(() => live && setItems([])); }, sameRecord ? 1500 : 0);
+    return () => { live = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, rec?.changedAt, rec?.imageData, rec?.afterImageData]);
+  if (!remoteState.active) return null;
+  // Typing is saved in bursts: fold repeats by the same person within 10 minutes.
+  const rows = [];
+  for (const ev of items || []) {
+    const text = describe(ev);
+    const prev = rows[rows.length - 1];
+    if (prev && prev.user === ev.user && prev.text === text && Math.abs(Date.parse(prev.at) - Date.parse(ev.at)) < 600000) continue;
+    rows.push({ ...ev, text });
+  }
+  const shown = all ? rows : rows.slice(0, 5);
+  const dot = (ev) => (ev.action === 'import' ? 'var(--md-sys-color-outline)' : ev.detail?.status ? statusColor(settings.statuses, ev.detail.status) : 'var(--md-sys-color-primary)');
+  return (
+    <section aria-label="History">
+      <h3 className="mb-2 flex items-center gap-2 text-[14px] font-semibold"><Icon name="history" className="text-[18px] text-on-surface-variant" />History</h3>
+      {items == null ? <div className="skeleton h-12 w-full rounded-control" /> : rows.length === 0 ? (
+        <p className="text-[13px] text-on-surface-variant">No changes recorded yet.</p>
+      ) : (
+        <ol className="hist space-y-2.5">
+          {shown.map((ev, i) => (
+            <li key={i} className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-baseline gap-2.5 text-[13px]">
+              <span className="h-2 w-2 translate-y-[1px] rounded-full" style={{ background: dot(ev) }} />
+              <span className="min-w-0"><b className="font-semibold">{ev.user || 'Someone'}</b> {ev.text}</span>
+              <span className="whitespace-nowrap text-on-surface-variant" title={new Date(ev.at).toLocaleString()}>{timeAgo(ev.at)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {rows.length > 5 && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="mt-2 rounded-full px-2 py-1 text-[13px] font-medium text-primary hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          {all ? 'Show less' : `Show all ${rows.length}`}
+        </button>
+      )}
+    </section>
   );
 }

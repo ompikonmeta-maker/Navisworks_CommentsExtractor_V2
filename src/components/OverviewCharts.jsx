@@ -9,7 +9,7 @@ import { AGE_BUCKETS } from '../lib/overview.js';
 const DAY = 86400000;
 export const DISC_NAMES = {
   PIP: 'Piping', STR: 'Structural', ELE: 'Electrical', INS: 'Instrument', TEL: 'Telecom', HVAC: 'HVAC',
-  LOSPE: 'Loss prevention', HANDLING: 'Material handling', OTHER: 'No discipline',
+  LOSPE: 'Loss prevention', HANDLING: 'Material handling', OTHER: 'Unassigned',
 };
 export const discName = (k) => DISC_NAMES[k] || k;
 export const discCode = (k) => (k === 'OTHER' ? '—' : k);
@@ -192,7 +192,7 @@ export function ForecastRunway({ ov, onPick }) {
             <g>
               <rect x={X(tg) - 4} y={top} width="8" height={bottom - top} fill="url(#ovChk)" opacity=".9" />
               <rect x={X(tg) - 27} y={top - 26} width="54" height="22" rx="11" style={{ fill: 'var(--md-sys-color-on-surface)' }} />
-              <text x={X(tg)} y={top - 11} textAnchor="middle" fontSize="11.5" fontWeight="700" style={{ fill: 'var(--md-sys-color-surface)' }}>{fmtDay(tg)}</text>
+              <text x={X(tg)} y={top - 11} textAnchor="middle" fontSize="12" fontWeight="700" style={{ fill: 'var(--md-sys-color-surface)' }}>{fmtDay(tg)}</text>
             </g>
           )}
           {rows.map((r, i) => {
@@ -221,21 +221,21 @@ export function ForecastRunway({ ov, onPick }) {
                 {r.all && <rect x="4" y={cy - rowH / 2 + 3} width={W - 8} height={rowH - 6} rx="14" className="ov-allrow" />}
                 <circle cx="22" cy={cy} r={rr} fill="none" className="ov-ring-track" strokeWidth="3.5" />
                 <circle cx="22" cy={cy} r={rr} fill="none" strokeWidth="3.5" strokeLinecap="round" style={{ stroke: 'var(--tabelin-status-closed)' }} strokeDasharray={`${(circ * r.pct) / 100} ${circ}`} transform={`rotate(-90 22 ${cy})`} />
-                <text x="22" y={cy + 3.5} textAnchor="middle" fontSize="8.5" fontWeight="700" className="ov-ink2">{r.pct}</text>
-                <text x="44" y={narrow ? cy + 4 : cy - 2} fontSize={r.all ? 13 : 12} fontWeight="700" className={`ov-ink ${r.all ? '' : 'ov-mono'}`}>{r.all ? 'All' : r.key === 'OTHER' ? 'No disc.' : r.key}</text>
-                {!narrow && <text x="44" y={cy + 13} fontSize="11" className="ov-ink3">{r.all ? 'whole review' : discName(r.key)}</text>}
+                
+                <text x="44" y={narrow ? cy + 4 : cy - 2} fontSize={r.all ? 13 : 12} fontWeight="700" className={`ov-ink ${r.all ? '' : 'ov-mono'}`}>{r.all ? 'All' : r.key === 'OTHER' ? 'Unassigned' : r.key}</text>
+                {!narrow && <text x="44" y={cy + 13} fontSize="12" className="ov-ink3">{r.all ? 'whole review' : discName(r.key)}</text>}
                 {has && <rect x={tx} y={cy - th / 2} width={Math.max(0, fx - tx)} height={th} rx={th / 2} fill={`url(#ovG${i})`} className={anim ? 'ov-grow' : ''} style={{ animationDelay: `${i * 45}ms` }} />}
                 {has && (
                   <g className={anim ? 'ov-pop' : ''} style={{ animationDelay: `${450 + i * 45}ms` }}>
                     {r.all && <circle cx={fx} cy={cy} r={rad} className="ov-pulse" style={{ fill: col }} />}
                     <circle cx={fx} cy={cy} r={rad} filter="url(#ovGlow)" opacity=".9" style={{ fill: col }} />
                     <circle cx={fx} cy={cy} r={rad} strokeWidth="2.5" style={{ fill: col, stroke: 'var(--md-sys-color-surface)' }} />
-                    {rad >= 10.5 && <text x={fx} y={cy + 3.8} textAnchor="middle" fontSize={r.all ? 10.5 : 9.5} fontWeight="700" style={{ fill: 'var(--ov-on-strong)' }}>{r.remaining}</text>}
+                    {rad >= 13 && <text x={fx} y={cy + 4} textAnchor="middle" fontSize="12" fontWeight="700" style={{ fill: 'var(--ov-on-strong)' }}>{r.remaining}</text>}
                   </g>
                 )}
                 {over && <path d={`M${fx + rad + 5},${cy - 4}l4,4l-4,4M${fx + rad + 10},${cy - 4}l4,4l-4,4`} fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ stroke: col }} />}
                 <rect x={bx} y={cy - 11} width={bw} height="22" rx="11" style={{ fill: r.verdict === 'triage' || r.verdict === 'unknown' ? 'var(--md-sys-color-surface-container-high)' : tint(col, 16) }} />
-                <text x={bx + bw / 2} y={cy + 4} textAnchor="middle" fontSize="11" fontWeight="700" style={{ fill: r.verdict === 'triage' || r.verdict === 'unknown' ? 'var(--md-sys-color-on-surface-variant)' : col }}>{badge}</text>
+                <text x={bx + bw / 2} y={cy + 4} textAnchor="middle" fontSize="12" fontWeight="700" style={{ fill: r.verdict === 'triage' || r.verdict === 'unknown' ? 'var(--md-sys-color-on-surface-variant)' : col }}>{badge}</text>
                 <rect
                   x="0" y={cy - rowH / 2} width={W} height={rowH} fill="transparent" tabIndex={0}
                   style={{ cursor: r.all ? 'default' : 'pointer', outline: 'none' }}
@@ -251,7 +251,7 @@ export function ForecastRunway({ ov, onPick }) {
               <g pointerEvents="none">
                 <line x1={gx} x2={gx} y1={top} y2={bottom} className="ov-guide" />
                 <rect x={gx - 30} y={bottom + 2} width="60" height="18" rx="9" style={{ fill: 'var(--md-sys-color-on-surface)' }} />
-                <text x={gx} y={bottom + 15} textAnchor="middle" fontSize="10.5" fontWeight="700" style={{ fill: 'var(--md-sys-color-surface)' }}>{fmtDay(focused.forecast)}</text>
+                <text x={gx} y={bottom + 15} textAnchor="middle" fontSize="12" fontWeight="700" style={{ fill: 'var(--md-sys-color-surface)' }}>{fmtDay(focused.forecast)}</text>
               </g>
             );
           })()}
@@ -292,7 +292,7 @@ export function BurnUp({ ov, height = 290 }) {
           {yt.map((v) => <g key={v}><line x1={m.l} x2={W - m.r} y1={Y(v)} y2={Y(v)} className="ov-grid" /><text x={m.l - 8} y={Y(v) + 4} textAnchor="end" className="ov-tick">{v}</text></g>)}
           {months.map((t) => <text key={t} x={X(t)} y={H - 8} textAnchor="middle" className="ov-tick">{new Date(t).toLocaleDateString('en-GB', { month: 'short' })}{new Date(t).getMonth() === 0 ? ` ’${String(new Date(t).getFullYear()).slice(2)}` : ''}</text>)}
           {tg != null && <><line x1={X(tg)} x2={X(tg)} y1={m.t} y2={H - m.b} strokeWidth="1.5" strokeDasharray="4 4" style={{ stroke: ov.late > 0 ? 'var(--tabelin-bad)' : 'var(--md-sys-color-on-surface-variant)' }} />
-            <text x={X(tg) - 4} y={m.t - 8} textAnchor="end" fontSize="11" fontWeight="700" style={{ fill: ov.late > 0 ? 'var(--tabelin-bad)' : 'var(--md-sys-color-on-surface-variant)' }}>{fmtDay(tg)}</text></>}
+            <text x={X(tg) - 4} y={m.t - 8} textAnchor="end" fontSize="12" fontWeight="700" style={{ fill: ov.late > 0 ? 'var(--tabelin-bad)' : 'var(--md-sys-color-on-surface-variant)' }}>{fmtDay(tg)}</text></>}
           <line x1={X(T)} x2={X(T)} y1={m.t} y2={H - m.b} className="ov-today" />
           <path d={area} style={{ fill: 'color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent)' }} />
           <path d={`${line('raised')}L${X(x1)},${Y(pts[pts.length - 1].raised)}`} fill="none" strokeWidth="2" strokeLinejoin="round" style={{ stroke: 'var(--md-sys-color-outline)' }} />
@@ -348,7 +348,7 @@ export function WeeklyPace({ ov, height = 220, fill = false }) {
           })}
           {need != null && <>
             <line x1={m.l} x2={W - m.r} y1={Y(need)} y2={Y(need)} strokeWidth="1.5" strokeDasharray="2 3" style={{ stroke: 'var(--md-sys-color-on-surface-variant)' }} pointerEvents="none" />
-            {!fill && <text x={W - m.r} y={Y(need) - 6} textAnchor="end" fontSize="11" fontWeight="700" className="ov-ink2">{Math.ceil(need)} needed</text>}</>}
+            {!fill && <text x={W - m.r} y={Y(need) - 6} textAnchor="end" fontSize="12" fontWeight="700" className="ov-ink2">{Math.ceil(need)} needed</text>}</>}
         </svg>
       )}
     </div>
@@ -368,7 +368,7 @@ export function Pipeline({ ov, onPick }) {
         return (
           <div key={s.key}>
             {drop > 0 && (
-              <div className="ml-[132px] flex items-center gap-1 py-0.5 text-[11.5px] text-on-surface-variant sm:ml-[152px]">
+              <div className="ml-[132px] flex items-center gap-1 py-0.5 text-[12px] text-on-surface-variant sm:ml-[152px]">
                 <span className="font-semibold tabular-nums" style={{ color: 'var(--tabelin-warn)' }}>−{drop}</span> {s.drop}
               </div>
             )}
@@ -396,7 +396,7 @@ export function AgeHeatmap({ ov, onPick }) {
     <div className="overflow-x-auto">
       <div className="grid min-w-[440px] gap-[3px] text-[12.5px]" style={{ gridTemplateColumns: '112px repeat(4, minmax(0,1fr)) 44px' }}>
         <div />
-        {AGE_BUCKETS.map((b) => <div key={b.key} className="px-1 py-1 text-center text-[11px] font-semibold text-on-surface-variant">{b.label}</div>)}
+        {AGE_BUCKETS.map((b) => <div key={b.key} className="px-1 py-1 text-center text-[12px] font-semibold text-on-surface-variant">{b.label}</div>)}
         <div />
         {rows.map((d) => (
           <div key={d.key} className="contents">

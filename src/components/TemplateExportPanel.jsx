@@ -216,10 +216,10 @@ export default function TemplateExportPanel() {
   const statusPill = (f, col) => {
     const dot = <span className="h-1.5 w-1.5 rounded-full bg-current" />;
     if (f.source.kind === 'blank')
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-review/15 px-2 py-0.5 text-[11px] font-bold text-status-review">{dot}New{col && <span className="font-mono opacity-70">{col}</span>}</span>;
+      return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-review/15 px-2 py-0.5 text-[12px] font-bold text-status-review">{dot}New{col && <span className="font-mono opacity-70">{col}</span>}</span>;
     if (col)
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-closed/15 px-2 py-0.5 text-[11px] font-bold text-status-closed">{dot}Mapped<span className="font-mono opacity-70">{col}</span></span>;
-    return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-open/15 px-2 py-0.5 text-[11px] font-bold text-status-open">{dot}No column</span>;
+      return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-closed/15 px-2 py-0.5 text-[12px] font-bold text-status-closed">{dot}Mapped<span className="font-mono opacity-70">{col}</span></span>;
+    return <span className="inline-flex items-center gap-1.5 rounded-full bg-status-open/15 px-2 py-0.5 text-[12px] font-bold text-status-open">{dot}No column</span>;
   };
 
   const stepper = (
@@ -237,7 +237,7 @@ export default function TemplateExportPanel() {
             aria-current={on ? 'step' : undefined}
             className={`flex flex-1 items-center justify-center gap-2 rounded-full px-2 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${on ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}
           >
-            <span className={`grid h-5 w-5 place-items-center rounded-full text-[11px] font-bold ${on ? 'bg-white/25 text-on-primary' : done ? 'bg-status-closed text-white' : 'bg-surface-high text-on-surface-variant'}`}>
+            <span className={`grid h-5 w-5 place-items-center rounded-full text-[12px] font-bold ${on ? 'bg-white/25 text-on-primary' : done ? 'bg-status-closed text-white' : 'bg-surface-high text-on-surface-variant'}`}>
               {done ? <Check /> : i + 1}
             </span>
             <span className="hidden sm:inline">{s.label}</span>
@@ -272,7 +272,7 @@ export default function TemplateExportPanel() {
               <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={onPick} />
               <Button variant="tonal" icon="upload_file" onClick={() => fileRef.current?.click()}>{tpl ? 'Replace template…' : 'Choose template .xlsx…'}</Button>
               {tpl && <span className="text-sm font-medium">{tpl.name}</span>}
-              {info && <span className="rounded-full bg-surface-container px-2.5 py-0.5 text-[11px] font-bold text-on-surface-variant">{Object.keys(headersFor(cfg.logSheet.name)).length} columns read</span>}
+              {info && <span className="rounded-full bg-surface-container px-2.5 py-0.5 text-[12px] font-bold text-on-surface-variant">{Object.keys(headersFor(cfg.logSheet.name)).length} columns read</span>}
               <span className="flex-1" />
               {tpl && <button onClick={removeTpl} className="rounded-full p-1.5 text-on-surface-variant hover:text-error" title="Remove template"><Icon name="close" className="text-[18px]" /></button>}
             </div>
@@ -286,7 +286,7 @@ export default function TemplateExportPanel() {
                   Detail sheet
                   <Select className="mt-1 w-full" aria-label="Detail sheet" value={cfg.detail?.patternSheet || info.detailSheets[0] || ''} onChange={setPattern} options={(info.detailSheets || []).map((n) => ({ value: n, label: n }))} />
                 </label>
-                <p className="text-[11px] text-on-surface-variant sm:col-span-2">Pick which sheet holds the comment table and which one is the per-item detail page. Saved in this browser.</p>
+                <p className="text-[12px] text-on-surface-variant sm:col-span-2">Pick which sheet holds the comment table and which one is the per-item detail page. Saved in this browser.</p>
               </div>
             )}
             {err && <p className="mt-2 text-xs text-error">{err}</p>}
@@ -346,7 +346,7 @@ export default function TemplateExportPanel() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] text-xs">
               <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant">
+                <tr className="text-left text-[12px] uppercase tracking-wide text-on-surface-variant">
                   <th className="pb-1.5 pr-2 font-semibold">Label</th>
                   <th className="pb-1.5 pr-2 font-semibold">Source</th>
                   <th className="pb-1.5 pr-2 font-semibold">Field / key</th>
@@ -369,7 +369,7 @@ export default function TemplateExportPanel() {
                         {kind === 'record' ? (
                           <Select className="dd-quiet dd-compact w-[150px]" aria-label="Data field" value={f.source.key} onChange={(v) => setFieldSource(i, { key: v })} options={RECORD_OPTS} />
                         ) : kind === 'blank' ? (
-                          <button onClick={() => defineBlank(i)} className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15">Define as {f.suggestKey || `${CUSTOM_PREFIX}${slug(f.label)}`}</button>
+                          <button onClick={() => defineBlank(i)} className="rounded-full bg-primary/10 px-2.5 py-1 text-[12px] font-semibold text-primary hover:bg-primary/15">Define as {f.suggestKey || `${CUSTOM_PREFIX}${slug(f.label)}`}</button>
                         ) : (
                           <input key={f.id + kind} className={`${quietInput} w-[130px] font-mono ${kind === 'attr' ? cfHighlight : ''}`} defaultValue={f.source.key} onBlur={(e) => commitKey(i, f.source.key, e.target.value)} />
                         )}
@@ -391,7 +391,7 @@ export default function TemplateExportPanel() {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-[11px] text-on-surface-variant">
+          <p className="mt-2 text-[12px] text-on-surface-variant">
             <span className="font-bold text-status-closed">Mapped</span> pulls from your comments (its column letter is shown) · <span className="font-bold text-status-review">New</span> column isn’t in your data — Define it (key gets <span className="font-mono">cf_</span>) to fill it per comment · <span className="font-bold text-status-open">No column</span> means the header wasn’t found.
           </p>
           <div className="mt-3 flex">{nextBtn(2, 'Continue to Detail')}</div>
@@ -433,7 +433,7 @@ export default function TemplateExportPanel() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-xs">
                   <thead>
-                    <tr className="text-left text-[10px] uppercase tracking-wide text-on-surface-variant">
+                    <tr className="text-left text-[12px] uppercase tracking-wide text-on-surface-variant">
                       <th className="pb-1.5 pr-2 font-semibold">Source</th>
                       <th className="pb-1.5 pr-2 font-semibold">Field / key</th>
                       <th className="pb-1.5 pr-2 font-semibold">Find cell by</th>
@@ -470,7 +470,7 @@ export default function TemplateExportPanel() {
             ) : (
               <p className="py-4 text-center text-xs text-on-surface-variant">No detail fields yet. Add one to write a field’s value into a detail-sheet cell — or leave empty if your template already uses VLOOKUP.</p>
             )}
-            <p className="mt-2 text-[11px] text-on-surface-variant">Custom (<span className="font-mono">cf_</span>) fields are <span className="rounded bg-status-review/10 px-1 ring-1 ring-status-review/40">highlighted</span>. Values are written directly (no formula) so they don’t depend on the log’s sheet name or column order.</p>
+            <p className="mt-2 text-[12px] text-on-surface-variant">Custom (<span className="font-mono">cf_</span>) fields are <span className="rounded bg-status-review/10 px-1 ring-1 ring-status-review/40">highlighted</span>. Values are written directly (no formula) so they don’t depend on the log’s sheet name or column order.</p>
           </div>
 
           {/* constants — custom (cf_) fields now live in Settings › Labels */}
@@ -480,7 +480,7 @@ export default function TemplateExportPanel() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {constFields.map((f) => (
                   <label key={f.id} className="text-xs font-medium text-on-surface-variant">
-                    {f.label} <span className="font-mono text-[10px] text-outline">({f.source.key})</span>
+                    {f.label} <span className="font-mono text-[12px] text-outline">({f.source.key})</span>
                     <input className={`${inputCls} mt-1 block w-full`} value={cfg.constants?.[f.source.key] ?? ''} onChange={(e) => setConst(f.source.key, e.target.value)} placeholder="—" />
                   </label>
                 ))}
@@ -488,7 +488,7 @@ export default function TemplateExportPanel() {
             </div>
           )}
           {attrList.length > 0 && (
-            <p className="px-1 text-[11px] text-on-surface-variant">Custom (cf_) field defaults are set in <span className="font-medium">Settings › Labels › Custom fields</span>.</p>
+            <p className="px-1 text-[12px] text-on-surface-variant">Custom (cf_) field defaults are set in <span className="font-medium">Settings › Labels › Custom fields</span>.</p>
           )}
           <div className="flex">{nextBtn(3, 'Continue to Export')}</div>
         </>

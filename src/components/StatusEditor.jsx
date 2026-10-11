@@ -58,7 +58,7 @@ export default function StatusEditor() {
                 aria-label={`Rename ${s.label}`}
               />
 
-              {!middle && <span className="rounded-full bg-surface-container px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">required</span>}
+              {!middle && <span className="rounded-full bg-surface-container px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-on-surface-variant">required</span>}
               <span className="text-xs text-on-surface-variant tabular-nums">{count} comment{count === 1 ? '' : 's'}</span>
 
               <div className="ml-auto flex items-center gap-1.5">

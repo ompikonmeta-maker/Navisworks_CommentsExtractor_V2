@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Dialog, Icon, Button, Select } from './ui.jsx';
+import { Dialog, Icon, Button, Select, discOptions, discLabel } from './ui.jsx';
 import { DISCIPLINES, detectCommenter, inferDiscipline, cleanComment } from '../lib/parser.js';
 import { MANUAL } from '../lib/merge.js';
 
@@ -134,7 +134,7 @@ export default function AddCommentDialog({ open, onClose, onAdd, records, custom
                 <button type="button" onClick={() => fileRef.current?.click()} className="flex h-full w-full flex-col items-center justify-center gap-1 text-on-surface-variant">
                   <Icon name="cloud_upload" className="text-[24px] text-primary" />
                   <span className="text-xs font-medium">Upload</span>
-                  <span className="text-[10px] font-normal">or Ctrl+V a snapshot</span>
+                  <span className="text-[12px] font-normal">or Ctrl+V a snapshot</span>
                 </button>
               )}
             </div>
@@ -151,7 +151,7 @@ export default function AddCommentDialog({ open, onClose, onAdd, records, custom
           <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
             Discipline
             <Select className="mt-1 w-full" aria-label="Discipline" value={discipline} onChange={setDiscipline}
-              options={[{ value: '', label: autoDisc ? `Auto · ${autoDisc}` : 'Auto' }, ...DISCIPLINES.map((d) => ({ value: d, label: d }))]} />
+              options={[{ value: '', label: autoDisc ? `Auto · ${discLabel(autoDisc)}` : 'Auto' }, ...discOptions(DISCIPLINES)]} />
           </label>
           <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
             Commenter

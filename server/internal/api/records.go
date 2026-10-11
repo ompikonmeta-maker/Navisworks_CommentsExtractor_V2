@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -159,11 +160,15 @@ func (a *API) importRecords(w http.ResponseWriter, r *http.Request) {
 		if extra == "" {
 			extra = "{}"
 		}
-		if _, err := stmt.Exec(rid, rec.CommentID, rec.Viewpoint, rec.Commenter, rec.Discipline,
+		res, err := stmt.Exec(rid, rec.CommentID, rec.Viewpoint, rec.Commenter, rec.Discipline,
 			rec.CommentRaw, rec.CommentText, rec.Resolution, rec.Status, nullStr(rec.ClosedAt),
-			rec.CommentDate, rec.AuthorCode, rec.CameraPosition, rec.ImageRef, rec.Source, extra, u.ID); err != nil {
+			rec.CommentDate, rec.AuthorCode, rec.CameraPosition, rec.ImageRef, rec.Source, extra, u.ID)
+		if err != nil {
 			writeErr(w, 500, "insert record")
 			return
+		}
+		if newID, e := res.LastInsertId(); e == nil {
+			logEvent(txExec(tx), newID, u.ID, "import", map[string]any{"source": rec.Source})
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -195,7 +200,7 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad body")
 		return
 	}
-	set, args := buildPatch(patch, u.ID, isAdminRole(u))
+	set, args, keys := buildPatch(patch, u.ID, isAdminRole(u))
 	if set == "" {
 		writeErr(w, http.StatusBadRequest, "nothing to update")
 		return
@@ -204,6 +209,7 @@ func (a *API) patchRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "update record")
 		return
 	}
+	logEvent(a.exec, id, u.ID, "edit", editDetail(patch, keys))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -240,7 +246,7 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	n := 0
 	for _, up := range body.Updates {
-		set, args := buildPatch(up.Patch, u.ID, isAdminRole(u))
+		set, args, keys := buildPatch(up.Patch, u.ID, isAdminRole(u))
 		if set == "" {
 			continue
 		}
@@ -251,6 +257,7 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 		}
 		if c, _ := res.RowsAffected(); c > 0 {
 			n++
+			logEvent(txExec(tx), up.ID, u.ID, "edit", editDetail(up.Patch, keys))
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -263,7 +270,7 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 // buildPatch turns a JSON patch into "col=?, …" plus args for the editable
 // fields, stamping who changed it and when. Empty set = nothing editable.
 // Reviewers get the review fields only; admins also the report fields.
-func buildPatch(patch map[string]json.RawMessage, userID int64, admin bool) (string, []any) {
+func buildPatch(patch map[string]json.RawMessage, userID int64, admin bool) (string, []any, []string) {
 	// Only these fields are editable; column ← jsonKey.
 	allowed := map[string]string{
 		"commenter": "commenter", "discipline": "discipline", "resolution": "resolution",
@@ -279,12 +286,13 @@ func buildPatch(patch map[string]json.RawMessage, userID int64, admin bool) (str
 			allowed[col] = key
 		}
 	}
-	set, args := "", []any{}
+	set, args, keys := "", []any{}, []string{}
 	for col, key := range allowed {
 		raw, present := patch[key]
 		if !present {
 			continue
 		}
+		keys = append(keys, key)
 		if set != "" {
 			set += ", "
 		}
@@ -298,10 +306,11 @@ func buildPatch(patch map[string]json.RawMessage, userID int64, admin bool) (str
 		}
 	}
 	if set == "" {
-		return "", nil
+		return "", nil, nil
 	}
+	sort.Strings(keys)
 	set += ", updated_by=?, updated_at=?"
-	return set, append(args, userID, time.Now().UTC().Format(time.RFC3339))
+	return set, append(args, userID, time.Now().UTC().Format(time.RFC3339)), keys
 }
 
 // bulkDeleteRecords removes many records of a review (and their photos) in

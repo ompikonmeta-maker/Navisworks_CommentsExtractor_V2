@@ -24,7 +24,7 @@ function TypeSeg({ value, onChange }) {
           type="button"
           onClick={() => onChange(t.value)}
           aria-pressed={value === t.value}
-          className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${value === t.value ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}
+          className={`rounded-full px-2.5 py-1 text-[12px] font-semibold transition-colors ${value === t.value ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}
         >
           {t.label}
         </button>
@@ -39,7 +39,7 @@ function OptionsEditor({ options, onChange, pick }) {
   const add = () => { const v = draft.trim(); if (v && !options.includes(v)) onChange([...options, v]); setDraft(''); };
   return (
     <div className="mt-2 rounded-xl bg-surface-low p-3">
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">Options ({pick})</div>
+      <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-on-surface-variant">Options ({pick})</div>
       <div className="flex flex-wrap items-center gap-2">
         {options.map((o) => (
           <span key={o} className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface py-1 pl-3 pr-1.5 text-xs">
@@ -87,7 +87,7 @@ export default function CustomFieldsEditor() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button variant="tonal" icon="download" onClick={pullFromTemplate} disabled={blankCount === 0}>Pull from template{blankCount > 0 ? ` (${blankCount})` : ''}</Button>
         <Button variant="text" icon="upload_file" onClick={addField}>Add field</Button>
-        {blankCount === 0 && attrList.length === 0 && <span className="text-[11px] text-on-surface-variant">Import a template in the Template tab to pull its columns.</span>}
+        {blankCount === 0 && attrList.length === 0 && <span className="text-[12px] text-on-surface-variant">Import a template in the Template tab to pull its columns.</span>}
       </div>
 
       {attrList.length ? (
@@ -112,7 +112,7 @@ export default function CustomFieldsEditor() {
                         <span className="inline-flex items-center gap-1">When more than one is ticked, write them as <InfoTip label="About checkbox output"><b>Comma</b> puts them on one line (Photo, Drawing). <b>Numbered list</b> stacks them in the cell (1. Photo / 2. Drawing).</InfoTip></span>
                         <span className="inline-flex rounded-full border border-outline-variant bg-surface-low p-0.5">
                           {[['comma', 'Comma'], ['list', 'Numbered list']].map(([v, label]) => (
-                            <button key={v} onClick={() => setField(i, { join: v })} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${(f.join || 'comma') === v ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>{label}</button>
+                            <button key={v} onClick={() => setField(i, { join: v })} className={`rounded-full px-2.5 py-1 text-[12px] font-semibold transition-colors ${(f.join || 'comma') === v ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>{label}</button>
                           ))}
                         </span>
                       </div>
@@ -120,7 +120,7 @@ export default function CustomFieldsEditor() {
                   </div>
                 ) : (
                   <div className="ml-1 mt-2 flex items-center gap-2 pl-1">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-on-surface-variant">Default <InfoTip label="About default">Starting value for every comment. Leave empty to fill each one by hand.</InfoTip></span>
+                    <span className="inline-flex items-center gap-1 text-[12px] font-medium text-on-surface-variant">Default <InfoTip label="About default">Starting value for every comment. Leave empty to fill each one by hand.</InfoTip></span>
                     <input value={f.default || ''} onChange={(e) => setField(i, { default: e.target.value })} placeholder="(empty)" className={`${quiet} w-full max-w-md flex-1 text-[12px]`} aria-label="Default value" />
                   </div>
                 )}

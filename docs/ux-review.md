@@ -16,10 +16,11 @@ from screenshots of the running app, not a measurement.
 | 1st — "looks pale" | 6.2 | — | — |
 | 2nd — admin workflow | — | 7 / 5 | — |
 | 3rd — after visual + workflow fixes (2026-10-11) | 8.0 | 8.5 / 8.0 | ≈ 8.0 desktop |
+| 4th — after the 9.2 plan was built (2026-10-11) | 9.0 | 9.0 / 9.0 | ≈ 9.2 desktop |
 
 Target set by the owner: **9.2**.
 
-## Open findings (3rd review, desktop)
+## Findings from the 3rd review (all addressed in the 4th, see below)
 
 1. **Overview is too dense.** Nine cards; the same number repeats across cards (e.g. the
    172 comments without a discipline appear in Forecast, Pipeline, Needs attention,
@@ -33,7 +34,7 @@ Target set by the owner: **9.2**.
 5. **Small text.** Many 10–11 px labels in charts and captions; hard to read on a laptop.
 6. Phone layout issues (top nav clipped, sideways-scrolling table) — **out of scope**.
 
-## Path to 9.2 (proposed, not started)
+## Path to 9.2 (built)
 
 | Change | Expected gain |
 |---|:-:|
@@ -45,3 +46,10 @@ Target set by the owner: **9.2**.
 | Per-comment history (who changed what, when) instead of last change only | +0.2 |
 
 Owner's usual process: show a mockup first, build only after a go-ahead.
+Mockup: https://claude.ai/artifact/SKHHib6ECyYJXx4zi4LmWz
+
+## Still open after the 4th review
+
+- "Closed per week" uses a red badge/bar for a pace drop — arguably lateness, but loud.
+- The drawer is long: History sits below the fold on a 900 px-tall screen.
+- Quick Excel / log-sheet exports still write the stored `OTHER`, not "Unassigned".

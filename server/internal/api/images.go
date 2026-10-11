@@ -78,6 +78,7 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "insert image")
 		return
 	}
+	logEvent(a.exec, id, u.ID, "photo", map[string]any{"kind": kind, "op": "add"})
 	writeJSON(w, http.StatusCreated, map[string]any{"key": key, "url": "/api/files/" + key, "kind": kind})
 }
 
@@ -109,9 +110,13 @@ func (a *API) deleteImage(w http.ResponseWriter, r *http.Request) {
 			os.Remove(filepath.Join(a.FilesDir, k))
 		}
 	}
-	if _, err := a.DB.Exec(`DELETE FROM images WHERE record_id=? AND kind=?`, id, kind); err != nil {
+	res, err := a.DB.Exec(`DELETE FROM images WHERE record_id=? AND kind=?`, id, kind)
+	if err != nil {
 		writeErr(w, 500, "delete image")
 		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		logEvent(a.exec, id, auth.FromContext(r.Context()).ID, "photo", map[string]any{"kind": kind, "op": "remove"})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

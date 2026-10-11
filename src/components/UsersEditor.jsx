@@ -74,7 +74,7 @@ export default function UsersEditor({ me }) {
       {/* Invite: the address to open + a message ready to send */}
       <div className="mb-5 grid gap-4 rounded-[20px] bg-surface-container/60 p-4 md:grid-cols-2">
         <div className="min-w-0">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
             Tabelin address
             <InfoTip label="About the address">Works for anyone on the office network or VPN. If this PC has more than one network, the other addresses are listed below it.</InfoTip>
           </div>
@@ -85,10 +85,10 @@ export default function UsersEditor({ me }) {
               <Icon name={copied === 'address' ? 'check' : 'content_copy'} className="text-[15px]" />{copied === 'address' ? 'Copied' : 'Copy'}
             </button>
           </div>
-          {urls.length > 1 && <div className="mt-1.5 truncate text-[11.5px] text-on-surface-variant">Also: {urls.slice(1).join(' · ')}</div>}
+          {urls.length > 1 && <div className="mt-1.5 truncate text-[12px] text-on-surface-variant">Also: {urls.slice(1).join(' · ')}</div>}
         </div>
         <div className="min-w-0">
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
+          <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
             {target ? `Message for ${target.displayName || target.username}` : 'Message'}
           </div>
           {target ? (
@@ -138,7 +138,7 @@ export default function UsersEditor({ me }) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-on-surface-variant">
+              <tr className="text-left text-[12px] uppercase tracking-wide text-on-surface-variant">
                 <th className="py-2 pr-3 font-semibold">User</th>
                 <th className="py-2 pr-3 font-semibold">Role</th>
                 <th className="py-2 pr-3 font-semibold">Active</th>
@@ -151,7 +151,7 @@ export default function UsersEditor({ me }) {
                 return (
                   <tr key={u.id} className="border-t border-outline-variant/40">
                     <td className="py-2.5 pr-3">
-                      <div className="font-medium">{u.displayName || u.username}{self && <span className="ml-2 text-[10px] uppercase text-primary">you</span>}</div>
+                      <div className="font-medium">{u.displayName || u.username}{self && <span className="ml-2 text-[12px] uppercase text-primary">you</span>}</div>
                       <div className="text-xs text-on-surface-variant">
                         {u.username} · <span style={{ color: u.signedIn ? 'var(--tabelin-good)' : undefined }}>{u.signedIn ? 'signed in' : 'not signed in yet'}</span>
                       </div>

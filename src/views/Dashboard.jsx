@@ -37,7 +37,6 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
 
   const fileInputRef = useRef(null);
   const overviewRef = useRef(null);
-  const forecastRef = useRef(null);
   const burnRef = useRef(null);
   const scoreRef = useRef(null);
 
@@ -116,7 +115,7 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
     if (!records.length) return;
     try {
       notify('Building Excel — rendering charts…', 'info');
-      const [fImg, bImg, sImg] = await Promise.all([forecastRef, burnRef, scoreRef].map((r) => nodeToImage(r.current)));
+      const [bImg, sImg] = await Promise.all([burnRef, scoreRef].map((r) => nodeToImage(r.current)));
       const trend = {};
       for (const r of records) { const k = toMonth(r.commentDate); if (!k) continue; const row = trend[k] || (trend[k] = { month: k }); row[r.status] = (row[r.status] || 0) + 1; }
       const oldestOpen = records.filter((r) => r.status !== ov.doneL)
@@ -130,7 +129,7 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
         byDiscipline: ov.disciplines.map((d) => ({ name: discName(d.key), ...d.counts, total: d.total })).sort((a, b) => b.total - a.total),
         trend: Object.values(trend).sort((a, b) => a.month.localeCompare(b.month)),
         needsAttention: oldestOpen,
-        charts: [{ name: 'Forecast finish', img: fImg }, { name: 'Scope and close-out', img: bImg }, { name: 'Disciplines', img: sImg }],
+        charts: [{ name: 'Scope and close-out', img: bImg }, { name: 'Disciplines', img: sImg }],
       };
       await exportToExcel(records, { overview });
       notify(`Exported ${records.length} comments with the Overview.`, 'success');
@@ -188,21 +187,29 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
           </Reveal>
 
           <Reveal deps={[status, meta.source]}>
-            <Card ref={forecastRef} className="relative min-w-0 p-6">
-              <Head icon="sports_score" title="Forecast finish" snap={() => snap(forecastRef, 'forecast-finish')}
-                tip="Each comet runs from today to when a discipline closes its last comment at its current pace (close-outs in the last 14 days). Bigger head = more left. Past the chequered line misses the target. Click a row to open its comments."
+            <Card className="relative p-6">
+              <Head icon="flag" title="Do next" tip="What holds the log sheet and the target back, biggest first. Each count appears only here; Open list shows exactly those comments."
+                right={<span className="text-[13px] text-on-surface-variant">Biggest effect first</span>} />
+              <DoNext ov={ov} statuses={statuses} goComments={goComments} />
+            </Card>
+          </Reveal>
+
+          <Reveal deps={[status, meta.source]}>
+            <Card ref={scoreRef} className="relative p-6">
+              <Head icon="groups" title="Disciplines" snap={() => snap(scoreRef, 'disciplines')}
+                tip="Progress, pace and forecast per discipline, most at risk first. Pace = closed per day over the last 14 days; the tick is the pace the target needs. Click a row to open its comments."
                 right={<VerdictCounts ov={ov} />} />
-              {ov.hasCloseDates ? <ForecastRunway ov={ov} onPick={pickDisc} /> : <NoPace />}
+              <Scorecard ov={ov} onPick={pickDisc} />
             </Card>
           </Reveal>
 
           <Reveal className="grid gap-4 lg:grid-cols-12" deps={[status, meta.source]}>
-            <Card ref={burnRef} className="relative min-w-0 p-6 lg:col-span-8">
+            <Card ref={burnRef} className="relative min-w-0 p-6 lg:col-span-7">
               <Head icon="show_chart" title="Scope and close-out" snap={() => snap(burnRef, 'scope-close-out')}
                 tip="Comments raised (grey) against closed (blue). The gap is the open backlog. Dashed blue: forecast at the current pace. Dotted: the pace needed to hit the target." />
               <BurnUp ov={ov} />
             </Card>
-            <Card className="relative flex min-w-0 flex-col p-6 lg:col-span-4">
+            <Card className="relative flex min-w-0 flex-col p-6 lg:col-span-5">
               <Head icon="speed" title="Closed per week" tip="Close-outs recorded in Tabelin over the last 8 weeks. The dotted line is the weekly pace the target needs; the bar below compares the last 4 weeks with it." />
               <PaceHeadline ov={ov} />
               <WeeklyPace ov={ov} fill />
@@ -210,33 +217,8 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
             </Card>
           </Reveal>
 
-          <Reveal className="grid gap-4 lg:grid-cols-2" deps={[status, meta.source]}>
-            <Card className="relative flex flex-col p-6">
-              <Head icon="conversion_path" title="Pipeline" tip="Where comments sit between being raised and going into the log sheet. Red numbers are what drops out at each step. Click a step to see those comments." />
-              <Pipeline ov={ov} onPick={pickStage} />
-            </Card>
-            <Card className="relative flex flex-col p-6">
-              <Head icon="priority_high" title="Needs attention" tip="What holds the target back, most urgent first. Each opens the matching comments." />
-              <Attention ov={ov} statuses={statuses} goComments={goComments} openDetail={openDetail} />
-            </Card>
-          </Reveal>
-
           <Reveal deps={[status, meta.source]}>
-            <Card ref={scoreRef} className="relative p-6">
-              <Head icon="groups" title="Disciplines" snap={() => snap(scoreRef, 'disciplines')} tip="Progress, pace and forecast per discipline, most at risk first. Click a row to open its comments." />
-              <Scorecard ov={ov} statuses={statuses} onPick={pickDisc} />
-            </Card>
-          </Reveal>
-
-          <Reveal className="grid gap-4 lg:grid-cols-12" deps={[status, meta.source]}>
-            <Card className="relative min-w-0 p-6 lg:col-span-7">
-              <Head icon="schedule" title="Backlog age" tip="Comments not yet closed, by how long ago they were raised. Darker = more." />
-              <AgeHeatmap ov={ov} onPick={pickDisc} />
-            </Card>
-            <Card className="relative flex min-w-0 flex-col p-6 lg:col-span-5">
-              <Head icon="record_voice_over" title="Raised by" tip="Share of each group's comments that are closed. Groups come from the prefix of the commenter name (CPY_, OPS, …)." />
-              <RaisedBy ov={ov} />
-            </Card>
+            <MoreInsights ov={ov} pickDisc={pickDisc} pickStage={pickStage} />
           </Reveal>
         </>
       )}
@@ -276,7 +258,7 @@ function SetupChecklist({ hasData, target, isAdmin, onImport, onTarget, onTempla
     <div data-nosnap><Card className="relative p-5">
       <div className="mb-3 flex items-center gap-2 pr-8">
         <h2 className="text-[15px] font-semibold">Get this review ready</h2>
-        <span className="rounded-full bg-surface-container px-2 py-0.5 text-[11.5px] font-semibold tabular-nums text-on-surface-variant">{doneN} of {steps.length}</span>
+        <span className="rounded-full bg-surface-container px-2 py-0.5 text-[12px] font-semibold tabular-nums text-on-surface-variant">{doneN} of {steps.length}</span>
       </div>
       <button type="button" onClick={dismiss} aria-label="Hide these steps" title="Hide"
         className="t-press absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -291,7 +273,7 @@ function SetupChecklist({ hasData, target, isAdmin, onImport, onTarget, onTempla
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-semibold">{x.title}</span>
-              <span className="block truncate text-[11.5px] text-on-surface-variant">{x.sub}</span>
+              <span className="block truncate text-[12px] text-on-surface-variant">{x.sub}</span>
             </span>
             {!x.done && (
               <button type="button" onClick={x.go} className="t-press shrink-0 rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-primary hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">{x.action}</button>
@@ -337,11 +319,12 @@ function VerdictChip({ verdict, children, tip }) {
 
 function VerdictCounts({ ov }) {
   if (ov.target == null) return null;
-  const groups = ['ok', 'risk', 'bad', 'triage'].map((k) => [k, ov.disciplines.filter((d) => d.remaining > 0 && d.verdict === k)]).filter(([, l]) => l.length);
+  const words = { ok: 'on track', risk: 'at risk', bad: 'behind', triage: 'unclear' };
+  const groups = ['ok', 'risk', 'bad', 'triage'].map((k) => [k, ov.disciplines.filter((d) => d.remaining > 0 && (d.verdict === k || (k === 'triage' && d.verdict === 'unknown')))]).filter(([, l]) => l.length);
   return (
     <div className="flex flex-wrap gap-1.5">
       {groups.map(([k, list]) => (
-        <VerdictChip key={k} verdict={k} tip={<TipRows title={VERDICT[k].label} note={list.map((d) => discName(d.key)).join(', ')} />}>{list.length}</VerdictChip>
+        <VerdictChip key={k} verdict={k} tip={<TipRows title={words[k]} note={list.map((d) => discName(d.key)).join(', ')} />}>{list.length} {words[k]}</VerdictChip>
       ))}
     </div>
   );
@@ -447,7 +430,7 @@ function Hero({ ov, statuses, goComments }) {
               {v && <VerdictChip verdict={ov.verdict} tip={ov.forecast != null ? <TipRows title={`Forecast ${fmtDayY(ov.forecast)}`} note={ov.late > 0 ? `${ov.late} days after the target` : ov.late < 0 ? `${-ov.late} days early` : 'On the target day'} /> : <TipRows title="No pace yet" note="Close comments in Tabelin to measure the pace." />} />}
             </div>
             <div className="mt-3 text-[34px] font-bold leading-tight tracking-[-0.02em] tabular-nums">
-              {ov.remaining === 0 ? 'All closed' : ov.daysLeft > 0 ? `${ov.daysLeft} days` : ov.daysLeft === 0 ? 'Due today' : `${-ov.daysLeft} days over`}
+              {ov.remaining === 0 ? 'All closed' : ov.daysLeft > 0 ? `${ov.daysLeft} days left` : ov.daysLeft === 0 ? 'Due today' : `${-ov.daysLeft} days over`}
             </div>
             {ov.remaining > 0 && (
               <div className="mt-4 grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 text-[12.5px] tabular-nums">
@@ -461,9 +444,14 @@ function Hero({ ov, statuses, goComments }) {
                 </>}
               </div>
             )}
-            {ov.forecast != null && ov.remaining > 0 && (
-              <div className="mt-3 text-[12.5px] text-on-surface-variant">Finish <b className="text-on-surface">{fmtDay(ov.forecast)}</b>
-                {ov.late > 0 && <b style={{ color: v?.fg }}> · +{ov.late}d</b>}</div>
+            {ov.remaining > 0 && (
+              <p className="mt-2 text-[14px] leading-snug text-on-surface-variant">
+                {ov.forecast == null ? 'Close comments in Tabelin to measure the pace.' : (
+                  <>At today’s pace you finish <b className="text-on-surface">{fmtDay(ov.forecast)}</b>
+                    {ov.late > 0 ? <> — <b style={{ color: v?.fg }}>{ov.late} day{ov.late === 1 ? '' : 's'} late</b>.</>
+                      : ov.late < 0 ? <> — {-ov.late} day{ov.late === -1 ? '' : 's'} early.</> : <> — on the target day.</>}</>
+                )}
+              </p>
             )}
           </>
         )}
@@ -472,92 +460,101 @@ function Hero({ ov, statuses, goComments }) {
       {/* log-sheet readiness */}
       <div className="border-t border-outline-variant/40 p-6 lg:border-l lg:border-t-0">
         <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
-          Log sheet <InfoTip label="About log-sheet ready">Closed comments with an after-photo and a resolution — ready for the 3D Model Log Sheet export.</InfoTip>
+          Log sheet ready
         </div>
         <div className="mt-3 flex items-baseline gap-2 tabular-nums"><span className="text-[34px] font-bold leading-tight tracking-[-0.02em]">{ov.ready}</span><span className="text-sm text-on-surface-variant">/ {ov.total}</span></div>
         <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-surface-high"><div className="h-full rounded-full" style={{ width: `${ov.total ? (ov.ready / ov.total) * 100 : 0}%`, background: 'var(--tabelin-status-closed)' }} /></div>
-        {ov.done > 0 && (
-          <div className="mt-4 grid gap-1">
-            {[
-              ['no_photography', ov.noPhoto, 'without an after-photo', 'Closed, but the after-photo is missing.', { noPhoto: true }],
-              ['description', ov.noRes, 'without a resolution', 'Closed, but no resolution was written.', { noRes: true }],
-            ].map(([icon, n, label, tip, f]) => (
-              <button key={icon} type="button" onClick={() => goComments({ status: ov.doneL, ...f })} disabled={!n}
-                className="t-press flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-[12.5px] tabular-nums enabled:hover:bg-surface-container disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                {...tp(<TipRows title={`${n} closed ${label}`} note={tip} />)}>
-                <Icon name={icon} className="text-[17px]" style={{ color: n ? 'var(--tabelin-warn)' : 'var(--tabelin-good)' }} />
-                <b className="font-semibold">{n}</b><span className="truncate text-on-surface-variant">{label}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <p className="mt-4 text-[13px] leading-snug text-on-surface-variant">Ready = closed, with an after-photo and a resolution. What’s missing is in <b className="font-semibold text-on-surface">Do next</b>.</p>
       </div>
     </Card>
   );
 }
 
-function Attention({ ov, statuses, goComments, openDetail }) {
+// "Do next": every blocker counted once, ranked by what it unblocks, each
+// opening exactly those comments in Viewpoints.
+function DoNext({ ov, statuses, goComments }) {
   const a = ov.attention;
-  const mid = statuses.filter((s) => s.role === 'middle');
+  const mid = statuses.filter((x) => x.role === 'middle');
   const items = [
-    a.unassignedOpen > 0 && { n: a.unassignedOpen, t: 'without a discipline', icon: 'person_off', c: 'var(--tabelin-bad)', go: () => goComments({ discipline: 'OTHER', status: '!done' }), tip: 'Nobody owns these yet. Detection could not read a discipline from the text.' },
-    a.over90 > 0 && { n: a.over90, t: 'open over 3 months', icon: 'hourglass_bottom', c: 'var(--tabelin-bad)', go: () => goComments({ old: true }), tip: 'Raised more than 90 days ago and still not closed.' },
-    a.middle > 0 && { n: a.middle, t: mid.length === 1 ? `${mid[0].label.toLowerCase()}` : 'waiting for verification', icon: 'pending', c: 'var(--tabelin-warn)', go: () => goComments({ status: mid[0]?.label || ov.openL, discipline: 'all' }), tip: 'Fixed, waiting for the reviewer to verify.' },
-    a.missingEvidence > 0 && { n: a.missingEvidence, t: 'closed without evidence', icon: 'no_photography', c: 'var(--tabelin-warn)', go: () => goComments({ status: ov.doneL, noPhoto: true, noRes: true }), tip: `${a.noPhoto} without an after-photo · ${a.noRes} without a resolution.` },
-  ].filter(Boolean);
-  const tp = useTipProps();
+    { n: a.unassignedOpen, icon: 'person_off', c: 'var(--md-sys-color-on-surface-variant)', title: 'Give these comments a discipline', why: 'Unassigned comments have no owner and no forecast.', go: () => goComments({ discipline: 'OTHER', status: '!done' }) },
+    { n: a.noPhoto, icon: 'no_photography', c: 'var(--md-sys-color-primary)', title: 'Add the after-photo', why: 'Closed, but can’t go on the log sheet without evidence.', go: () => goComments({ status: ov.doneL, noPhoto: true }) },
+    { n: a.middle, icon: 'pending', c: mid[0]?.color || 'var(--md-sys-color-primary)', title: mid.length === 1 ? `Verify what is ${mid[0].label.toLowerCase()}` : 'Verify the fixed comments', why: 'Fixed, waiting for a reviewer to close.', go: () => goComments({ status: mid[0]?.label || ov.openL, discipline: 'all' }) },
+    { n: a.noRes, icon: 'description', c: 'var(--tabelin-warn)', title: 'Write the resolution', why: 'Closed without a note on what was done.', go: () => goComments({ status: ov.doneL, noRes: true }) },
+    { n: a.over90, icon: 'hourglass_bottom', c: 'var(--tabelin-warn)', title: 'Chase the old ones', why: 'Raised more than 3 months ago and still open.', go: () => goComments({ old: true }) },
+  ].filter((x) => x.n > 0);
+  if (!items.length) {
+    return <div className="flex items-center gap-2 py-2 text-sm text-on-surface-variant"><Icon name="check_circle" className="text-[20px]" style={{ color: 'var(--tabelin-good)' }} />Nothing is holding the log sheet back.</div>;
+  }
   return (
-    <div>
-      {items.length === 0 ? (
-        <div className="flex items-center gap-2 py-4 text-sm text-on-surface-variant"><Icon name="check_circle" className="text-[20px]" style={{ color: 'var(--tabelin-good)' }} />Nothing is blocking the target.</div>
-      ) : (
-        <div className="grid grid-cols-2 gap-2.5">
-          {items.map((it) => (
-            <button key={it.t} type="button" onClick={it.go} {...tp(<TipRows title={`${it.n} ${it.t}`} note={it.tip} />)}
-              className="flex flex-col gap-2 rounded-[20px] bg-surface-container p-4 text-left transition-[background,transform] hover:-translate-y-px hover:bg-secondary-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-              <span className="flex items-center justify-between">
-                <span className="text-[28px] font-bold leading-none tracking-[-0.02em] tabular-nums">{it.n}</span>
-                <Icon name={it.icon} className="text-[20px]" style={{ color: it.c }} />
-              </span>
-              <span className="text-[12.5px] font-medium text-on-surface-variant">{it.t}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {a.oldest && (
-        <button type="button" onClick={() => openDetail(a.oldest.record.ID)}
-          className="mt-3 grid w-full grid-cols-[auto_1fr] items-start gap-3 rounded-control bg-surface-container p-3 text-left hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-          {a.oldest.record.imageData ? (
-            <img src={a.oldest.record.imageData} alt="" className="h-12 w-16 rounded-lg object-cover" />
-          ) : (
-            <span className="grid h-12 w-16 place-items-center rounded-lg bg-surface-high text-on-surface-variant"><Icon name="view_in_ar" /></span>
-          )}
-          <span className="min-w-0">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">Oldest open · {a.oldest.age} days</span>
-            <span className="mt-0.5 line-clamp-2 block text-[12.5px]">{a.oldest.record.commentText}</span>
-            <span className="mt-0.5 block truncate text-[11.5px] text-on-surface-variant">{a.oldest.record.viewpoint} · {discName(a.oldest.record.discipline || 'OTHER')}</span>
-          </span>
-        </button>
-      )}
-    </div>
+    <ol className="-mx-2 divide-y divide-outline-variant/40">
+      {items.map((it, i) => (
+        <li key={it.title}>
+          <button type="button" onClick={it.go}
+            className="donext t-press grid w-full grid-cols-[22px_44px_minmax(64px,auto)_minmax(0,1fr)_auto] items-center gap-3.5 rounded-[18px] px-2 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <span className="text-center text-[13px] font-semibold tabular-nums text-on-surface-variant">{i + 1}</span>
+            <span className="grid h-11 w-11 place-items-center rounded-[14px]" style={{ background: tint(it.c, 14), color: it.c }}><Icon name={it.icon} className="text-[22px]" /></span>
+            <span className="text-[26px] font-bold leading-none tracking-[-0.02em] tabular-nums">{it.n}</span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-semibold">{it.title}</span>
+              <span className="block truncate text-[13px] text-on-surface-variant">{it.why}</span>
+            </span>
+            <span className="donext-go inline-flex items-center gap-1.5 rounded-[12px] px-3 py-2 text-[14px] font-medium text-primary">Open list<Icon name="arrow_forward" className="text-[20px]" /></span>
+          </button>
+        </li>
+      ))}
+    </ol>
   );
 }
 
-function Scorecard({ ov, statuses, onPick }) {
+// Pipeline, the forecast runway, backlog age and "raised by" stay one click
+// away instead of crowding the page.
+const MORE = [
+  { id: 'forecast', label: 'Forecast runway', icon: 'sports_score' },
+  { id: 'pipeline', label: 'Pipeline', icon: 'conversion_path' },
+  { id: 'age', label: 'Backlog age', icon: 'schedule' },
+  { id: 'raised', label: 'Raised by', icon: 'record_voice_over' },
+];
+function MoreInsights({ ov, pickDisc, pickStage }) {
+  const [open, setOpenState] = useState(() => { try { return localStorage.getItem('tabelin.ovMore') || ''; } catch { return ''; } });
+  const setOpen = (v) => { setOpenState(v); try { localStorage.setItem('tabelin.ovMore', v); } catch { /* ignore */ } };
+  return (
+    <Card className="relative px-6 py-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="mr-auto text-[15px] font-semibold">More insights</h2>
+        {MORE.map((m) => (
+          <button key={m.id} type="button" onClick={() => setOpen(open === m.id ? '' : m.id)} aria-expanded={open === m.id}
+            className={`t-press inline-flex h-9 items-center gap-1.5 rounded-[12px] px-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${open === m.id ? 'bg-secondary-container font-semibold text-on-secondary-container' : 'bg-surface-container text-on-surface hover:bg-surface-high'}`}>
+            <Icon name={m.icon} className="text-[18px]" />{m.label}
+            <Icon name={open === m.id ? 'expand_less' : 'expand_more'} className="text-[20px]" />
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div key={open} className="more-pane mt-5 border-t border-outline-variant/50 pt-5">
+          {open === 'forecast' && (ov.hasCloseDates ? <ForecastRunway ov={ov} onPick={pickDisc} /> : <NoPace />)}
+          {open === 'pipeline' && <Pipeline ov={ov} onPick={pickStage} />}
+          {open === 'age' && <AgeHeatmap ov={ov} onPick={pickDisc} />}
+          {open === 'raised' && <RaisedBy ov={ov} />}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Scorecard({ ov, onPick }) {
   const tp = useTipProps();
-  const order = [...statuses].reverse();
   const maxP = Math.max(0.1, ...ov.disciplines.map((d) => Math.max(d.pace, d.needed ?? 0)));
+  const lateColor = (d) => (d.verdict === 'bad' ? 'var(--tabelin-bad)' : d.verdict === 'risk' ? 'var(--tabelin-warn)' : 'var(--md-sys-color-on-surface-variant)');
   return (
     <div className="-mx-2 overflow-x-auto">
-      <table className="w-full min-w-[820px] text-[13px]">
+      <table className="w-full min-w-[820px] text-[14px]">
         <thead>
-          <tr className="text-left text-[11px] uppercase tracking-[0.06em] text-on-surface-variant">
+          <tr className="text-left text-[12px] uppercase tracking-[0.06em] text-on-surface-variant">
             <th className="px-2 py-2 font-semibold">Discipline</th>
-            <th className="px-2 py-2 font-semibold">Status</th>
-            <th className="px-2 py-2 text-right font-semibold">Closed</th>
+            <th className="px-2 py-2 font-semibold">Closed</th>
             <th className="px-2 py-2 text-right font-semibold">Left</th>
-            <th className="px-2 py-2 font-semibold"><span className="inline-flex items-center gap-1">Pace<InfoTip label="About pace">Closed per day over the last 14 days. The tick marks the pace needed to hit the target.</InfoTip></span></th>
-            <th className="px-2 py-2 font-semibold">Finish</th>
+            <th className="px-2 py-2 font-semibold">Pace now / needed</th>
+            <th className="px-2 py-2 font-semibold">Forecast finish</th>
             <th className="px-2 py-2 text-right font-semibold">Oldest</th>
             <th className="px-2 py-2 font-semibold" />
           </tr>
@@ -566,30 +563,30 @@ function Scorecard({ ov, statuses, onPick }) {
           {ov.byRisk.map((d) => (
             <tr key={d.key} tabIndex={0} onClick={() => onPick(d.key)} onKeyDown={(e) => e.key === 'Enter' && onPick(d.key)}
               className="cursor-pointer border-t border-outline-variant/40 transition-colors hover:bg-surface-container focus:outline-none focus-visible:bg-surface-container">
-              <td className="whitespace-nowrap px-2 py-2.5">
-                <span className="mr-2 rounded-md bg-surface-container px-1.5 py-0.5 font-mono text-[11.5px] font-medium text-on-surface-variant">{discCode(d.key)}</span>{discName(d.key)}
+              <td className="whitespace-nowrap px-2 py-3">
+                <span className="mr-2 rounded-md bg-surface-container px-1.5 py-0.5 font-mono text-[12px] font-medium text-on-surface-variant">{discCode(d.key)}</span>{discName(d.key)}
               </td>
-              <td className="px-2 py-2.5">
-                <div className="flex h-2.5 w-36 gap-[2px] overflow-hidden rounded-full" {...tp(<TipRows title={discName(d.key)} rows={order.map((s) => [s.label, d.counts[s.label] || 0])} />)}>
-                  {order.map((s) => (d.counts[s.label] ? <div key={s.key} style={{ flex: d.counts[s.label], background: s.role === 'middle' ? hatch(s.color) : s.color }} /> : null))}
+              <td className="px-2 py-3">
+                <div className="flex items-center gap-3 tabular-nums">
+                  <div className="h-2 w-32 overflow-hidden rounded-full bg-surface-high"><div className="h-full rounded-full" style={{ width: `${d.pct}%`, background: 'var(--tabelin-good)' }} /></div>
+                  <span className="whitespace-nowrap text-[13px] text-on-surface-variant"><b className="font-semibold text-on-surface">{d.pct}%</b> of {d.total}</span>
                 </div>
               </td>
-              <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums"><b className="font-semibold">{d.pct}%</b> <span className="text-on-surface-variant">of {d.total}</span></td>
-              <td className="px-2 py-2.5 text-right tabular-nums">{d.remaining}</td>
-              <td className="px-2 py-2.5">
-                <div className="flex items-center gap-2 tabular-nums">
-                  <div className="relative h-1.5 w-20 rounded-full bg-surface-high">
+              <td className="px-2 py-3 text-right font-semibold tabular-nums">{d.remaining}</td>
+              <td className="px-2 py-3">
+                <div className="flex items-center gap-2.5 tabular-nums" {...tp(<TipRows title={discName(d.key)} rows={[['Closed per day now', d.pace.toFixed(1)], ...(d.needed != null && d.remaining > 0 ? [['Needed per day', d.needed.toFixed(1)]] : [])]} />)}>
+                  <div className="relative h-2 w-24 rounded-full bg-surface-high">
                     <div className="h-full rounded-full" style={{ width: `${Math.min(100, (d.pace / maxP) * 100)}%`, background: 'var(--md-sys-color-primary)' }} />
-                    {d.needed != null && d.remaining > 0 && <i className="absolute -top-[3px] h-3 w-0.5 rounded bg-on-surface" style={{ left: `${Math.min(98, (d.needed / maxP) * 100)}%` }} />}
+                    {d.needed != null && d.remaining > 0 && <i className="absolute -top-[3px] h-3.5 w-0.5 rounded bg-on-surface" style={{ left: `${Math.min(98, (d.needed / maxP) * 100)}%` }} />}
                   </div>
-                  <span>{d.pace.toFixed(1)}</span>{d.needed != null && d.remaining > 0 && <span className="text-on-surface-variant">/ {d.needed.toFixed(1)}</span>}
+                  <span className="whitespace-nowrap text-[13px]">{d.pace.toFixed(1)}{d.needed != null && d.remaining > 0 && <span className="text-on-surface-variant"> / {d.needed.toFixed(1)}</span>}</span>
                 </div>
               </td>
-              <td className="whitespace-nowrap px-2 py-2.5 tabular-nums">
-                {d.remaining === 0 ? <span className="text-on-surface-variant">done</span> : d.forecast == null ? <span className="text-on-surface-variant">—</span> : <>{fmtDay(d.forecast)}{d.late > 0 && <span className="text-on-surface-variant"> +{d.late}d</span>}</>}
+              <td className="whitespace-nowrap px-2 py-3 text-[13px] tabular-nums">
+                {d.remaining === 0 ? <span className="text-on-surface-variant">done</span> : d.forecast == null ? <span className="text-on-surface-variant">—</span> : <>{fmtDay(d.forecast)}{d.late > 0 && <b className="font-semibold" style={{ color: lateColor(d) }}> +{d.late} d</b>}</>}
               </td>
-              <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">{d.oldest != null && d.remaining > 0 ? `${d.oldest} d` : '—'}</td>
-              <td className="px-2 py-2.5">{d.verdict && <VerdictChip verdict={d.verdict} />}</td>
+              <td className="whitespace-nowrap px-2 py-3 text-right text-[13px] tabular-nums text-on-surface-variant">{d.oldest != null && d.remaining > 0 ? `${d.oldest} d` : '—'}</td>
+              <td className="px-2 py-3 text-right">{d.verdict && <VerdictChip verdict={d.verdict} />}</td>
             </tr>
           ))}
         </tbody>

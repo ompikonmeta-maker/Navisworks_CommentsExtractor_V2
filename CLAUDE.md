@@ -185,10 +185,14 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   the review target, log-sheet readiness = closed + after-photo + resolution, per-discipline
   scorecard/forecast/ages, pipeline, burn-up, weekly close-outs, "raised by" party from the
   commenter prefix). Charts are hand-drawn SVG in `components/OverviewCharts.jsx` (no chart
-  library; colours are MD3/status CSS variables so themes switch without re-render): hero
-  (progress · target verdict · log sheet), the **Forecast finish** comet runway, burn-up,
-  weekly pace, pipeline, needs-attention tiles, discipline scorecard, backlog-age heatmap,
-  raised by. Labels stay minimal — explanations live in `InfoTip`s and the shared chart
+  library; colours are MD3/status CSS variables so themes switch without re-render). Layout
+  (top to bottom): hero (progress · target sentence "At today's pace you finish … — N days
+  late" · log-sheet ready), **Do next** (each blocker counted once — unassigned, no
+  after-photo, in review, no resolution, open > 3 months — ranked, each "Open list" drilling
+  into exactly those rows), **Disciplines** (one table: closed, left, pace now/needed,
+  forecast finish, oldest, verdict; replaces the separate forecast/backlog cards), burn-up +
+  closed per week, and **More insights** (forecast runway, pipeline, backlog age, raised by —
+  collapsed, choice in localStorage `tabelin.ovMore`). Red only means late/behind. Labels stay minimal — explanations live in `InfoTip`s and the shared chart
   tooltip (`TipProvider`/`useTipProps`). The review target is `settings.reviewTarget`
   ('YYYY-MM-DD', set from the Target chip). Pace/forecast need `closedAt`, so they fill in as
   comments are closed in Tabelin.
@@ -222,8 +226,14 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - **Viewpoints**: filter chips (no after-photo / no resolution / not closed > 3 months /
   commenter, status `!done`), Overview tiles drill down into exactly the listed rows. Row
   checkboxes open the `.t-bulk` bar (discipline / status / commenter → store `bulkUpdate`).
-  The drawer has prev/next (J/K), "Next after closing" (localStorage `tabelin.autoNext`),
-  delete, and "Changed by" (`changedBy`/`changedAt` from the server's `updated_by`/`updated_at`).
+  The drawer has prev/next (J/K), keys **1–9** = status (registry order), **Ctrl/⌘+Enter** =
+  next comment, "Next after closing" (localStorage `tabelin.autoNext`), delete (admin), and a
+  **History** section on the server: `record_events` rows written by patch / bulk patch /
+  photo add-remove / import, read via `GET /api/records/{id}/history` (newest first; the
+  drawer folds repeats by the same person within 10 min). The catch-all discipline `OTHER`
+  (or empty) is shown as **"Unassigned"** everywhere (`discLabel`/`discOptions` in `ui.jsx`);
+  the stored value stays `OTHER`. Dates read "9 Dec 2024, 07:25" (`overview.fmtStamp`).
+  No UI text below 12 px.
 - **Manual comments**: Viewpoints › Add (`components/AddCommentDialog.jsx`, writers only) →
   store `addRecord` (server: created via the import endpoint so it gets the server ID). They
   carry `source: 'manual'` (`merge.MANUAL`), so a re-import never lists them as missing.
@@ -240,7 +250,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   limits) and "About" (version, run mode, where each record field comes from), in EN / ID (`localStorage tabelin.helpLang`, default from the browser language).
   Screenshots are WebP files in `src/assets/help/`, inlined at build time so Help works
   offline — re-capture them when a pictured screen changes. Keep the matrix in sync with the
-  server's role checks (`canWriteRole` / `requireAdmin`).
+  server's role checks (`isAdminRole` / `canReviewRole` / `requireAdmin`).
 - **Overview setup checklist** (import · target · template · invite team), dismissible per
   review in localStorage `tabelin.setupDone.<reviewId|local>`. **Settings › Users** shows an
   invite card with the LAN address from `GET /api/server-info` and a copyable message.

@@ -146,7 +146,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
                         <li key={d.name} className="flex flex-wrap items-center gap-3 py-2">
                           <span className="w-28"><DisciplineBadge discipline={d.name} /></span>
                           <span className="text-xs text-on-surface-variant tabular-nums">{d.count}</span>
-                          {d.custom && <span className="text-[11px] font-semibold text-primary">custom</span>}
+                          {d.custom && <span className="text-[12px] font-semibold text-primary">custom</span>}
                           <div className="ml-auto flex items-center gap-1">
                             <DiscColorButton name={d.name} color={color || discColor(d.name)} custom={!!color} onPick={(c) => setDisciplineColor(d.name, c)} />
                             {d.custom && d.count === 0 && <button onClick={() => removeDiscipline(d.name)} aria-label={`Remove ${d.name}`} className="t-press rounded-full p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-error" title="Remove discipline"><Icon name="close" className="text-[16px]" /></button>}
@@ -173,7 +173,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
                         <li key={c.name} className="flex flex-wrap items-center gap-3 py-2.5">
                           <span className="inline-flex items-center gap-2 font-medium"><Icon name="person" className="text-[18px] text-on-surface-variant" /> {c.name}</span>
                           <span className="text-xs text-on-surface-variant tabular-nums">{c.count} comment{c.count === 1 ? '' : 's'}</span>
-                          {c.custom && <span className="rounded-full bg-secondary-container px-2 py-0.5 text-[10px] font-medium text-on-secondary-container">added</span>}
+                          {c.custom && <span className="rounded-full bg-secondary-container px-2 py-0.5 text-[12px] font-medium text-on-secondary-container">added</span>}
                           {c.custom && c.count === 0 && <button onClick={() => removeCommenter(c.name)} aria-label={`Remove ${c.name}`} className="ml-auto rounded-full p-1 text-on-surface-variant hover:text-error" title="Remove commenter"><Icon name="close" className="text-[16px]" /></button>}
                         </li>
                       ))}
