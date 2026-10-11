@@ -300,5 +300,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `docs/tabelin-dokumentasi.md` — the authoritative system spec (UI, Input, Process, Output).
   Follow it when extending behavior.
 - `docs/material-design-3-project/` — the MD3 token/component reference the theme is based on.
+- `docs/ux-review.md` — running UI/UX review notes: scores, open findings, the owner's 9.2
+  target, and scope (**desktop only** — the owner doesn't need a phone layout).
 - `docs/Sample/` — the original Navisworks report and viewpoint images (also copied into
   `src/sample/` where they are embedded into the bundle as the app's seed data).
