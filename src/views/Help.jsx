@@ -19,7 +19,8 @@ import shotExport from '../assets/help/export.webp';
 const C = { blue: '#2a78d6', violet: '#7a5af8', green: '#1baf7a', orange: '#eb6834', pink: '#d9548f', teal: '#0e7c86', amber: '#d98a00', slate: '#64748b' };
 const tint = (c, p = 14) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
 
-const APP_VERSION = '2.0.0';
+// Set by the release build (VITE_APP_VERSION); local builds say "dev".
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 const TABS = ['use', 'roles', 'about'];
 const LANG_KEY = 'tabelin.helpLang';
 function initialLang() {
