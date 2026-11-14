@@ -127,3 +127,5 @@ Go + SQLite (satu binary, tanpa cgo).
 - [`server/README.md`](./server/README.md) — detail server dan API.
 - [`docs/tabelin-dokumentasi.md`](./docs/tabelin-dokumentasi.md) — spesifikasi sistem.
 - [`docs/ux-review.md`](./docs/ux-review.md) — catatan review UI/UX.
+- [`docs/retrospective.md`](./docs/retrospective.md) — retrospektif: apa yang dipertahankan, dirombak, dibuang.
+- [`docs/plan-v2.md`](./docs/plan-v2.md) — rencana perbaikan bertahap untuk sesi kerja berikutnya.
