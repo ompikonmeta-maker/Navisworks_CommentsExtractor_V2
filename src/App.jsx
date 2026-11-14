@@ -7,13 +7,13 @@ import { Icon, Button } from './components/ui.jsx';
 import { useData } from './data/index.js';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
-import Comments from './views/Comments.jsx';
+import Work from './views/Work.jsx';
 import Settings, { SECTIONS } from './views/Settings.jsx';
 import Help from './views/Help.jsx';
 
 const NAV = [
-  { id: 'dashboard', label: 'Overview', icon: 'dashboard' },
-  { id: 'comments', label: 'Viewpoints', icon: 'format_list_bulleted' },
+  { id: 'work', label: 'Work', icon: 'fact_check' },
+  { id: 'insights', label: 'Insights', icon: 'insights' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
   { id: 'help', label: 'Help', icon: 'help' },
 ];
@@ -34,7 +34,7 @@ export default function App({ onExitProject, onSignOut } = {}) {
   const { caps, place, user } = source;
   const { settings, update, ready: settingsReady, bindShared, unbindShared } = useSettings();
   const [effTheme, setEffTheme] = useState(effectiveTheme);
-  const [route, setRoute] = useState('dashboard');
+  const [route, setRoute] = useState('work');
   const [detailId, setDetailId] = useState(null);
   const [commentsFilter, setCommentsFilter] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -177,9 +177,11 @@ export default function App({ onExitProject, onSignOut } = {}) {
     }
   }, [store, source]);
 
+  // Open one comment in Work (from Insights): All comments, that one selected.
   const openDetail = useCallback((id) => {
     setDetailId(id);
-    setRoute('comments');
+    setCommentsFilter({ keepSelection: true, _n: Date.now() });
+    setRoute('work');
   }, []);
   const go = useCallback((id) => {
     // Reveal direction follows nav order: moving to a lower menu item reveals
@@ -216,13 +218,18 @@ export default function App({ onExitProject, onSignOut } = {}) {
     setSettingsOpen(true);
     setDetailId(null);
   }, []);
-  // Jump to Viewpoints with a preset filter (from an Overview KPI/discipline).
+  // Jump to Work with a preset filter (from an Insights count/discipline).
   // The nonce lets the same target re-apply on a repeat click.
   const goComments = useCallback((filter) => {
     setDetailId(null);
     setCommentsFilter(filter ? { ...filter, _n: Date.now() } : null);
-    setRoute('comments');
+    setRoute('work');
   }, []);
+  // Work needs the width: below 1500 px the sidebar folds to its rail on the
+  // way in (it can be opened again).
+  useEffect(() => {
+    if (route === 'work' && window.innerWidth < 1500) setCollapsed(true);
+  }, [route]);
 
   const railStyle = {
     '--rail-w': `${collapsed ? RAIL : EXPANDED}px`,
@@ -543,10 +550,10 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
   }
 
   switch (route) {
-    case 'dashboard':
+    case 'work':
+      return <Work detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} goSettings={setSettingsSection} />;
+    case 'insights':
       return <Dashboard openDetail={openDetail} goComments={goComments} goSettings={setSettingsSection} />;
-    case 'comments':
-      return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} goSettings={setSettingsSection} />;
     case 'settings':
       return <Settings section={settingsSection} setSection={setSettingsSection} sections={settingsSections} />;
     case 'help':

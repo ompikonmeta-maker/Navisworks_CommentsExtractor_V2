@@ -1,5 +1,6 @@
 // Smoke test: open the built offline app (dist/index.html, as a user does by
-// double-click), import the sample report, open a comment, change its status,
+// double-click), import the sample report, check every Work queue (and the
+// Insights drill-down) lists exactly its count, open a comment, change its status,
 // and check the change survives a reload; then add and delete a comment,
 // re-import (merge + undo), check Help › About and reset to the sample.
 // Fails on any page error.
@@ -36,7 +37,8 @@ try {
 
   await page.goto(URL_);
   await page.getByRole('button', { name: 'Import', exact: true }).waitFor();
-  step(`opened ${path.relative(ROOT, APP)} — Overview shows the bundled sample`);
+  await page.locator('li.wb-row').first().waitFor();
+  step(`opened ${path.relative(ROOT, APP)} — Work shows the bundled sample`);
 
   // Import the full sample report with its viewpoint images.
   const files = ['report.html', ...fs.readdirSync(SAMPLE).filter((f) => f.endsWith('.jpg'))].map((f) => path.join(SAMPLE, f));
@@ -44,18 +46,42 @@ try {
   await page.getByText(/Imported 747 comments · \d+ images linked\./).waitFor();
   step('imported the sample report: 747 comments');
 
-  // Open the first comment in Viewpoints.
-  await page.getByRole('button', { name: 'Viewpoints' }).first().click();
-  const rows = page.locator('tr.vp-row');
-  await rows.first().waitFor();
-  const rowCount = await rows.count();
-  if (rowCount !== 747) fail(`Viewpoints shows ${rowCount} rows, expected 747`);
+  // Work starts on the first Do-next queue; open All comments and the first one.
+  const rows = page.locator('li.wb-row');
+  const allQueue = async () => {
+    await page.getByRole('button', { name: /^All comments/ }).click();
+    await page.getByRole('heading', { name: 'All comments' }).waitFor();
+  };
+  // Every queue opens exactly the number of comments it shows.
+  const queueButtons = page.getByRole('navigation', { name: 'Queues' }).getByRole('button');
+  const nQueues = await queueButtons.count();
+  if (nQueues !== 7) fail(`expected 7 queues, found ${nQueues}`);
+  const counted = [];
+  for (let i = 0; i < nQueues; i += 1) {
+    const btn = queueButtons.nth(i);
+    const n = Number((await btn.locator('.wb-queue-n').innerText()).trim());
+    const label = (await btn.innerText()).replace(/\s+/g, ' ').trim();
+    await btn.click();
+    await page.waitForFunction((want) => document.querySelectorAll('li.wb-row').length === want, n);
+    counted.push(`${label.replace(/\s*\d+$/, '')}: ${n}`);
+  }
+  step(`each queue lists exactly its count (${counted.join(', ')})`);
+  // …and so does Insights' Do next.
+  await page.getByRole('button', { name: 'Insights' }).first().click();
+  await page.getByRole('button', { name: /Give these comments a discipline/ }).click();
+  await page.getByRole('heading', { name: 'Give these comments a discipline' }).waitFor();
+  const want = Number((await page.getByRole('navigation', { name: 'Queues' }).getByRole('button', { name: /Give a discipline/ }).locator('.wb-queue-n').innerText()).trim());
+  await page.waitForFunction((n) => document.querySelectorAll('li.wb-row').length === n, want);
+  step(`Insights › Do next opens the same ${want} comments in Work`);
+
+  await allQueue();
+  await page.waitForFunction(() => document.querySelectorAll('li.wb-row').length === 747);
   const first = rows.first();
-  const viewpoint = (await first.locator('td').nth(1).innerText()).trim();
+  const viewpoint = (await first.locator('.wb-row-vp').innerText()).trim();
   await first.click();
-  const drawer = page.getByRole('dialog', { name: 'Viewpoint detail' });
+  const drawer = page.getByRole('region', { name: 'Comment details' });
   await drawer.getByRole('heading', { name: viewpoint }).waitFor();
-  step(`opened comment "${viewpoint}"`);
+  step(`All comments: 747; opened comment "${viewpoint}"`);
 
   // Change its status to Closed.
   const status = drawer.getByRole('group', { name: 'Status' });
@@ -67,10 +93,9 @@ try {
   // Autosave (IndexedDB) is debounced; wait for it, then reload.
   await page.waitForTimeout(1500);
   await page.reload();
-  await page.getByRole('button', { name: 'Viewpoints' }).first().click();
   await rows.first().waitFor();
-  const afterReload = await rows.count();
-  if (afterReload !== 747) fail(`after reload: ${afterReload} rows, expected 747`);
+  await allQueue();
+  await page.waitForFunction(() => document.querySelectorAll('li.wb-row').length === 747);
   await rows.filter({ hasText: viewpoint }).first().getByText('Closed', { exact: true }).waitFor();
   step('after reload: still 747 comments, the change was kept');
 
@@ -84,17 +109,16 @@ try {
   await drawer.getByRole('button', { name: 'Delete this comment' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete comment' }).click();
   await page.getByText('Comment deleted.').waitFor();
-  await page.waitForFunction(() => document.querySelectorAll('tr.vp-row').length === 747);
+  await page.waitForFunction(() => document.querySelectorAll('li.wb-row').length === 747);
   step('added a comment by hand (748), deleted it again (747)');
 
   // Re-import the same report: a merge that changes nothing, then Undo.
-  await page.getByRole('button', { name: 'Overview' }).first().click();
   await page.locator('input[type=file][accept*=".html"]').setInputFiles(files);
   await page.getByRole('button', { name: 'Update review' }).click();
   await page.getByText('Review updated: 0 added, 0 changed.').waitFor();
   await page.getByRole('button', { name: 'Undo' }).click();
   await page.getByText('Import undone.').waitFor();
-  await page.getByRole('button', { name: 'Viewpoints' }).first().click();
+  await allQueue();
   await rows.filter({ hasText: viewpoint }).first().getByText('Closed', { exact: true }).waitFor();
   if ((await rows.count()) !== 747) fail(`after merge + undo: ${await rows.count()} rows, expected 747`);
   step('re-import merged (0 added, 0 changed) and Undo kept the work');
@@ -109,8 +133,9 @@ try {
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Reset to sample' }).click();
   await page.getByText('Reset to sample.').waitFor();
-  await page.getByRole('button', { name: 'Viewpoints' }).first().click();
-  await page.waitForFunction(() => document.querySelectorAll('tr.vp-row').length === 10);
+  await page.getByRole('button', { name: 'Work' }).first().click();
+  await allQueue();
+  await page.waitForFunction(() => document.querySelectorAll('li.wb-row').length === 10);
   step('reset to the sample: 10 comments');
 
   if (errors.length) fail(`the page reported errors:\n${errors.join('\n')}`);

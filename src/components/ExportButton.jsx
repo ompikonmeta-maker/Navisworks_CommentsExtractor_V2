@@ -3,7 +3,8 @@ import { Icon } from './ui.jsx';
 
 // The main export action: "Export log sheet" (the Excel template — the
 // review's deliverable), with Quick Excel behind the arrow.
-export default function ExportButton({ onLogSheet, onQuick, quickNote = 'All comments', disabled }) {
+// quiet: a tonal button for dense toolbars where another action is the strong one.
+export default function ExportButton({ onLogSheet, onQuick, quickNote = 'All comments', disabled, quiet = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
@@ -21,14 +22,15 @@ export default function ExportButton({ onLogSheet, onQuick, quickNote = 'All com
     try { await fn(); } finally { setBusy(false); }
   };
   const off = disabled || busy;
+  const tone = quiet ? 'bg-secondary-container text-on-secondary-container' : 'bg-primary text-on-primary';
   return (
     <div ref={ref} className="relative inline-flex shrink-0" data-nosnap>
       <button type="button" onClick={run(onLogSheet)} disabled={off}
-        className="t-press inline-flex h-10 items-center gap-2 rounded-l-control bg-primary pl-4 pr-3 text-sm font-medium text-on-primary hover:shadow-md-1 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        className={`t-press inline-flex h-10 items-center gap-2 rounded-l-control pl-4 pr-3 text-sm font-medium ${tone} hover:shadow-md-1 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}>
         <Icon name="description" className="text-[19px]" />{busy ? 'Exporting…' : 'Export log sheet'}
       </button>
       <button type="button" onClick={() => setOpen((o) => !o)} disabled={off} aria-label="More export options" aria-haspopup="menu" aria-expanded={open}
-        className="t-press ml-px inline-flex h-10 w-9 items-center justify-center rounded-r-control bg-primary text-on-primary hover:shadow-md-1 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        className={`t-press ml-px inline-flex h-10 w-9 items-center justify-center rounded-r-control ${tone} hover:shadow-md-1 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}>
         <Icon name="expand_more" className={`text-[20px] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       <div role="menu" className={`t-pop absolute right-0 top-12 z-30 w-64 rounded-[16px] bg-surface p-1.5 ${open ? 'show' : ''}`}>

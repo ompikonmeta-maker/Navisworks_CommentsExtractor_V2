@@ -1679,7 +1679,7 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   animation: wb-row-in var(--wb-dur-slow) var(--wb-ease-enter) both;
 }
 .wb-row:hover { background: var(--md-sys-color-surface-container-low); }
-.wb-row[aria-selected="true"] { background: var(--md-sys-color-primary-container); box-shadow: inset 4px 0 0 var(--md-sys-color-primary); }
+.wb-row[data-selected="true"] { background: var(--md-sys-color-primary-container); box-shadow: inset 4px 0 0 var(--md-sys-color-primary); }
 .wb-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--md-sys-color-primary); }
 .wb-row-vp { font-size: var(--wb-text-md); font-weight: 600; }
 .wb-row-text { font-size: var(--wb-text-md); line-height: 1.45; color: var(--md-sys-color-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1712,7 +1712,8 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 
 /* Work layout: queues · list · detail. Narrow: queues become a scrolling row
    above the list and the detail goes back to a drawer. */
-.wb-panes { display: grid; gap: var(--wb-pane-gap); grid-template-columns: 240px minmax(320px, 1fr) minmax(380px, 460px); min-height: 0; }
+.wb-panes { display: grid; gap: var(--wb-pane-gap); grid-template-columns: 256px minmax(320px, 1fr) minmax(380px, 460px); min-height: 0; }
+.wb-pane .ba-thumb { aspect-ratio: 16 / 10; }
 .wb-panes.is-narrow { grid-template-columns: minmax(0, 1fr); }
 .wb-queues-row { display: flex; gap: var(--wb-space-2); overflow-x: auto; padding: var(--wb-space-3); }
 .wb-queues-row .wb-queue { width: auto; min-width: max-content; }

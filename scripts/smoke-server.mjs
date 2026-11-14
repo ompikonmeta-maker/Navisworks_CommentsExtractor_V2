@@ -103,10 +103,10 @@ try {
       if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`${who}: console error: ${m.text()}`);
     });
     await page.goto(BASE);
-    await page.getByRole('button', { name: 'Viewpoints' }).first().click();
-    await page.locator('tr.vp-row').first().waitFor();
-    await page.locator('tr.vp-row', { hasText: 'Tag View 1' }).click();
-    const drawer = page.getByRole('dialog', { name: 'Viewpoint detail' });
+    await page.getByRole('button', { name: /^All comments/ }).click();
+    await page.getByRole('heading', { name: 'All comments' }).waitFor();
+    await page.locator('li.wb-row').filter({ has: page.locator('.wb-row-vp', { hasText: /^Tag View 1$/ }) }).click();
+    const drawer = page.getByRole('region', { name: 'Comment details' });
     await drawer.getByRole('heading', { name: 'Tag View 1' }).waitFor();
     return { page, drawer, status: drawer.getByRole('group', { name: 'Status' }) };
   }
@@ -140,7 +140,7 @@ try {
 
   // ---- 2. Boss sees it without reloading (timer refresh, ≤ 30 s) ----
   const t0 = Date.now();
-  await A.page.waitForFunction(() => document.querySelector('[aria-label="Viewpoint detail"] textarea')?.value === "Rina's fix", null, { timeout: 40000 });
+  await A.page.waitForFunction(() => document.querySelector('[aria-label="Comment details"] textarea')?.value === "Rina's fix", null, { timeout: 40000 });
   step(`Boss's screen showed Rina's resolution after ${Math.round((Date.now() - t0) / 1000)} s, no reload`);
 
   // ---- 3. plain conflict on another field ----
@@ -168,11 +168,7 @@ try {
   await A.drawer.getByText(/imported it from smoke\.html/).waitFor();
   step('the admin can delete and sees the history; the reviewer cannot delete');
 
-  for (const side of [A, B]) {
-    await side.page.keyboard.press('Escape');
-    await side.page.getByRole('button', { name: 'Overview' }).first().click();
-    await side.page.getByText('Target 31 Jan 2030').first().waitFor();
-  }
+  for (const side of [A, B]) await side.page.getByText('Target 31 Jan 2030').first().waitFor();
   if (await B.page.getByRole('button', { name: 'Import', exact: true }).count()) fail('a reviewer sees Import');
   step('both see the review target saved on the server; the reviewer has no Import');
 
@@ -193,7 +189,7 @@ try {
 
   const sample = path.join(ROOT, 'src/sample');
   const files = ['report.html', ...fs.readdirSync(sample).filter((f) => f.endsWith('.jpg'))].map((f) => path.join(sample, f));
-  await A.page.getByRole('button', { name: 'Overview' }).first().click();
+  await A.page.getByRole('button', { name: 'Work' }).first().click();
   await A.page.locator('input[type=file][accept*=".html"]').setInputFiles(files);
   await A.page.getByRole('button', { name: 'Update review' }).click();
   // none of the report's comment ids are in the review, so nothing matches
@@ -204,7 +200,6 @@ try {
   if ((await count()) !== 3) fail(`after Undo: ${await count()} comments, expected 3`);
   step('the admin imported the sample (750 comments) and undid it (3)');
 
-  await A.page.getByRole('button', { name: 'Viewpoints' }).first().click();
   await A.page.getByRole('button', { name: 'Add', exact: true }).click();
   await A.page.getByPlaceholder('e.g. CPY_Dito: Provide access platform for the valve').fill('CPY_Dito: PIP to add a pipe support');
   await A.page.getByRole('dialog').getByRole('button', { name: 'Add comment' }).click();

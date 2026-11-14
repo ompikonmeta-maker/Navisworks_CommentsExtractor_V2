@@ -377,7 +377,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                 ))}
               </div>
 
-              {!rec.afterImageData && !readOnly && (
+              {!rec.afterImageData && !readOnly && !docked && (
                 <p className="text-xs text-on-surface-variant">An after photo is cropped to a uniform size and marks this comment Closed.</p>
               )}
               {rec.cameraPosition && (
@@ -395,7 +395,9 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
               </div>
             )}
 
-            <fieldset disabled={readOnly} className="contents">
+            <fieldset disabled={readOnly} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
+            <StatusPicker statuses={settings.statuses} value={rec.status} onPick={pickStatus} readOnly={readOnly} />
+
             <div className="grid grid-cols-2 gap-3">
               <label className="block min-w-0 text-xs font-medium text-on-surface-variant">
                 Discipline
@@ -406,8 +408,6 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                 <Select className="mt-1 w-full" aria-label="Change commenter" value={rec.commenter || ''} onChange={(v) => set({ commenter: v })} options={commenterOptions} />
               </label>
             </div>
-
-            <StatusPicker statuses={settings.statuses} value={rec.status} onPick={pickStatus} readOnly={readOnly} />
 
             {rec.status === doneLabel && (
               <label className="block text-xs font-medium text-on-surface-variant">

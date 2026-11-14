@@ -6,6 +6,7 @@ import { statusLabels } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
 import { useData } from '../data/index.js';
 import { useImport } from '../components/ImportAction.jsx';
+import { workQueues } from '../lib/queues.js';
 import ExportButton from '../components/ExportButton.jsx';
 import { exportLogSheet } from '../lib/logsheet.js';
 import { computeOverview, parseDay, parseTs } from '../lib/overview.js';
@@ -286,7 +287,7 @@ function NoPace() {
   );
 }
 
-function TargetChip({ value, onChange, readOnly, openSignal }) {
+export function TargetChip({ value, onChange, readOnly, openSignal }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value || '');
   const ref = useRef(null);
@@ -418,17 +419,21 @@ function Hero({ ov, statuses, goComments }) {
 }
 
 // "Do next": every blocker counted once, ranked by what it unblocks, each
-// opening exactly those comments in Viewpoints.
+// opening exactly those comments as a Work queue (definitions in lib/queues.js).
+const DO_NEXT_LOOK = {
+  unassigned: { c: 'var(--md-sys-color-on-surface-variant)', why: 'Unassigned comments have no owner and no forecast.' },
+  noPhoto: { c: 'var(--md-sys-color-primary)' },
+  verify: { why: 'Fixed, waiting for a reviewer to close.' },
+  noRes: { c: 'var(--tabelin-warn)' },
+  old: { c: 'var(--tabelin-warn)', why: 'Raised more than 3 months ago and still open.' },
+};
 function DoNext({ ov, statuses, goComments }) {
-  const a = ov.attention;
   const mid = statuses.filter((x) => x.role === 'middle');
-  const items = [
-    { n: a.unassignedOpen, icon: 'person_off', c: 'var(--md-sys-color-on-surface-variant)', title: 'Give these comments a discipline', why: 'Unassigned comments have no owner and no forecast.', go: () => goComments({ discipline: 'OTHER', status: '!done' }) },
-    { n: a.noPhoto, icon: 'no_photography', c: 'var(--md-sys-color-primary)', title: 'Add the after-photo', why: 'Closed, but can’t go on the log sheet without evidence.', go: () => goComments({ status: ov.doneL, noPhoto: true }) },
-    { n: a.middle, icon: 'pending', c: mid[0]?.color || 'var(--md-sys-color-primary)', title: mid.length === 1 ? `Verify what is ${mid[0].label.toLowerCase()}` : 'Verify the fixed comments', why: 'Fixed, waiting for a reviewer to close.', go: () => goComments({ status: mid[0]?.label || ov.openL, discipline: 'all' }) },
-    { n: a.noRes, icon: 'description', c: 'var(--tabelin-warn)', title: 'Write the resolution', why: 'Closed without a note on what was done.', go: () => goComments({ status: ov.doneL, noRes: true }) },
-    { n: a.over90, icon: 'hourglass_bottom', c: 'var(--tabelin-warn)', title: 'Chase the old ones', why: 'Raised more than 3 months ago and still open.', go: () => goComments({ old: true }) },
-  ].filter((x) => x.n > 0);
+  const items = workQueues(ov, statuses).doNext.map((q) => ({
+    n: q.n, icon: q.icon, title: q.title, why: DO_NEXT_LOOK[q.id]?.why || q.why,
+    c: DO_NEXT_LOOK[q.id]?.c || mid[0]?.color || 'var(--md-sys-color-primary)',
+    go: () => goComments(q.filter),
+  })).filter((x) => x.n > 0);
   if (!items.length) {
     return <div className="flex items-center gap-2 py-2 text-sm text-on-surface-variant"><Icon name="check_circle" className="text-[20px]" style={{ color: 'var(--tabelin-good)' }} />Nothing is holding the log sheet back.</div>;
   }
