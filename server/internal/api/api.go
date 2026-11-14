@@ -78,6 +78,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/records/{id}", a.deleteRecord)
 	mux.HandleFunc("POST /api/records/{id}/images", a.uploadImage)
 	mux.HandleFunc("DELETE /api/records/{id}/images", a.deleteImage)
+	mux.HandleFunc("GET /api/records/{id}/history", a.recordHistory)
 	mux.HandleFunc("POST /api/reviews/{rid}/records/delete", a.bulkDeleteRecords)
 	mux.HandleFunc("GET /api/files/{key}", a.getFile)
 	// central configuration (settings, detection, statuses, template mapping, custom fields)

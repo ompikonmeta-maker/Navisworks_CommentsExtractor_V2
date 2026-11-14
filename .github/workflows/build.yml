@@ -39,6 +39,8 @@ jobs:
           cache-dependency-path: server/go.sum
 
       - name: Build the web app
+        env:
+          VITE_APP_VERSION: ${{ inputs.version }}
         run: |
           npm ci
           npm run build

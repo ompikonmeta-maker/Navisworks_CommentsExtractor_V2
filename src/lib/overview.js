@@ -25,6 +25,16 @@ export function parseTs(s) {
   return new Date(+m[1], +m[2] - 1, +m[3], +m[4] || 0, +m[5] || 0, +m[6] || 0).getTime();
 }
 
+// "2024/12/9 07:25:10" → "9 Dec 2024, 07:25" (the raw text when unparseable).
+export function fmtStamp(raw) {
+  const t = parseTs(raw);
+  if (!t) return raw || '';
+  const d = new Date(t);
+  const day = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const hasTime = /\d{1,2}:\d{1,2}/.test(String(raw));
+  return hasTime ? `${day}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : day;
+}
+
 export const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 export const parseDay = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null; };
 

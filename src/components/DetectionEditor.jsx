@@ -99,7 +99,7 @@ export default function DetectionEditor() {
         {cfg.rules.map((r, i) => (
           <div key={i} className="rounded-2xl border border-outline-variant bg-surface p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary-container text-[11px] font-bold text-on-secondary-container">{i + 1}</span>
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary-container text-[12px] font-bold text-on-secondary-container">{i + 1}</span>
               <Select value={r.mode} onChange={(v) => setMode(i, v)} aria-label="Rule mode" options={RULE_MODES.map((m) => ({ value: m.mode, label: m.label }))} />
 
               {(r.mode === 'delimiter' || r.mode === 'after') && (
@@ -166,7 +166,7 @@ export default function DetectionEditor() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-[10.5px] uppercase tracking-wide text-on-surface-variant">
+              <tr className="text-left text-[12px] uppercase tracking-wide text-on-surface-variant">
                 <th className="pb-1.5 pr-2 font-semibold">Sample comment text</th>
                 <th className="pb-1.5 pr-2 font-semibold">Detected</th>
                 <th className="pb-1.5 font-semibold">Via</th>
@@ -177,7 +177,7 @@ export default function DetectionEditor() {
                 <tr key={i} className="border-t border-outline-variant/50">
                   <td className="py-1.5 pr-2 font-mono text-on-surface-variant">{e.text.length > 68 ? `${e.text.slice(0, 68)}…` : e.text}</td>
                   <td className="py-1.5 pr-2">{e.val ? <span className="font-semibold">{e.val}</span> : <span className="italic text-status-open">— none —</span>}</td>
-                  <td className="py-1.5 text-[10.5px] text-on-surface-variant">{e.via ? `rule ${e.via}` : (e.val === 'OTHER' ? 'default' : '—')}</td>
+                  <td className="py-1.5 text-[12px] text-on-surface-variant">{e.via ? `rule ${e.via}` : (e.val === 'OTHER' ? 'default' : '—')}</td>
                 </tr>
               ))}
             </tbody>

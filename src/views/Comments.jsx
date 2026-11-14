@@ -4,7 +4,7 @@ import { useSettings } from '../store/settings.jsx';
 import { statusLabels, doneLabel, openLabel } from '../lib/status.js';
 import { DISCIPLINES } from '../lib/parser.js';
 import { exportToExcel } from '../lib/excel.js';
-import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState } from '../components/ui.jsx';
+import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState, discOptions, isUnassignedDisc } from '../components/ui.jsx';
 import DetailPanel from '../components/DetailPanel.jsx';
 import ExportButton from '../components/ExportButton.jsx';
 import AddCommentDialog from '../components/AddCommentDialog.jsx';
@@ -62,7 +62,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
   const base = useMemo(() => {
     const q = query.trim().toLowerCase();
     return records.filter((r) => {
-      if (discipline !== 'all' && r.discipline !== discipline) return false;
+      if (discipline !== 'all' && (discipline === 'OTHER' ? !isUnassignedDisc(r.discipline) : r.discipline !== discipline)) return false;
       if (statusFilter === '!done' ? r.status === doneL : statusFilter !== 'all' && r.status !== statusFilter) return false;
       if (commenter !== 'all' && (r.commenter || '') !== commenter) return false;
       if (q) {
@@ -213,7 +213,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
               aria-label="Filter by discipline"
               value={discipline}
               onChange={setDiscipline}
-              options={[{ value: 'all', label: 'All disciplines' }, ...DISCIPLINES.map((d) => ({ value: d, label: d }))]}
+              options={[{ value: 'all', label: 'All disciplines' }, ...discOptions(DISCIPLINES)]}
             />
             <Select
               aria-label="Filter by status"
@@ -296,19 +296,13 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
                     )}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {r.imageData ? (
-                          <img src={r.imageData} alt="" className="h-9 w-12 shrink-0 rounded-[10px] object-cover" />
-                        ) : (
-                          <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-[10px] bg-surface-container text-on-surface-variant/70">
-                            <Icon name="image_not_supported" className="text-[17px]" />
-                          </span>
-                        )}
+                        {r.imageData && <img src={r.imageData} alt="" className="h-9 w-12 shrink-0 rounded-[10px] object-cover" />}
                         <span className="whitespace-nowrap font-medium">{r.viewpoint}</span>
                       </div>
                     </td>
                     <td className="px-3 py-3"><DisciplineBadge discipline={r.discipline} /></td>
                     <td className="px-3 py-3 max-w-md">
-                      <span className="line-clamp-2 text-on-surface-variant">{r.commentText}</span>
+                      <span className="line-clamp-2">{r.commentText}</span>
                     </td>
                     <td className="px-3 py-3"><StatusBadge status={r.status} /></td>
                     <td className="px-3 py-3 pr-5 whitespace-nowrap text-[13px] tabular-nums text-on-surface-variant" title={r.commentDate}>{fmtCommentDate(r.commentDate)}</td>
@@ -325,7 +319,7 @@ export default function Comments({ detailId, setDetailId, initialFilter, goSetti
           <b className="whitespace-nowrap pl-2 tabular-nums">{visiblePicked.length} selected</b>
           <span className="mx-1 h-5 w-px bg-current opacity-25" />
           <Select className="dd-bar" aria-label="Set discipline" value="" onChange={(v) => applyBulk('discipline', v, 'Discipline')}
-            options={[{ value: '', label: 'Discipline' }, ...DISCIPLINES.map((d) => ({ value: d, label: d }))]} />
+            options={[{ value: '', label: 'Discipline' }, ...discOptions(DISCIPLINES)]} />
           <Select className="dd-bar" aria-label="Set status" value="" onChange={(v) => applyBulk('status', v, 'Status')}
             options={[{ value: '', label: 'Status' }, ...statusLabels(settings.statuses).map((x) => ({ value: x, label: x }))]} />
           <Select className="dd-bar" aria-label="Set commenter" value="" onChange={(v) => applyBulk('commenter', v, 'Commenter')}

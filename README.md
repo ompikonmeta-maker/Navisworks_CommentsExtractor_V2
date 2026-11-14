@@ -1,54 +1,131 @@
 # Tabelin — Navisworks Comments Extractor
 
-Ubah laporan **review comment Navisworks (HTML)** menjadi workspace review yang bisa
-dicari, difilter, dan **diekspor ke Excel (`.xlsx`)** — semuanya berjalan di browser.
-Tidak ada berkas yang diunggah ke server; data hidup di memori selama sesi berjalan.
+Tabelin mengubah laporan **review comment Navisworks (HTML)** menjadi ruang kerja review:
+komentar bisa dicari, difilter, ditutup dengan foto before/after, lalu diekspor ke
+**log sheet Excel** memakai template perusahaan.
+
+Ada dua cara memakainya, dari kode yang sama:
+
+| | **Server kantor** (`tabelin-server.exe`) | **File offline** (`tabelin-offline.html`) |
+|---|---|---|
+| Untuk | Tim, dikerjakan bersama | Satu orang |
+| Cara jalan | Klik dua kali exe di satu PC kantor; rekan membuka alamatnya di browser | Klik dua kali file HTML |
+| Login | Nama + PIN, peran Admin / Reviewer | Tidak ada |
+| Data disimpan | Folder `data\` di samping exe (jaringan kantor saja) | Browser PC itu (opsional: folder sesi) |
+| Install / hak admin | Tidak perlu | Tidak perlu |
+
+Kedua file ada di halaman **Releases** GitHub. Tidak ada data yang dikirim ke internet.
+
+## Alur kerja
+
+1. **Import** — di Navisworks, export *Viewpoints* sebagai HTML (beserta gambar, atau satu
+   `.zip`), lalu Overview › Import.
+2. **Review** — cari dan filter komentar; Overview › *Do next* menunjukkan apa yang paling
+   menahan target.
+3. **Tutup** — tambah foto After (otomatis Closed), tulis resolusi.
+4. **Export** — *Export log sheet* mengisi template Excel, lengkap dengan foto.
+
+Panduan bergambar ada di dalam aplikasi: menu **Help** (Bahasa Indonesia / English).
 
 ## Fitur
 
-- **Impor** satu/beberapa `.html`, gambar viewpoint `.jpg/.png`, atau paket `.zip`.
-- **Parser Navisworks**: mengekstrak viewpoint + komentar, menautkan gambar, menormalisasi
-  status, dan menyimpulkan disiplin (PIP, STR, ELE, INS, TEL, HVAC, LOSPE, HANDLING, OTHER).
-- **Dashboard** dengan KPI (Total / Open / In Review / Closed) dan beban per disiplin.
-- **Daftar viewpoint**: pencarian teks, filter disiplin & status, panel detail yang bisa
-  disunting (status, disiplin, resolusi) dengan gambar & posisi kamera.
-- **Analytics**: distribusi disiplin, status, dan tren komentar per bulan.
-- **Export Excel** dari seluruh data atau sesuai filter (sheet Comments + Summary).
-- **Material Design 3** (skema teal) dengan mode terang/gelap.
+**Overview**
+- Progres, target, dan perkiraan selesai dalam kalimat ("At today's pace you finish 21 Jan — 37 days late").
+- **Do next**: tiap masalah dihitung sekali (tanpa discipline, tanpa foto after, menunggu
+  verifikasi, tanpa resolusi, open > 3 bulan), dengan tombol ke daftar persisnya.
+- Satu tabel **Disciplines**: progres, sisa, pace sekarang vs dibutuhkan, perkiraan selesai.
+- Grafik tren; *More insights* untuk forecast runway, pipeline, umur backlog, raised by.
+- Snapshot PNG per kartu atau seluruh halaman.
 
-Data disimpan di memori browser. Memuat ulang halaman mengembalikan data ke sample bawaan;
-tidak ada penyimpanan permanen.
+**Viewpoints**
+- Pencarian, filter discipline / status / commenter, dan chip cepat.
+- Panel detail: foto before/after (upload, seret, atau **Ctrl+V** dari snapshot), status,
+  resolusi, discipline, commenter, custom field.
+- Tombol cepat: **1 / 2 / 3** status, **J / K** pindah komentar, **Ctrl+Enter** komentar berikutnya.
+- **Edit massal**: centang beberapa baris, ubah discipline / status / commenter sekaligus.
+- **Tambah komentar manual** untuk temuan di luar Navisworks.
+- **Riwayat per komentar** (versi server): siapa mengubah apa dan kapan.
 
-## Portable · independen · tanpa admin
+**Import ulang**
+- Laporan baru dicocokkan lewat ID komentar — tanpa duplikat; status, foto, dan resolusi
+  tetap. Ada ringkasan sebelum disimpan, dan import terakhir bisa di-undo.
 
-`npm run build` menghasilkan **satu file `dist/index.html`** (~2,3 MB) yang benar-benar
-mandiri: semua JS/CSS, data sample, gambar, dan font ikon sudah tertanam di dalamnya.
+**Export**
+- **Log sheet** dari template `.xlsx` Anda: layout, logo, dan gaya template tidak diubah;
+  kolom diatur di Settings › Template.
+- **Quick Excel**: daftar komentar + ringkasan Overview.
 
-- **Portable** — cukup satu file; copy ke USB atau folder mana pun.
-- **Independen** — buka dengan **dobel-klik** di browser (`file://`). Tanpa server,
-  tanpa Node, tanpa koneksi internet. Berfungsi penuh offline.
-- **Tanpa admin** — tidak ada instalasi apa pun; tidak butuh hak administrator.
+**Settings**
+- Template dan pemetaan kolom, custom field, label discipline dan commenter, status yang
+  bisa diatur, aturan deteksi (commenter / discipline dari teks), tema terang/gelap.
 
-Ambil filenya dari tab **Actions** GitHub (artifact `tabelin-dist`) atau bangun sendiri
-dengan `npm run build`.
+## Peran (versi server)
 
-## Menjalankan
+| Kegiatan | Admin | Reviewer |
+|---|:-:|:-:|
+| Lihat semua project, komentar, foto, Overview | ✓ | ✓ |
+| Export log sheet / Quick Excel, snapshot | ✓ | ✓ |
+| Edit status, resolusi, discipline, commenter, custom field | ✓ | ✓ |
+| Tambah / ganti / hapus foto, edit massal | ✓ | ✓ |
+| Import, import ulang, undo import | ✓ | – |
+| Tambah komentar manual, hapus komentar | ✓ | – |
+| Settings (template, label, deteksi, status, target) | ✓ | – |
+| Project & review, kelola user dan PIN | ✓ | – |
+
+Pembatasan dijalankan oleh server, bukan hanya dengan menyembunyikan tombol.
+
+## Memasang server kantor
+
+1. Unduh `tabelin-server.exe` dari Releases, taruh di sebuah folder (mis. `D:\Tabelin\`).
+2. Klik dua kali. Browser terbuka sendiri; jendela server menampilkan alamat untuk rekan
+   satu jaringan (mis. `http://192.168.x.x:8787`).
+3. Login pertama sebagai `admin`; PIN yang diketik pertama kali menjadi PIN-nya.
+4. Buat project dan review, lalu undang tim dari Settings › Users.
+
+- **Update**: tutup server, ganti **file exe saja**. Folder `data\` jangan dihapus.
+- **Backup / pindah**: salin seluruh folder (exe + `data\`).
+
+Pengaturan lewat environment variable (opsional):
+
+| Variabel | Bawaan | Arti |
+|---|---|---|
+| `TABELIN_ADDR` | `:8787` | Alamat dan port |
+| `TABELIN_DATA` | `./data` | Folder database + foto |
+| `TABELIN_BOOTSTRAP_ADMIN` | `admin` | Akun admin pertama saat database masih kosong |
+| `TABELIN_NO_BROWSER` | – | `1` = jangan buka browser otomatis |
+
+## Batasan yang perlu diketahui
+
+- Semua user melihat semua project; peran berlaku untuk seluruh server.
+- Hapus komentar / review / project permanen. Hanya import terakhir yang bisa di-undo.
+- Tidak real-time: dua orang di satu komentar, simpanan terakhir yang menang.
+- Input hanya laporan HTML *Viewpoints* Navisworks (`.html` / `.zip`); foto JPG atau PNG.
+- Foto maks. 25 MB, template maks. 50 MB. Sesi login 30 hari.
+- File offline tidak punya login dan tidak menyimpan riwayat.
+- Dirancang untuk layar desktop.
+
+## Pengembangan
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
+npm run dev        # aplikasi web, http://localhost:5173
+npm run build      # satu file dist/index.html
+
+cp dist/index.html server/web/index.html
+cd server && go run .   # server, http://localhost:8787
 ```
 
-Build produksi:
+**Rilis** dibuat lewat GitHub Actions › *Build* › *Run workflow* (isi nomor versi). Workflow
+ini hanya jalan manual, lalu membuat Release berisi `tabelin-server.exe` dan
+`tabelin-offline.html`.
 
-```bash
-npm run build    # hasil ke dist/
-npm run preview  # pratinjau build
-```
+**Stack**: React 18 · Vite 5 · Tailwind CSS 3 · JSZip · SheetJS · html-to-image — server
+Go + SQLite (satu binary, tanpa cgo).
 
-## Stack
-
-React 18 · Vite 5 · Tailwind CSS 3 · Recharts · JSZip · SheetJS (xlsx).
-
-Detail arsitektur ada di [`CLAUDE.md`](./CLAUDE.md); spesifikasi sistem di
-[`docs/tabelin-dokumentasi.md`](./docs/tabelin-dokumentasi.md).
+**Dokumen lain**
+- [`CLAUDE.md`](./CLAUDE.md) — arsitektur dan konvensi kode.
+- [`server/README.md`](./server/README.md) — detail server dan API.
+- [`docs/tabelin-dokumentasi.md`](./docs/tabelin-dokumentasi.md) — spesifikasi sistem.
+- [`docs/ux-review.md`](./docs/ux-review.md) — catatan review UI/UX.
+- [`docs/retrospective.md`](./docs/retrospective.md) — retrospektif: apa yang dipertahankan, dirombak, dibuang.
+- [`docs/plan-v2.md`](./docs/plan-v2.md) — rencana perbaikan bertahap untuk sesi kerja berikutnya.

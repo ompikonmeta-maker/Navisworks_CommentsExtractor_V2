@@ -19,7 +19,8 @@ import shotExport from '../assets/help/export.webp';
 const C = { blue: '#2a78d6', violet: '#7a5af8', green: '#1baf7a', orange: '#eb6834', pink: '#d9548f', teal: '#0e7c86', amber: '#d98a00', slate: '#64748b' };
 const tint = (c, p = 14) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
 
-const APP_VERSION = '2.0.0';
+// Set by the release build (VITE_APP_VERSION); local builds say "dev".
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 const TABS = ['use', 'roles', 'about'];
 const LANG_KEY = 'tabelin.helpLang';
 function initialLang() {
@@ -68,9 +69,9 @@ const T = {
         pts: ['Comments are matched by their ID — no duplicates.', 'Your status, photos and notes stay.', 'Decide what happens to comments no longer in the report.'],
         tip: 'Changed your mind? Press Undo on the message, or ⋯ › Undo last import.' },
       { icon: 'search', c: C.teal, title: 'Find what needs work', shot: shotList, alt: 'Viewpoints list with filters',
-        pts: ['Search, or filter by discipline and status.', 'Quick chips: no after-photo, no resolution, open > 3 months.', 'Click a number on the Overview to open exactly those comments.'] },
+        pts: ['Search, or filter by discipline and status.', 'Quick chips: no after-photo, no resolution, open > 3 months.', 'On the Overview, Do next › Open list shows exactly those comments.'] },
       { icon: 'photo_camera', c: C.green, title: 'Close a comment', shot: shotDrawer, alt: 'Comment details with before and after photos',
-        pts: ['Click a row to open it.', 'Add the After photo — it marks the comment Closed.', 'Write the resolution. J / K jump to the next / previous comment.'],
+        pts: ['Click a row to open it.', 'Add the After photo — it marks the comment Closed.', 'Keys 1 / 2 / 3 set the status. Ctrl+Enter or J / K move to the next comment.'],
         tip: 'Snapshot (Win+Shift+S), point at Before or After, press Ctrl+V.' },
       { icon: 'add', c: C.pink, admin: true, title: 'Add a comment by hand', shot: shotAdd, alt: 'Add comment dialog',
         pts: ['Viewpoints › Add, for issues found outside Navisworks.', 'Discipline and commenter are read from the text.', 'Paste a snapshot as the Before photo.'] },
@@ -80,7 +81,7 @@ const T = {
         pts: ['Export log sheet fills your Excel template, photos included.', 'Quick Excel exports just the list you see.', 'Set the template once in Settings › Template.'] },
     ],
     keysTitle: 'Handy keys',
-    keys: [['Ctrl V', 'Paste a snapshot'], ['J  K', 'Next / previous comment'], ['Ctrl Enter', 'Save a new comment'], ['Esc', 'Close a panel or dialog']],
+    keys: [['1 2 3', 'Set the status'], ['Ctrl Enter', 'Next comment · save a new one'], ['J  K', 'Next / previous comment'], ['Ctrl V', 'Paste a snapshot'], ['Esc', 'Close a panel or dialog']],
     whereTitle: 'Where is my data?',
     where: [
       ['lan', C.blue, 'Server version', 'On the office server, in the data folder next to tabelin-server.exe. Never on the internet.'],
@@ -119,7 +120,7 @@ const T = {
     limits: [
       ['lock', 'Everyone sees every project', 'Roles apply to the whole server, not per project.'],
       ['undo', 'Deleting is final', 'Only the last import can be undone. Back up the data folder.'],
-      ['history', 'Last change only', '“Changed by” shows the latest edit, not a full history.'],
+      ['history', 'History on the server only', 'Each comment shows who changed what. The offline file keeps no history.'],
       ['sync', 'No live updates', 'Two people on one comment: the last save wins. Reload to see others’ work.'],
       ['upload_file', 'Navisworks HTML only', 'Viewpoints report (.html / .zip). Photos: JPG or PNG.'],
       ['image', 'Size limits', 'Photo up to 25 MB, template up to 50 MB.'],
@@ -166,9 +167,9 @@ const T = {
         pts: ['Komentar dicocokkan lewat ID — tidak ada duplikat.', 'Status, foto, dan catatan Anda tetap aman.', 'Pilih nasib komentar yang hilang dari laporan.'],
         tip: 'Berubah pikiran? Tekan Undo di pesan, atau ⋯ › Undo last import.' },
       { icon: 'search', c: C.teal, title: 'Cari yang perlu dikerjakan', shot: shotList, alt: 'Daftar viewpoint dengan filter',
-        pts: ['Cari, atau filter discipline dan status.', 'Chip cepat: tanpa foto after, tanpa resolusi, open > 3 bulan.', 'Klik angka di Overview untuk membuka daftar persisnya.'] },
+        pts: ['Cari, atau filter discipline dan status.', 'Chip cepat: tanpa foto after, tanpa resolusi, open > 3 bulan.', 'Di Overview, Do next › Open list membuka daftar persisnya.'] },
       { icon: 'photo_camera', c: C.green, title: 'Menutup komentar', shot: shotDrawer, alt: 'Detail komentar dengan foto before dan after',
-        pts: ['Klik baris untuk membukanya.', 'Tambah foto After — komentar otomatis Closed.', 'Tulis resolusi. J / K pindah ke komentar berikut / sebelumnya.'],
+        pts: ['Klik baris untuk membukanya.', 'Tambah foto After — komentar otomatis Closed.', 'Tombol 1 / 2 / 3 mengatur status. Ctrl+Enter atau J / K pindah ke komentar berikutnya.'],
         tip: 'Snapshot (Win+Shift+S), arahkan ke Before atau After, tekan Ctrl+V.' },
       { icon: 'add', c: C.pink, admin: true, title: 'Tambah komentar manual', shot: shotAdd, alt: 'Dialog tambah komentar',
         pts: ['Viewpoints › Add, untuk temuan di luar Navisworks.', 'Discipline dan commenter terbaca dari teks.', 'Paste snapshot sebagai foto Before.'] },
@@ -178,7 +179,7 @@ const T = {
         pts: ['Export log sheet mengisi template Excel Anda, lengkap dengan foto.', 'Quick Excel hanya daftar yang tampil.', 'Pasang template sekali di Settings › Template.'] },
     ],
     keysTitle: 'Tombol praktis',
-    keys: [['Ctrl V', 'Paste snapshot'], ['J  K', 'Komentar berikut / sebelumnya'], ['Ctrl Enter', 'Simpan komentar baru'], ['Esc', 'Tutup panel atau dialog']],
+    keys: [['1 2 3', 'Atur status'], ['Ctrl Enter', 'Komentar berikutnya · simpan komentar baru'], ['J  K', 'Komentar berikut / sebelumnya'], ['Ctrl V', 'Paste snapshot'], ['Esc', 'Tutup panel atau dialog']],
     whereTitle: 'Data saya di mana?',
     where: [
       ['lan', C.blue, 'Versi server', 'Di server kantor, folder data di samping tabelin-server.exe. Tidak pernah ke internet.'],
@@ -216,7 +217,7 @@ const T = {
     limits: [
       ['lock', 'Semua project terlihat', 'Peran berlaku untuk seluruh server, bukan per project.'],
       ['undo', 'Hapus itu permanen', 'Hanya import terakhir yang bisa di-undo. Backup folder data.'],
-      ['history', 'Hanya perubahan terakhir', '“Changed by” menunjukkan edit terakhir, bukan riwayat lengkap.'],
+      ['history', 'Riwayat hanya di server', 'Setiap komentar menunjukkan siapa mengubah apa. File offline tidak menyimpan riwayat.'],
       ['sync', 'Tidak real-time', 'Dua orang di satu komentar: simpanan terakhir menang. Reload untuk melihat kerja orang lain.'],
       ['upload_file', 'Hanya HTML Navisworks', 'Laporan Viewpoints (.html / .zip). Foto: JPG atau PNG.'],
       ['image', 'Batas ukuran', 'Foto maks. 25 MB, template maks. 50 MB.'],
@@ -254,7 +255,7 @@ function Flow({ t }) {
             {i < t.flow.length - 1 && <span aria-hidden="true" className="help-flow-line" />}
             <span className="relative grid h-14 w-14 place-items-center rounded-full text-white shadow-md" style={{ background: cols[i] }}>
               <Icon name={icon} className="text-[26px]" />
-              <b className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-surface text-[11px] tabular-nums shadow" style={{ color: cols[i] }}>{i + 1}</b>
+              <b className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-surface text-[12px] tabular-nums shadow" style={{ color: cols[i] }}>{i + 1}</b>
             </span>
             <span className="mt-2.5 text-sm font-semibold">{name}</span>
             <span className="text-xs text-on-surface-variant">{note}</span>
@@ -274,7 +275,7 @@ function Step({ s, n, flip, serverLabel, adminLabel }) {
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-white tabular-nums" style={{ background: s.c }}>{n}</span>
             <h3 className="min-w-0 text-[17px] font-semibold leading-snug">{s.title}</h3>
             {(s.server || s.admin) && (
-              <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ background: tint(s.admin ? C.blue : s.c, 16), color: s.admin ? C.blue : s.c }}>
+              <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={{ background: tint(s.admin ? C.blue : s.c, 16), color: s.admin ? C.blue : s.c }}>
                 {s.admin && <Icon name="admin_panel_settings" className="text-[14px]" />}{s.admin ? adminLabel : serverLabel}
               </span>
             )}

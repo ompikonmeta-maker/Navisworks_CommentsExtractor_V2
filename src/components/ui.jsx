@@ -22,6 +22,9 @@ const INLINE_SVG = {
 // index.css when adding a new icon.
 const ICON_CODEPOINTS = {
   add: 'e145',
+  arrow_forward: 'e5c8',
+  keyboard_arrow_down: 'e313',
+  keyboard_arrow_up: 'e316',
   arrow_back: 'e5c4',
   bar_chart: 'e26b',
   check: 'e5ca',
@@ -167,13 +170,19 @@ export function discColor(name, overrides) {
   return overrides?.[name] || DISC_DEFAULT[name] || '#0e7c86';
 }
 
+// The catch-all discipline is stored as OTHER (or left empty); people see it
+// as "Unassigned" everywhere.
+export const isUnassignedDisc = (d) => !d || String(d).toUpperCase() === 'OTHER';
+export const discLabel = (d) => (isUnassignedDisc(d) ? 'Unassigned' : d);
+export const discOptions = (list) => list.map((d) => ({ value: d, label: discLabel(d) }));
+
 export function DisciplineBadge({ discipline }) {
   const { settings } = useSettings();
-  const c = discColor(discipline, settings.disciplineColors);
+  const c = discColor(isUnassignedDisc(discipline) ? 'OTHER' : discipline, settings.disciplineColors);
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-on-surface-variant">
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c }} />
-      {discipline}
+      {discLabel(discipline)}
     </span>
   );
 }

@@ -64,7 +64,7 @@ export default function Login({ onSuccess }) {
           <Button type="submit" variant="filled" icon="check_circle" disabled={busy || !username.trim() || !pin}>
             {busy ? 'Signing in…' : 'Sign in'}
           </Button>
-          <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
+          <p className="mt-1 text-[12px] leading-relaxed text-on-surface-variant">
             First time signing in sets your PIN. Ask your administrator if your
             account is not set up yet.
           </p>
