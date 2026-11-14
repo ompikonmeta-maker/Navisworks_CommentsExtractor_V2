@@ -1,14 +1,16 @@
 // =====================================================================
-// In-memory session store. All state lives in React memory only; there is
-// no server call and no persistence — reloading returns to the sample data
-// (per spec "Batasan sistem").
+// Session store: the records of the open dataset, in React memory.
+// Offline, App.jsx autosaves them to the browser. On the office server every
+// edit is saved per record with the version this browser last saw (a stale
+// save comes back 409 and the newer values are shown instead), and a light
+// refresh merges other people's changes every 30 s and on window focus.
 // =====================================================================
 import { createContext, useContext, useReducer, useCallback, useMemo, useRef, useEffect } from 'react';
 import { detectCommenter } from '../lib/parser.js';
 import { extract } from '../lib/detect.js';
 import { useSettings } from './settings.jsx';
 import { doneLabel as doneLabelOf, resolveStatus } from '../lib/status.js';
-import { api, remoteState, syncRecord, importParsedRecords } from '../lib/server.js';
+import { api, remoteState, syncRecord, createRecordRemote, mapServerRecord } from '../lib/server.js';
 
 const StoreContext = createContext(null);
 
@@ -17,6 +19,12 @@ const BULK_KEYS = ['commenter', 'discipline', 'commentText', 'status', 'closedAt
 
 // Fields typed into a text box — their server saves are batched.
 const TEXT_KEYS = new Set(['resolution', 'commentText', 'extra']);
+
+// How often the open review asks the server for other people's changes.
+export const REFRESH_MS = 30000;
+
+export const CONFLICT_MESSAGE = 'Someone else changed this comment — showing the latest.';
+export const CONFLICT_KEPT_MESSAGE = 'Someone else changed this comment — showing the latest. Your resolution text is still in the field but not saved.';
 
 function saveErrorMessage(e) {
   if (e?.code === 403) return 'You have view-only access, so this change wasn’t saved.';
@@ -146,6 +154,46 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'MERGE_SERVER': {
+      // Records from the server (mapped). A record replaces the local copy when
+      // its version is newer — or always with `force` (a save conflict). Ids in
+      // `skip` (being edited/saved here) are left alone. With `ids` (the full
+      // id list from a refresh), local records that were in `dropFrom` and are
+      // no longer on the server are removed; unknown server records are added.
+      // `patch` ({ id: fields }) is laid over a replaced record.
+      const list = action.statuses;
+      const norm = (r) => {
+        const [x] = withCommenters([r]);
+        return list && list.length ? { ...x, status: resolveStatus(x.status, list) } : x;
+      };
+      const incoming = new Map(action.records.map((r) => [r.ID, r]));
+      const keep = action.ids ? new Set(action.ids) : null;
+      const skip = action.skip || new Set();
+      const dropFrom = action.dropFrom || null;
+      let changed = false;
+      const seen = new Set();
+      const out = [];
+      for (const r of state.records) {
+        if (keep && !keep.has(r.ID) && !skip.has(r.ID) && (!dropFrom || dropFrom.has(r.ID))) { changed = true; continue; }
+        const srv = incoming.get(r.ID);
+        if (srv) {
+          seen.add(r.ID);
+          if (!skip.has(r.ID) && (action.force || (srv.version || 0) > (r.version || 0))) {
+            out.push({ ...norm(srv), ...(action.patch?.[r.ID] || {}) });
+            changed = true;
+            continue;
+          }
+        }
+        out.push(r);
+      }
+      for (const srv of incoming.values()) {
+        if (seen.has(srv.ID) || (keep && !keep.has(srv.ID))) continue;
+        if (action.force) continue; // a conflict never adds a record
+        out.push(norm(srv));
+        changed = true;
+      }
+      return changed ? { ...state, records: out } : state;
+    }
     case 'ADD_RECORD':
       return { ...state, records: [...state.records, action.record] };
     case 'REMOVE_RECORDS': {
@@ -179,10 +227,21 @@ export function StoreProvider({ children }) {
 
   const setLoading = useCallback(() => dispatch({ type: 'LOADING' }), []);
   const setError = useCallback((error) => dispatch({ type: 'LOAD_ERROR', error }), []);
+  // Latest version per record id as answered by the server — ahead of the
+  // rendered state right after a save. `gen` changes whenever the whole list
+  // is replaced, so a refresh that started before is thrown away.
+  const versions = useRef(new Map());
+  const gen = useRef(0);
   const setData = useCallback(
-    (records, source, stats) => dispatch({ type: 'SET_DATA', records, source, stats, statuses: settings.statuses }),
+    (records, source, stats) => {
+      versions.current.clear();
+      gen.current += 1;
+      dispatch({ type: 'SET_DATA', records, source, stats, statuses: settings.statuses });
+    },
     [settings.statuses]
   );
+  const statusesRef = useRef(settings.statuses);
+  statusesRef.current = settings.statuses;
   // ---- server sync (remote mode) ----
   // Edits are saved per record. Typing in a text field is batched into one save
   // after a short pause; any other change saves at once. If a save fails, the
@@ -190,17 +249,59 @@ export function StoreProvider({ children }) {
   const recordsRef = useRef(state.records);
   recordsRef.current = state.records;
   const pending = useRef(new Map()); // id → { fields, before, timer }
+  const inflight = useRef(new Map()); // id → promise of the save being sent
 
+  const versionOf = useCallback((id) => {
+    if (versions.current.has(id)) return versions.current.get(id);
+    return recordsRef.current.find((r) => r.ID === id)?.version;
+  }, []);
+
+  // Someone else saved this comment first. Show their version; if this save
+  // carried a resolution, keep the user's text in the field (not saved) and
+  // offer to save it over theirs.
+  const onConflict = useCallback((id, fields, server) => {
+    if (!server) return;
+    versions.current.set(id, server.version);
+    const p = pending.current.get(id);
+    if (p) { clearTimeout(p.timer); pending.current.delete(id); }
+    const local = recordsRef.current.find((r) => r.ID === id);
+    const typed = local?.resolution ?? fields.resolution ?? '';
+    const keepText = 'resolution' in fields && typed !== (server.resolution ?? '');
+    dispatch({
+      type: 'MERGE_SERVER', records: [server], force: true, statuses: statusesRef.current,
+      patch: keepText ? { [id]: { resolution: typed } } : undefined,
+    });
+    const toast = keepText
+      ? { message: CONFLICT_KEPT_MESSAGE, kind: 'info', ts: Date.now(), action: { label: 'Save mine', onClick: () => saveRef.current?.(id, { resolution: typed }) } }
+      : { message: CONFLICT_MESSAGE, kind: 'info', ts: Date.now() };
+    dispatch({ type: 'TOAST', toast });
+  }, []);
+
+  // Saves of one record go out one after another, each with the version the
+  // previous one returned — so this browser never conflicts with itself.
   const flush = useCallback((id) => {
     const p = pending.current.get(id);
     if (!p) return;
     clearTimeout(p.timer);
     pending.current.delete(id);
-    syncRecord(id, p.fields).catch((e) => {
-      dispatch({ type: 'UPDATE_RECORD', id, patch: p.before });
-      dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
+    const prev = inflight.current.get(id) || Promise.resolve();
+    const run = prev.then(async () => {
+      try {
+        const { version } = await syncRecord(id, p.fields, versionOf(id));
+        if (version != null && version !== versionOf(id)) {
+          versions.current.set(id, version);
+          dispatch({ type: 'UPDATE_RECORD', id, patch: { version } });
+        }
+      } catch (e) {
+        if (e?.code === 409) { onConflict(id, p.fields, e.record); return; }
+        dispatch({ type: 'UPDATE_RECORD', id, patch: p.before });
+        dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
+      }
     });
-  }, []);
+    inflight.current.set(id, run);
+    run.finally(() => { if (inflight.current.get(id) === run) inflight.current.delete(id); });
+  }, [versionOf, onConflict]);
+  const saveRef = useRef(null);
 
   useEffect(() => {
     const flushAll = () => [...pending.current.keys()].forEach(flush);
@@ -239,6 +340,7 @@ export function StoreProvider({ children }) {
     },
     [doneLabel, flush]
   );
+  saveRef.current = updateRecord;
   // Changes that touch many records at once. On the server, the records that
   // actually changed are saved in one request; if it fails they're put back.
   const bulk = useCallback((action) => {
@@ -254,16 +356,32 @@ export function StoreProvider({ children }) {
       const patch = {};
       for (const k of BULK_KEYS) if (JSON.stringify(r[k]) !== JSON.stringify(o[k])) patch[k] = r[k];
       if (Object.keys(patch).length) {
-        updates.push({ id: r.ID, patch });
+        const version = versionOf(r.ID);
+        updates.push(version != null ? { id: r.ID, version, patch } : { id: r.ID, patch });
         old.set(r.ID, o);
       }
     });
     if (!updates.length) return;
-    api.bulkPatchRecords(remoteState.reviewId, updates).catch((e) => {
+    api.bulkPatchRecords(remoteState.reviewId, updates).then((res) => {
+      for (const [id, v] of Object.entries(res?.versions || {})) {
+        versions.current.set(Number(id), v);
+        dispatch({ type: 'UPDATE_RECORD', id: Number(id), patch: { version: v } });
+      }
+      const conflicts = (res?.conflicts || []).map(mapServerRecord);
+      if (conflicts.length) {
+        for (const c of conflicts) versions.current.set(c.ID, c.version);
+        dispatch({ type: 'MERGE_SERVER', records: conflicts, force: true, statuses: statusesRef.current });
+        const n = conflicts.length;
+        dispatch({ type: 'TOAST', toast: {
+          message: n === 1 ? CONFLICT_MESSAGE : `Someone else changed ${n} of these comments — showing the latest for those.`,
+          kind: 'info', ts: Date.now(),
+        } });
+      }
+    }).catch((e) => {
       dispatch({ type: 'REPLACE_RECORDS', byId: old });
       dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
     });
-  }, []);
+  }, [versionOf]);
   // Delete comments (and their photos). On the server a failed delete puts
   // them back where they were.
   const removeRecords = useCallback((ids) => {
@@ -282,10 +400,8 @@ export function StoreProvider({ children }) {
   const addRecord = useCallback(async (rec) => {
     let record;
     if (remoteState.active) {
-      const list = await importParsedRecords(remoteState.reviewId, [rec]);
-      const known = new Set(recordsRef.current.map((r) => r.ID));
-      record = list.filter((r) => !known.has(r.ID)).pop();
-      if (!record) throw new Error('The server did not return the new comment.');
+      record = await createRecordRemote(remoteState.reviewId, rec);
+      versions.current.set(record.ID, record.version);
     } else {
       const max = recordsRef.current.reduce((m, r) => Math.max(m, Number(r.ID) || 0), 0);
       record = { ...rec, ID: max + 1 };
@@ -293,6 +409,57 @@ export function StoreProvider({ children }) {
     dispatch({ type: 'ADD_RECORD', record });
     return record;
   }, []);
+  // ---- light refresh (server) ----
+  // While a review is open, ask for what changed since the last ask: every
+  // REFRESH_MS, when the window gets focus and when the tab becomes visible.
+  // Records being edited or saved here are skipped (their save will either go
+  // through or come back as a conflict); newer versions replace the rest,
+  // new comments are added and deleted ones removed.
+  const refreshNow = useRef(null);
+  const reviewSource = state.status === 'ready' && remoteState.active && String(state.meta.source || '').startsWith('review:')
+    ? state.meta.source : null;
+  useEffect(() => {
+    if (!reviewSource) return undefined;
+    const rid = remoteState.reviewId;
+    let since = '';
+    let busy = false;
+    let stopped = false;
+    const refresh = async () => {
+      if (busy || stopped || (typeof document !== 'undefined' && document.hidden)) return;
+      busy = true;
+      const myGen = gen.current;
+      const startIds = new Set(recordsRef.current.map((r) => r.ID));
+      try {
+        const res = await api.getChanges(rid, since);
+        if (stopped || myGen !== gen.current) return;
+        since = res.next || since;
+        const skip = new Set([...pending.current.keys(), ...inflight.current.keys()]);
+        const records = (res.records || []).map(mapServerRecord);
+        for (const r of records) {
+          const known = versionOf(r.ID);
+          if (!skip.has(r.ID) && (known == null || r.version > known)) versions.current.set(r.ID, r.version);
+        }
+        dispatch({ type: 'MERGE_SERVER', records, ids: res.ids, skip, dropFrom: startIds, statuses: statusesRef.current });
+      } catch {
+        // offline for a moment or signed out — the next refresh tries again
+      } finally {
+        busy = false;
+      }
+    };
+    refreshNow.current = refresh;
+    const timer = setInterval(refresh, REFRESH_MS);
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      refreshNow.current = null;
+      clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [reviewSource, versionOf]);
+
   const applyDetect = useCallback(
     (field, config, allowed, mode) => bulk({ type: 'APPLY_DETECT', field, config, allowed, mode }),
     [bulk]

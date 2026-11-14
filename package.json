@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "smoke": "vite build && node scripts/smoke.mjs"
+    "smoke": "vite build && node scripts/smoke.mjs",
+    "smoke:server": "vite build && node -e \"require('fs').copyFileSync('dist/index.html','server/web/index.html')\" && node scripts/smoke-server.mjs"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",

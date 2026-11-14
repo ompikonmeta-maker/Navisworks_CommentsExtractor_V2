@@ -24,8 +24,13 @@ async function req(method, path, body) {
   }
   if (!res.ok) {
     const t = await res.text().catch(() => '');
-    const e = new Error(t || res.statusText);
+    let body = null;
+    try { body = JSON.parse(t); } catch { /* not JSON */ }
+    const e = new Error(body?.error || t || res.statusText);
     e.code = res.status;
+    // 409 = the comment changed since this browser last saw it; the server
+    // sends the current record along.
+    if (body?.record) e.record = body.record;
     throw e;
   }
   const ct = res.headers.get('content-type') || '';
@@ -44,7 +49,11 @@ export const api = {
   createReview: (pid, name) => req('POST', `/api/projects/${pid}/reviews`, { name }),
   renameReview: (rid, name) => req('PATCH', `/api/reviews/${rid}`, { name }),
   getRecords: (rid) => req('GET', `/api/reviews/${rid}/records`),
-  importRecords: (rid, records) => req('POST', `/api/reviews/${rid}/records`, { records }),
+  // ?since= (the light refresh) → { records: changed, ids: all ids, next }
+  getChanges: (rid, since) => req('GET', `/api/reviews/${rid}/records?since=${encodeURIComponent(since || '')}`),
+  getRecord: (id) => req('GET', `/api/records/${id}`),
+  importRecords: (rid, records) => req('POST', `/api/reviews/${rid}/records`, { records }), // → { imported, ids }
+  createRecord: (rid, record) => req('POST', `/api/reviews/${rid}/records/one`, record),
   bulkPatchRecords: (rid, updates) => req('PATCH', `/api/reviews/${rid}/records`, { updates }),
   patchRecord: (id, patch) => req('PATCH', `/api/records/${id}`, patch),
   uploadImage: (id, kind, blob) => req('POST', `/api/records/${id}/images?kind=${kind}`, blob),
@@ -137,48 +146,77 @@ export function dataURLtoBlob(dataUrl) {
   return new Blob([bytes], { type: m[1] });
 }
 
-// Import parsed records (from ingestFiles) into a review: POST the metadata,
-// then upload each linked "before" image. New rows are appended in array order,
-// so the last N server records line up with the parsed ones. Returns the fresh
-// mapped list for the store.
-export async function importParsedRecords(rid, recs) {
-  await api.importRecords(rid, recs);
-  const server = await api.getRecords(rid);
-  const start = Math.max(0, server.length - recs.length);
-  for (let i = 0; i < recs.length; i += 1) {
-    const src = recs[i];
-    const dst = server[start + i];
-    if (dst && typeof src.imageData === 'string' && src.imageData.startsWith('data:')) {
-      const blob = dataURLtoBlob(src.imageData);
-      if (blob) {
-        try { await api.uploadImage(dst.id, 'before', blob); } catch { /* keep going */ }
-      }
-    }
-  }
-  const finalList = await api.getRecords(rid);
-  return finalList.map(mapServerRecord);
+// Upload a "before" photo held as a data URL. Returns the upload answer
+// ({ url, version }) or null when there is nothing to upload or it failed.
+async function uploadBefore(id, dataUrl) {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+  const blob = dataURLtoBlob(dataUrl);
+  if (!blob) return null;
+  try { return await api.uploadImage(id, 'before', blob); } catch { return null; }
 }
 
-// Persist one record edit to the server. Splits image uploads (which have their
-// own endpoint) from ordinary field edits. Fire-and-forget; returns a promise
-// callers may await when they need to refresh.
-export async function syncRecord(id, patch) {
-  if (!remoteState.active) return;
+// Import parsed records (from ingestFiles) into a review: POST the metadata,
+// then upload each linked "before" image to the id the server gave that
+// record (answered in the order sent). Returns the fresh mapped list.
+export async function importParsedRecords(rid, recs) {
+  const { ids = [] } = await api.importRecords(rid, recs);
+  for (let i = 0; i < recs.length; i += 1) {
+    if (ids[i]) await uploadBefore(ids[i], recs[i].imageData);
+  }
+  return loadReviewRecords(rid);
+}
+
+// Create one comment typed in by hand (and its before-photo). Returns it
+// mapped for the store, with the server's id and version.
+export async function createRecordRemote(rid, rec) {
+  const { imageData, afterImageData, ID, ...fields } = rec;
+  const created = mapServerRecord(await api.createRecord(rid, fields));
+  const up = await uploadBefore(created.ID, imageData);
+  return up ? { ...created, imageData: up.url, version: up.version } : created;
+}
+
+// Persist one record edit to the server. Field edits go first and carry the
+// version this browser last saw (`version`); photos (their own endpoint, never
+// in conflict) follow. Resolves to { version } — the record's version after
+// the save. If someone else changed the record meanwhile, the field edit is
+// refused: the photos are still saved, then it throws an error with code 409
+// and `record` = the current record (mapped).
+export async function syncRecord(id, patch, version) {
+  if (!remoteState.active) return { version };
   const fieldKeys = ['commenter', 'discipline', 'resolution', 'status', 'closedAt', 'commentText', 'extra'];
   const fields = {};
   for (const k of fieldKeys) if (k in patch) fields[k] = patch[k];
 
+  let latest = version;
+  let conflict = null;
+  if (Object.keys(fields).length) {
+    try {
+      const res = await api.patchRecord(id, version != null ? { ...fields, version } : fields);
+      latest = res?.record?.version ?? latest;
+    } catch (e) {
+      if (e.code !== 409) throw e;
+      conflict = e;
+    }
+  }
   for (const [field, kind] of [['imageData', 'before'], ['afterImageData', 'after']]) {
     if (!(field in patch)) continue;
     const val = patch[field];
+    let res = null;
     if (typeof val === 'string' && val.startsWith('data:')) {
       const blob = dataURLtoBlob(val);
-      if (blob) await api.uploadImage(id, kind, blob);
+      if (blob) res = await api.uploadImage(id, kind, blob);
     } else if (!val) {
-      await api.deleteImage(id, kind); // photo removed in the drawer
+      res = await api.deleteImage(id, kind); // photo removed in the drawer
     }
+    if (res?.version) latest = res.version;
   }
-  if (Object.keys(fields).length) await api.patchRecord(id, fields);
+  if (conflict) {
+    let current = conflict.record;
+    if (latest !== version) { try { current = await api.getRecord(id); } catch { /* keep the 409 copy */ } }
+    conflict.record = current ? mapServerRecord(current) : null;
+    throw conflict;
+  }
+  return { version: latest };
 }
 
 // The last opened Project › Review, remembered per browser so a reload goes
