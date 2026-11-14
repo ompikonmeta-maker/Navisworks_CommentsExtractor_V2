@@ -6,7 +6,7 @@
 //     images captured from the dashboard.
 // Fully client-side; SheetJS and JSZip are imported dynamically.
 // =====================================================================
-import { inlineImages } from './server.js';
+import { inlineImages } from './photos.js';
 let XLSX = null;
 async function loadXLSX() {
   if (!XLSX) XLSX = await import('xlsx');

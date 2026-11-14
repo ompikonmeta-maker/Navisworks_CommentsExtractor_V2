@@ -9,8 +9,6 @@
 // Everything is inlined in the session object (images as data URLs) so a
 // single JSON file is a self-contained, portable copy.
 // =====================================================================
-import { api, remoteState, canWrite } from './server.js';
-
 const DB_NAME = 'tabelin';
 const STORE = 'kv';
 const SESSION_KEY = 'session';
@@ -61,12 +59,10 @@ async function idbDel(key) {
   });
 }
 
-// ---------- Excel template ----------
-// Offline: bytes live in IndexedDB so they survive a reload. On the server the
-// template belongs to the open project, so every user exports with the same one.
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-async function saveTemplateLocal(name, bytes) {
+// ---------- Excel template (offline) ----------
+// The bytes live in IndexedDB so they survive a reload. (On the server the
+// template belongs to the project — see data/serverSource.js.)
+export async function saveTemplateLocal(name, bytes) {
   try {
     const buffer = bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     await idbSet(TEMPLATE_KEY, { name, buffer, savedAt: Date.now() });
@@ -74,7 +70,7 @@ async function saveTemplateLocal(name, bytes) {
     /* ignore quota / private-mode errors */
   }
 }
-async function loadTemplateLocal() {
+export async function loadTemplateLocal() {
   try {
     const t = await idbGet(TEMPLATE_KEY);
     if (!t) return null;
@@ -83,34 +79,7 @@ async function loadTemplateLocal() {
     return null;
   }
 }
-
-export async function saveTemplate(name, bytes) {
-  if (remoteState.active) {
-    await api.putTemplate(remoteState.projectId, name, new Blob([bytes], { type: XLSX_MIME }));
-    return;
-  }
-  await saveTemplateLocal(name, bytes);
-}
-export async function loadTemplate() {
-  if (!remoteState.active) return loadTemplateLocal();
-  try {
-    const res = await api.getTemplate(remoteState.projectId);
-    const name = decodeURIComponent(res.headers.get('X-Template-Name') || 'template.xlsx');
-    return { name, bytes: new Uint8Array(await res.arrayBuffer()) };
-  } catch (e) {
-    if (e.code !== 404) return null;
-  }
-  // The project has no template yet: share the one this browser already uses.
-  const local = canWrite() ? await loadTemplateLocal() : null;
-  if (!local) return null;
-  try { await saveTemplate(local.name, local.bytes); } catch { /* keep it local-only */ }
-  return local;
-}
-export async function clearTemplate() {
-  if (remoteState.active) {
-    await api.deleteTemplate(remoteState.projectId);
-    return;
-  }
+export async function clearTemplateLocal() {
   try { await idbDel(TEMPLATE_KEY); } catch { /* ignore */ }
 }
 

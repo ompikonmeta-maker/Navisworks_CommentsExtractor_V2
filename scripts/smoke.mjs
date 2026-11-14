@@ -1,6 +1,8 @@
 // Smoke test: open the built offline app (dist/index.html, as a user does by
 // double-click), import the sample report, open a comment, change its status,
-// and check the change survives a reload. Fails on any page error.
+// and check the change survives a reload; then add and delete a comment,
+// re-import (merge + undo), check Help › About and reset to the sample.
+// Fails on any page error.
 // Run with `npm run smoke` (builds first).
 //
 // Uses the Chromium that is already installed (no `playwright install`):
@@ -71,6 +73,45 @@ try {
   if (afterReload !== 747) fail(`after reload: ${afterReload} rows, expected 747`);
   await rows.filter({ hasText: viewpoint }).first().getByText('Closed', { exact: true }).waitFor();
   step('after reload: still 747 comments, the change was kept');
+
+  // Add a comment by hand, then delete it.
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByPlaceholder('e.g. CPY_Dito: Provide access platform for the valve').fill('CPY_Dito: PIP to add a pipe support');
+  await page.getByRole('dialog').getByRole('button', { name: 'Add comment' }).click();
+  await page.getByText('Comment added.').waitFor();
+  await drawer.getByRole('heading', { name: 'Manual' }).waitFor();
+  if ((await rows.count()) !== 748) fail(`after adding: ${await rows.count()} rows, expected 748`);
+  await drawer.getByRole('button', { name: 'Delete this comment' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete comment' }).click();
+  await page.getByText('Comment deleted.').waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('tr.vp-row').length === 747);
+  step('added a comment by hand (748), deleted it again (747)');
+
+  // Re-import the same report: a merge that changes nothing, then Undo.
+  await page.getByRole('button', { name: 'Overview' }).first().click();
+  await page.locator('input[type=file][accept*=".html"]').setInputFiles(files);
+  await page.getByRole('button', { name: 'Update review' }).click();
+  await page.getByText('Review updated: 0 added, 0 changed.').waitFor();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await page.getByText('Import undone.').waitFor();
+  await page.getByRole('button', { name: 'Viewpoints' }).first().click();
+  await rows.filter({ hasText: viewpoint }).first().getByText('Closed', { exact: true }).waitFor();
+  if ((await rows.count()) !== 747) fail(`after merge + undo: ${await rows.count()} rows, expected 747`);
+  step('re-import merged (0 added, 0 changed) and Undo kept the work');
+
+  // Help › About says how the app runs.
+  await page.getByRole('button', { name: 'Help' }).first().click();
+  await page.getByRole('button', { name: 'About' }).click();
+  await page.getByText('Runs fully in your browser').waitFor();
+  step('Help › About: runs in the browser');
+
+  // Reset to the bundled sample (confirms with a browser dialog).
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Reset to sample' }).click();
+  await page.getByText('Reset to sample.').waitFor();
+  await page.getByRole('button', { name: 'Viewpoints' }).first().click();
+  await page.waitForFunction(() => document.querySelectorAll('tr.vp-row').length === 10);
+  step('reset to the sample: 10 comments');
 
   if (errors.length) fail(`the page reported errors:\n${errors.join('\n')}`);
   console.log('\nSMOKE OK');

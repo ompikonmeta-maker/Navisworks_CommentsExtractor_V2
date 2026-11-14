@@ -10,7 +10,7 @@ import StatusEditor from '../components/StatusEditor.jsx';
 import UsersEditor from '../components/UsersEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
-import { isReadOnly } from '../lib/server.js';
+import { useData } from '../data/index.js';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System' },
@@ -29,7 +29,8 @@ export const SECTIONS = [
   { id: 'appearance', label: 'Appearance', icon: 'dark_mode' },
 ];
 
-export default function Settings({ section = 'template', setSection = () => {}, sections = SECTIONS, remoteUser = null }) {
+export default function Settings({ section = 'template', setSection = () => {}, sections = SECTIONS }) {
+  const source = useData();
   const { records } = useStore();
   const { settings, setThemeMode, setDisciplineColor, addDiscipline, removeDiscipline, addCommenter, removeCommenter, resetSettings } = useSettings();
   const [labelTab, setLabelTab] = useState('disciplines');
@@ -52,7 +53,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
 
   // Viewers on the server can look but not change shared settings; the theme
   // (this browser only) stays theirs.
-  const readOnly = isReadOnly();
+  const readOnly = !source.caps.canAdmin;
   const locked = readOnly && (section === 'labels' || section === 'detection');
 
   const addNewDisc = () => { const c = newDisc.trim().toUpperCase(); if (c) addDiscipline(c); setNewDisc(''); };
@@ -92,7 +93,7 @@ export default function Settings({ section = 'template', setSection = () => {}, 
       <Reveal className="space-y-6" deps={[section]}>
         {section === 'users' && (
           <Card className="p-6">
-            <UsersEditor me={remoteUser} />
+            <UsersEditor me={source.user} />
           </Card>
         )}
 

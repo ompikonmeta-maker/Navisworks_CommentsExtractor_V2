@@ -11,8 +11,7 @@ import {
   RECORD_FIELDS,
   CUSTOM_PREFIX,
 } from '../lib/templateExcel.js';
-import { saveTemplate, loadTemplate, clearTemplate } from '../lib/persist.js';
-import { isReadOnly } from '../lib/server.js';
+import { useData } from '../data/index.js';
 import { exportLogSheet } from '../lib/logsheet.js';
 
 const BY_OPTS = [
@@ -75,6 +74,7 @@ function download(bytes, name, type = 'application/vnd.openxmlformats-officedocu
 }
 
 export default function TemplateExportPanel() {
+  const source = useData(); // template: this browser offline, the project on the server
   const { records, notify, renameAttr } = useStore();
   const { settings, setTemplateExport } = useSettings();
   const cfg = settings.templateExport;
@@ -89,7 +89,7 @@ export default function TemplateExportPanel() {
 
   useEffect(() => {
     (async () => {
-      const saved = await loadTemplate();
+      const saved = await source.loadTemplate();
       if (saved) { setTpl(saved); try { setInfo(await inspectTemplate(saved.bytes)); } catch (e) { setErr(e.message); } }
     })();
   }, []);
@@ -184,13 +184,13 @@ export default function TemplateExportPanel() {
     setErr('');
     const bytes = new Uint8Array(await f.arrayBuffer());
     setTpl({ name: f.name, bytes });
-    try { await saveTemplate(f.name, bytes); } catch { notify('Couldn’t save the template for this project. It is used for this export only.', 'error'); }
+    try { await source.saveTemplate(f.name, bytes); } catch { notify('Couldn’t save the template for this project. It is used for this export only.', 'error'); }
     // A fresh template should re-map from its own columns.
     setTemplateExport(() => JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_MAPPING)));
     try { setInfo(await inspectTemplate(bytes, cfg.logSheet.headerRow)); } catch (er) { setErr(`Couldn’t read template: ${er.message}`); setInfo(null); }
   };
   const removeTpl = async () => {
-    try { await clearTemplate(); } catch { notify('Couldn’t remove the template.', 'error'); return; }
+    try { await source.clearTemplate(); } catch { notify('Couldn’t remove the template.', 'error'); return; }
     setTpl(null); setInfo(null);
   };
 
@@ -253,7 +253,7 @@ export default function TemplateExportPanel() {
     </button>
   );
 
-  const readOnly = isReadOnly();
+  const readOnly = !source.caps.canAdmin;
   return (
     <div className="space-y-5 pb-4">
       {stepper}

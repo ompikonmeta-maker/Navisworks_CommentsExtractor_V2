@@ -4,6 +4,10 @@
 //      her text stays in the field, and "Save mine" saves it.
 //   2. Boss sees Rina's resolution appear by itself (the 30-second refresh).
 //   3. A plain conflict (no resolution) just shows the newer values.
+//   4. Roles and shared data: the review target comes from the server, a
+//      reviewer has no Import or Delete, an admin sees history, uploads the
+//      project template, imports the sample report (merge + Undo), and adds
+//      and deletes a comment.
 // Fails on any page error. Run with `npm run smoke:server` — it builds the app,
 // copies it into server/web/ (what the server embeds) and builds the server.
 import { spawn, execFileSync } from 'node:child_process';
@@ -69,7 +73,8 @@ try {
     status: 'Open', discipline: 'PIP', commenter: 'CPY_Dito', commentDate: '2025/1/5 09:00:00', source: 'smoke.html',
   }));
   const { ids } = await boss.call('POST', `/api/reviews/${review.id}/records`, { records: recs });
-  step('project, review with 3 comments, and a reviewer created');
+  await boss.call('PUT', `/api/reviews/${review.id}/config`, { key: 'reviewTarget', json: '2030-01-31' });
+  step('project, review with 3 comments and a target, and a reviewer created');
 
   // ---- two browsers, each signed in, opening the same review ----
   const executablePath = CANDIDATES.find((p) => fs.existsSync(p));
@@ -83,14 +88,15 @@ try {
     const page = await ctx.newPage();
     page.setDefaultTimeout(15000);
     page.on('pageerror', (e) => errors.push(`${who}: page error: ${e.message}`));
-    // Failed requests are checked one by one; two are expected: a refused
-    // save (409) and the setup checklist asking whether a template exists yet
-    // (HEAD …/template → 404). The browser also logs every failed request as a
-    // console error, so those lines are left to this check.
+    // Failed requests are checked one by one; two kinds are expected: a
+    // refused save (409) and asking whether the project has a template yet
+    // (HEAD/GET …/template → 404, from the setup checklist and the Template
+    // panel). The browser also logs every failed request as a console error,
+    // so those lines are left to this check.
     page.on('response', (r) => {
       if (r.status() < 400) return;
       const m = r.request().method();
-      const expected = (r.status() === 409 && m === 'PATCH') || (r.status() === 404 && m === 'HEAD' && /\/template$/.test(r.url()));
+      const expected = (r.status() === 409 && m === 'PATCH') || (r.status() === 404 && /\/template$/.test(r.url()));
       if (!expected) errors.push(`${who}: ${m} ${r.url()} → ${r.status()}`);
     });
     page.on('console', (m) => {
@@ -154,6 +160,63 @@ try {
   srv = await boss.call('GET', `/api/records/${ids[0]}`);
   if (srv.status !== 'Closed' || !srv.closedAt) fail(`server record after closing: ${JSON.stringify(srv)}`);
   step('Rina closed it on the second try');
+
+  // ---- 4. roles and shared data ----
+  const count = async () => (await boss.call('GET', `/api/reviews/${review.id}/records`)).length;
+  if (await B.drawer.getByRole('button', { name: 'Delete this comment' }).count()) fail('a reviewer sees Delete');
+  if (!(await A.drawer.getByRole('button', { name: 'Delete this comment' }).count())) fail('the admin has no Delete');
+  await A.drawer.getByText(/imported it from smoke\.html/).waitFor();
+  step('the admin can delete and sees the history; the reviewer cannot delete');
+
+  for (const side of [A, B]) {
+    await side.page.keyboard.press('Escape');
+    await side.page.getByRole('button', { name: 'Overview' }).first().click();
+    await side.page.getByText('Target 31 Jan 2030').first().waitFor();
+  }
+  if (await B.page.getByRole('button', { name: 'Import', exact: true }).count()) fail('a reviewer sees Import');
+  step('both see the review target saved on the server; the reviewer has no Import');
+
+  await A.page.getByRole('button', { name: 'Help' }).first().click();
+  await A.page.getByRole('button', { name: 'About' }).click();
+  await A.page.getByText('Shared on your office Tabelin server').waitFor();
+  step('Help › About: shared on the office server');
+
+  await A.page.getByRole('button', { name: 'Settings' }).first().click();
+  await A.page.locator('input[type=file][accept=".xlsx"]').setInputFiles(path.join(ROOT, 'docs/3D REVIEW LOG_MASTER_FORMAL_90_OFA.xlsx'));
+  for (let i = 0; ; i += 1) {
+    const r = await fetch(`${BASE}/api/projects/${project.id}/template`, { headers: { Cookie: boss.cookie.join('=') } });
+    if (r.ok) break;
+    if (i > 50) fail('the template did not reach the server');
+    await new Promise((x) => setTimeout(x, 100));
+  }
+  step('the admin uploaded the log-sheet template to the project');
+
+  const sample = path.join(ROOT, 'src/sample');
+  const files = ['report.html', ...fs.readdirSync(sample).filter((f) => f.endsWith('.jpg'))].map((f) => path.join(sample, f));
+  await A.page.getByRole('button', { name: 'Overview' }).first().click();
+  await A.page.locator('input[type=file][accept*=".html"]').setInputFiles(files);
+  await A.page.getByRole('button', { name: 'Update review' }).click();
+  // none of the report's comment ids are in the review, so nothing matches
+  await A.page.getByText(/^Imported 747 comments/).waitFor({ timeout: 60000 });
+  if ((await count()) !== 750) fail(`after importing the sample: ${await count()} comments, expected 750`);
+  await A.page.getByRole('button', { name: 'Undo' }).click();
+  await A.page.getByText('Import undone.').waitFor({ timeout: 60000 });
+  if ((await count()) !== 3) fail(`after Undo: ${await count()} comments, expected 3`);
+  step('the admin imported the sample (750 comments) and undid it (3)');
+
+  await A.page.getByRole('button', { name: 'Viewpoints' }).first().click();
+  await A.page.getByRole('button', { name: 'Add', exact: true }).click();
+  await A.page.getByPlaceholder('e.g. CPY_Dito: Provide access platform for the valve').fill('CPY_Dito: PIP to add a pipe support');
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Add comment' }).click();
+  await A.page.getByText('Comment added.').waitFor();
+  const all = await boss.call('GET', `/api/reviews/${review.id}/records`);
+  const manual = all.find((r) => r.source === 'manual');
+  if (all.length !== 4 || !manual || manual.commentText !== 'PIP to add a pipe support') fail(`after adding: ${JSON.stringify(all.map((r) => [r.id, r.source]))}`);
+  await A.drawer.getByRole('button', { name: 'Delete this comment' }).click();
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Delete comment' }).click();
+  await A.page.getByText('Comment deleted.').waitFor();
+  if ((await count()) !== 3) fail(`after deleting: ${await count()} comments, expected 3`);
+  step('the admin added a comment by hand (saved on the server) and deleted it');
 
   if (errors.length) fail(`the page reported errors:\n${errors.join('\n')}`);
   console.log('\nSERVER SMOKE OK');

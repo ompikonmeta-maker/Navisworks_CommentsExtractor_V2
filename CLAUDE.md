@@ -22,8 +22,11 @@ user-chosen folder (`tabelin-session.json`). "Reset to sample" returns to the bu
 The app picks the mode at startup: if the server API answers (`detectRemote` in
 `src/lib/server.js`) it runs against the server, otherwise offline. "Answers" means
 `/api/health` is OK **and** JSON with `status: "ok"` — a static host whose SPA fallback
-returns `index.html` (200 text/html) for unknown paths stays offline; `file://` skips the probe. The mode is the global
-`remoteState` flag; storage code differs per mode, the screens are shared.
+returns `index.html` (200 text/html) for unknown paths stays offline; `file://` skips the probe.
+The screens are shared; everything that differs per mode lives in the **data layer**
+(`src/data/`): one interface, two sources (`localSource`, `serverSource`). `Root.jsx` (boot)
+picks the source; the store and the screens only call `data()` / `useData()` and read
+`source.caps` — they never ask which mode runs.
 
 Stack: **React 18 + Vite 5 + Tailwind CSS 3**. UI follows a Material Design 3 scheme
 seeded from `#1768f7` (generated with the `docs/material-design-3-project` dynamic-color
@@ -50,8 +53,8 @@ npx vitest run tests/merge.test.js    # one test file
 npx vitest run -t "fills a before-photo"   # tests whose name matches
 cd server && go test ./...            # server tests (temp data folder each run)
 cd server && go test ./internal/api -run TestDeleteRules   # one server test
-npm run smoke                         # build, then drive the offline app in headless Chromium
-npm run smoke:server                  # build, copy into server/web, two browsers on the real server (~45 s)
+npm run smoke                         # build, then drive the offline app in headless Chromium (~15 s)
+npm run smoke:server                  # build, copy into server/web, two browsers on the real server (~60 s)
 ```
 
 - `tests/*.test.js` cover `parser.js` (the bundled sample report), `merge.js`, `overview.js`
@@ -60,7 +63,11 @@ npm run smoke:server                  # build, copy into server/web, two browser
   `server.test.js` covers `detectRemote` with a mocked `fetch` (`vi.resetModules()` + dynamic
   import per case, since the answer is cached at module level). `sync.test.js` covers
   versioned saves / 409 conflicts / create / import ids in `lib/server.js` (fake `fetch`) and
-  the store's `MERGE_SERVER` reducer (exported as `reducer`).
+  the store's `MERGE_SERVER` reducer (exported as `reducer`). `data.test.js` covers both data
+  sources (same members and caps, offline import/undo/ids, server calls with a fake `fetch`)
+  and **architecture guards**: no `remoteState` anywhere; only `src/data/`, `Root.jsx` and the
+  server-only screens (`Login`, `ProjectPicker`, `UsersEditor`) import `lib/server.js`; only
+  `src/data/` and `store/settings.jsx` import `lib/persist.js`.
   Files that need `DOMParser` start with `// @vitest-environment jsdom`.
 - `server/internal/api/api_test.go` runs the real routes and sign-in on `httptest` with a
   temp SQLite database: role checks (reviewer vs admin), history rows, delete rules;
@@ -70,11 +77,15 @@ npm run smoke:server                  # build, copy into server/web, two browser
 - `scripts/smoke-server.mjs` builds the Go server into a temp folder, starts it on a temp data
   dir, and drives two signed-in browsers on one comment: a stale save is refused (409), the
   newer values show, the typed resolution stays and "Save mine" saves it; the other browser
-  sees the change within 30 s without reload. Expected failed requests (409 PATCH, the setup
-  checklist's `HEAD …/template` 404) are allowed; any other failed request or page error fails it.
+  sees the change within 30 s without reload. Then roles and shared data: the review target
+  comes from the server, a reviewer has no Import/Delete, the admin sees history, uploads the
+  template, imports the sample (merge + Undo) and adds/deletes a comment. Expected failed
+  requests (409 PATCH; 404 on `…/template` while the project has none) are allowed; any other
+  failed request or page error fails it.
 - `scripts/smoke.mjs` opens `dist/index.html` over `file://` (as the offline user does),
-  imports the full sample, opens a comment, sets it Closed and checks it survives a reload;
-  any page error fails it. It uses `playwright-core` with the pre-installed Chromium
+  imports the full sample, opens a comment, sets it Closed and checks it survives a reload,
+  adds and deletes a comment, re-imports (merge + Undo), checks Help › About and resets to
+  the sample; any page error fails it. It uses `playwright-core` with the pre-installed Chromium
   (`/opt/pw-browsers/chromium`, or `CHROME_PATH`) — never run `playwright install`.
 - Run all of them before a release and after any change to parsing, merge, roles or export.
 
@@ -144,8 +155,9 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   sheet verbatim** with all OOXML bookkeeping). Optional `vlookupAutoRepair` rewrites the detail
   `VLOOKUP` column indexes to `MATCH(headerText,…)` so the sheet self-adjusts if log columns
   move. `DEFAULT_TEMPLATE_MAPPING` targets the shipped "3D Model Log Sheet" template; the mapping
-  persists in `settings.templateExport`, the template bytes in IndexedDB
-  (`persist.saveTemplate`/`loadTemplate`), and the UI is `components/TemplateExportPanel.jsx`
+  persists in `settings.templateExport`, the template bytes through the data source
+  (`source.loadTemplate`/`saveTemplate`/`clearTemplate`: IndexedDB offline, the project on the
+  server), and the UI is `components/TemplateExportPanel.jsx`
   under Settings › Export — a **fully configurable field editor** (all MD3 `Select`): add /
   remove / rename / reorder rows, plus header-row, data-start-row, item-column, detail-cell
   locators, import/export mapping JSON, and "+ add unmapped headers". Each field row is
@@ -178,9 +190,11 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. `computeKpis` is the
   shared status aggregation. The `UPDATE_RECORD` reducer auto-stamps `closedAt` (ISO) when a
   record moves into `Closed` and clears it when it leaves — unless the patch sets `closedAt`
-  itself (the detail drawer's manual editor). Offline persistence lives in `App.jsx` (autosave
-  effect) + `lib/persist.js`. **On the server** (see "Saving and refresh" below) edits save per
-  record with versions, and a refresh merges other people's changes.
+  itself (the detail drawer's manual editor). Every change is handed to the current data
+  source (`data().saveRecord / saveMany / addRecord / deleteRecords`): offline these are
+  no-ops and `App.jsx` autosaves the session (`source.persistSession`); **on the server** (see
+  "Saving and refresh" below) edits save per record with versions, and a refresh
+  (`source.changes`, only when `caps.refresh`) merges other people's changes.
 - `src/store/settings.jsx` — **v1.1** app settings context (`useSettings`), persisted to
   IndexedDB (separate `settings` key) and independent of the session: theme mode
   (`system`/`light`/`dark`, applied via `applyThemeMode` — `system` removes `data-theme` and
@@ -188,12 +202,12 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   **commenter master list** (`customCommenters`: names the user adds on top of those detected
   in the data). The header theme toggle and the Settings page both write here; `DisciplineBadge`
   reads the colour map. Wrapped around the app in `main.jsx`, outside `StoreProvider`.
-  On the V2 server, `bindRemote` (called by `App` when a review opens) swaps the shared keys
-  for the server's copy — labels, detection, template mapping and statuses per **project**,
-  `reviewTarget` per **review** — and syncs edits back; only `themeMode` stays per browser. A
-  project with nothing saved starts from the admin's browser settings. The template
-  file follows the same rule (`persist.saveTemplate`/`loadTemplate` go to
-  `/api/projects/{id}/template` in remote mode).
+  With a source that has `caps.sharedSettings` (a server review), `bindShared(source)` (called
+  by `App`) swaps the shared keys for the source's copy (`source.loadSharedSettings`) — labels,
+  detection, template mapping and statuses per **project**, `reviewTarget` per **review** — and
+  syncs edits back (`source.saveSharedSetting`); only `themeMode` stays per browser. A project
+  with nothing saved starts from the admin's browser settings. The template file follows the
+  same rule (`serverSource.loadTemplate` falls back to an admin's local template once).
   Commenters are a **record field**, not an author mapping: `record.commenter` is the person
   who wrote the comment, auto-detected by `parser.detectCommenter` from the leading `Name:`
   token in the comment text (e.g. `CPY_Dito:`, `OPS(Teguh):`); `store.setData` backfills it for
@@ -201,10 +215,27 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   `customCommenters`) to assign/override per comment; Viewpoints search and a dedicated Excel
   **Commenter** column use `record.commenter`. The Navisworks `User` code stays as the raw
   `authorCode` / Excel "Author" column.
-- `src/lib/persist.js` — session persistence: a tiny IndexedDB key/value for the autosaved
-  session, the stored folder handle, and the settings blob (`saveSettings`/`loadSettings`),
-  plus File System Access helpers (`pickFolder`/`writeSessionToFolder`). `App.jsx` restores on
-  startup and autosaves (debounced) on every change.
+- `src/data/` — **the data layer** (Phase 3). `index.js` holds the current source:
+  `data()` (plain modules, callbacks) / `useData()` (components; stable per mount, since the
+  source only changes while no review screen is mounted), `openServerReview({project, review,
+  user})` / `openLocal()` (called by `Root.jsx` only). `localSource.js` documents the shared
+  interface — `loadRecords`, `persistSession`, `resetToSample`, `folder`, `saveRecord`,
+  `saveMany`, `addRecord`, `deleteRecords`, `changes`, `history`, `editStamp`,
+  `isFreshImport`, `importMerge` (returns `undo`), template load/save/clear/has, shared
+  settings load/save, `teamSize` — plus `caps` (`canAdmin`, `canReview`, `hasHistory`,
+  `shared`, `autosave`, `sessionFolder`, `sampleReset`, `refresh`, `sharedSettings`,
+  `manageUsers`), `place`, `user`, `scopeKey` ('local' or the review id, for per-review
+  localStorage keys). `serverSource.js` wraps `lib/server.js`; roles come from the user
+  (`isAdminUser` / `isReviewerUser`). Screens read capabilities, never the mode: e.g.
+  `readOnly = !caps.canAdmin`, history only with `caps.hasHistory`. A new feature that
+  stores something adds a method to **both** sources (and to `MEMBERS` in `data.test.js`).
+- `src/lib/persist.js` — browser storage only (used by `localSource` and the settings store):
+  a tiny IndexedDB key/value for the autosaved session, the stored folder handle, the
+  settings blob (`saveSettings`/`loadSettings`) and the offline template
+  (`saveTemplateLocal`/`loadTemplateLocal`/`clearTemplateLocal`), plus File System Access
+  helpers (`pickFolder`/`writeSessionToFolder`).
+- `src/lib/photos.js` — `inlineImages(records)`: turns server photo URLs into data URLs for the
+  Excel exports (data URLs pass through).
 - `src/lib/motion.js` — MD3 Expressive motion. `mdSpring(bounce)` returns the single-overshoot
   spring easing `cubic-bezier(0.38, bounce, 0.22, 1)` (bounce = p1y), matching the repo's MD3
   reference — not a multi-oscillation `linear()` curve. Used for the sidebar collapse (660ms,
@@ -257,15 +288,17 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   reviewer in `db.Open`). Server: `isAdminRole` / `canReviewRole` in `api/api.go`; a reviewer
   may PATCH only `commenter, discipline, resolution, status, closedAt, extra` (`buildPatch`
   `admin` flag) and upload/remove photos; import, add/delete comments, config, template,
-  projects, reviews and users are admin-only. Client: `canWrite`/`isReadOnly` = setup
-  (admin), `canReview`/`isRecordReadOnly` = editing comments (`lib/server.js`).
+  projects, reviews and users are admin-only. Client: `source.caps.canAdmin` = setup (admin;
+  always true offline), `caps.canReview` = editing comments (`serverSource`: `isAdminUser` /
+  `isReviewerUser`).
 
 - **Re-import merges** (`lib/merge.js`): importing into a review that already has comments
   opens `ImportDialog` with `planMerge(existing, incoming)` — matched by Navisworks comment ID
   (`recordKey`; viewpoint + raw text when a report has no IDs). Matched comments get only the
   Navisworks fields (`SOURCE_FIELDS`) refreshed; status, resolution, photos and custom fields
-  stay. Missing comments are kept or moved to the done status. Local mode applies
-  `applyMergeLocal`; the server uses `server.applyMergeRemote`, which stores an undo record
+  stay. Missing comments are kept or moved to the done status. The Overview calls
+  `source.importMerge(plan, …)`: offline `applyMergeLocal` (over the sample it replaces —
+  `source.isFreshImport`); on the server `server.applyMergeRemote`, which stores an undo record
   in the review config key `lastImport` (`undoImportRemote`; also in the review ⋯ menu).
 - **Delete**: `DELETE /api/reviews/{rid}` and `/api/projects/{pid}` (admin; a project must be
   empty first), `POST /api/reviews/{rid}/records/delete` (bulk), `DELETE /api/records/{id}/images`

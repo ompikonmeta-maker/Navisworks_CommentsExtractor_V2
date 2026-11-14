@@ -118,7 +118,7 @@ Add `npm run smoke`. Document all three commands in `CLAUDE.md`.
 message instead of a silent overwrite; the other session's changes appear within ~30 s
 without a reload; tests pass.
 
-## Phase 3 — One data layer instead of the mode flag ☐
+## Phase 3 — One data layer instead of the mode flag ☑
 
 **Goal:** screens stop knowing whether they are offline or on the server. No visible change.
 Do this only after Phases 1–2 (the tests are the safety net).
@@ -217,3 +217,8 @@ Tick the phase box above and add one line here per finished phase (date, branch,
   "Save mine" for a typed resolution, `?since=` refresh every 30 s / on focus, `GET` one record.
   Help › Limits text updated (no longer "last save wins"). New: `sync.test.js`,
   `phase2_test.go`, `npm run smoke:server` (two browsers on the real server).
+- 2026-11-14 — Phase 3, branch `claude/v2`: `src/data/` (one interface, `localSource` +
+  `serverSource`, `caps`); store, settings, App and all screens use it; `remoteState` removed
+  entirely (boot code picks the source). Guards in `data.test.js`. Both smoke scripts extended
+  (roles, shared target, history, template, merge + undo, add/delete, reset) and run green on
+  the code before and after the change — no visible change.

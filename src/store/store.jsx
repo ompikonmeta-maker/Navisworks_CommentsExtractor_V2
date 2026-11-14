@@ -1,6 +1,7 @@
 // =====================================================================
 // Session store: the records of the open dataset, in React memory.
-// Offline, App.jsx autosaves them to the browser. On the office server every
+// Every change is handed to the current data source (src/data): offline that
+// is a no-op (App.jsx autosaves the whole session); on the office server each
 // edit is saved per record with the version this browser last saw (a stale
 // save comes back 409 and the newer values are shown instead), and a light
 // refresh merges other people's changes every 30 s and on window focus.
@@ -10,7 +11,7 @@ import { detectCommenter } from '../lib/parser.js';
 import { extract } from '../lib/detect.js';
 import { useSettings } from './settings.jsx';
 import { doneLabel as doneLabelOf, resolveStatus } from '../lib/status.js';
-import { api, remoteState, syncRecord, createRecordRemote, mapServerRecord } from '../lib/server.js';
+import { data } from '../data/index.js';
 
 const StoreContext = createContext(null);
 
@@ -242,13 +243,13 @@ export function StoreProvider({ children }) {
   );
   const statusesRef = useRef(settings.statuses);
   statusesRef.current = settings.statuses;
-  // ---- server sync (remote mode) ----
+  // ---- saving through the data source ----
   // Edits are saved per record. Typing in a text field is batched into one save
   // after a short pause; any other change saves at once. If a save fails, the
-  // record goes back to what the server has and the user is told why.
+  // record goes back to what it was and the user is told why.
   const recordsRef = useRef(state.records);
   recordsRef.current = state.records;
-  const pending = useRef(new Map()); // id → { fields, before, timer }
+  const pending = useRef(new Map()); // id → { fields, before, timer, source }
   const inflight = useRef(new Map()); // id → promise of the save being sent
 
   const versionOf = useCallback((id) => {
@@ -287,7 +288,7 @@ export function StoreProvider({ children }) {
     const prev = inflight.current.get(id) || Promise.resolve();
     const run = prev.then(async () => {
       try {
-        const { version } = await syncRecord(id, p.fields, versionOf(id));
+        const { version } = await p.source.saveRecord(id, p.fields, versionOf(id));
         if (version != null && version !== versionOf(id)) {
           versions.current.set(id, version);
           dispatch({ type: 'UPDATE_RECORD', id, patch: { version } });
@@ -311,21 +312,21 @@ export function StoreProvider({ children }) {
 
   const updateRecord = useCallback(
     (id, patch) => {
-      // On the server, stamp the edit locally too so "Changed by" is current
+      const source = data();
+      // A shared source stamps the edit locally too, so "Changed by" is current
       // without a reload (the server records the same on save).
-      const stamp = remoteState.active
-        ? { changedBy: remoteState.user?.displayName || remoteState.user?.username || '', changedAt: new Date().toISOString() }
-        : null;
+      const stamp = source.editStamp();
       dispatch({ type: 'UPDATE_RECORD', id, patch: stamp ? { ...patch, ...stamp } : patch, doneLabel });
-      if (!remoteState.active) return;
-      // Mirror the reducer's closedAt auto-stamp so the server stays consistent
+      // Mirror the reducer's closedAt auto-stamp so the saved copy stays consistent
       // when a status button (not the manual editor) closes/reopens a record.
       let sync = patch;
       if ('status' in patch && !('closedAt' in patch)) {
         sync = { ...patch, closedAt: patch.status === doneLabel ? new Date().toISOString() : '' };
       }
       const rec = recordsRef.current.find((r) => r.ID === id) || {};
-      const p = pending.current.get(id) || { fields: {}, before: {}, timer: null };
+      // The save goes to the source the edit was made on, even if the review
+      // is left before the batched save goes out.
+      const p = pending.current.get(id) || { fields: {}, before: {}, timer: null, source };
       for (const k of Object.keys(sync)) if (!(k in p.before)) p.before[k] = rec[k] ?? '';
       Object.assign(p.fields, sync);
       pending.current.set(id, p);
@@ -341,12 +342,11 @@ export function StoreProvider({ children }) {
     [doneLabel, flush]
   );
   saveRef.current = updateRecord;
-  // Changes that touch many records at once. On the server, the records that
-  // actually changed are saved in one request; if it fails they're put back.
+  // Changes that touch many records at once. The records that actually
+  // changed are saved in one request; if it fails they're put back.
   const bulk = useCallback((action) => {
     const prev = recordsRef.current;
     dispatch(action);
-    if (!remoteState.active) return;
     const next = reducer({ records: prev }, action).records;
     const updates = [];
     const old = new Map();
@@ -362,12 +362,12 @@ export function StoreProvider({ children }) {
       }
     });
     if (!updates.length) return;
-    api.bulkPatchRecords(remoteState.reviewId, updates).then((res) => {
+    data().saveMany(updates).then((res) => {
       for (const [id, v] of Object.entries(res?.versions || {})) {
         versions.current.set(Number(id), v);
         dispatch({ type: 'UPDATE_RECORD', id: Number(id), patch: { version: v } });
       }
-      const conflicts = (res?.conflicts || []).map(mapServerRecord);
+      const conflicts = res?.conflicts || [];
       if (conflicts.length) {
         for (const c of conflicts) versions.current.set(c.ID, c.version);
         dispatch({ type: 'MERGE_SERVER', records: conflicts, force: true, statuses: statusesRef.current });
@@ -382,45 +382,37 @@ export function StoreProvider({ children }) {
       dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
     });
   }, [versionOf]);
-  // Delete comments (and their photos). On the server a failed delete puts
-  // them back where they were.
+  // Delete comments (and their photos). A failed delete puts them back where
+  // they were.
   const removeRecords = useCallback((ids) => {
     const set = new Set(ids);
     const items = recordsRef.current.map((record, index) => ({ record, index })).filter((x) => set.has(x.record.ID));
     dispatch({ type: 'REMOVE_RECORDS', ids });
-    if (!remoteState.active) return Promise.resolve();
-    return api.deleteRecords(remoteState.reviewId, ids).catch((e) => {
+    return Promise.resolve(data().deleteRecords(ids)).catch((e) => {
       dispatch({ type: 'RESTORE_RECORDS', items });
       dispatch({ type: 'TOAST', toast: { message: saveErrorMessage(e), kind: 'error', ts: Date.now() } });
       throw e;
     });
   }, []);
-  // Add one comment typed in by hand (not from a Navisworks report). On the
-  // server it is created first so it carries the server's ID. Resolves to it.
+  // Add one comment typed in by hand (not from a Navisworks report). The data
+  // source gives it its ID (on the server it is created there first). Resolves to it.
   const addRecord = useCallback(async (rec) => {
-    let record;
-    if (remoteState.active) {
-      record = await createRecordRemote(remoteState.reviewId, rec);
-      versions.current.set(record.ID, record.version);
-    } else {
-      const max = recordsRef.current.reduce((m, r) => Math.max(m, Number(r.ID) || 0), 0);
-      record = { ...rec, ID: max + 1 };
-    }
+    const record = await data().addRecord(rec, recordsRef.current);
+    if (record.version != null) versions.current.set(record.ID, record.version);
     dispatch({ type: 'ADD_RECORD', record });
     return record;
   }, []);
-  // ---- light refresh (server) ----
+  // ---- light refresh (sources with caps.refresh: the server) ----
   // While a review is open, ask for what changed since the last ask: every
   // REFRESH_MS, when the window gets focus and when the tab becomes visible.
   // Records being edited or saved here are skipped (their save will either go
   // through or come back as a conflict); newer versions replace the rest,
   // new comments are added and deleted ones removed.
   const refreshNow = useRef(null);
-  const reviewSource = state.status === 'ready' && remoteState.active && String(state.meta.source || '').startsWith('review:')
-    ? state.meta.source : null;
+  const reviewSource = state.status === 'ready' && data().caps.refresh ? state.meta.source : null;
   useEffect(() => {
     if (!reviewSource) return undefined;
-    const rid = remoteState.reviewId;
+    const source = data();
     let since = '';
     let busy = false;
     let stopped = false;
@@ -430,11 +422,11 @@ export function StoreProvider({ children }) {
       const myGen = gen.current;
       const startIds = new Set(recordsRef.current.map((r) => r.ID));
       try {
-        const res = await api.getChanges(rid, since);
-        if (stopped || myGen !== gen.current) return;
+        const res = await source.changes(since);
+        if (!res || stopped || myGen !== gen.current) return;
         since = res.next || since;
         const skip = new Set([...pending.current.keys(), ...inflight.current.keys()]);
-        const records = (res.records || []).map(mapServerRecord);
+        const records = res.records || [];
         for (const r of records) {
           const known = versionOf(r.ID);
           if (!skip.has(r.ID) && (known == null || r.version > known)) versions.current.set(r.ID, r.version);

@@ -1,4 +1,6 @@
-// V2 remote mode: talk to the Tabelin server that serves this page.
+// The Tabelin server's HTTP API, plus helpers built on it. Used by the server
+// data source (data/serverSource.js) and the boot screens (sign-in, review
+// picker, users); the rest of the app goes through src/data.
 //
 // "Remote mode" is on only when the app is served BY the Go server (its
 // /api/health on the same origin answers JSON {"status":"ok"}). Opened as a
@@ -79,18 +81,6 @@ export const api = {
   putReviewConfig: (rid, key, json) => req('PUT', `/api/reviews/${rid}/config`, { key, json }),
   putGlobalConfig: (key, json) => req('PUT', '/api/config', { key, json }),
 };
-
-// Session-wide remote flag + the open Project › Review. Set by Root; read by
-// App, the store, and the import path to branch behaviour without prop-drilling.
-export const remoteState = { active: false, projectId: null, reviewId: null, user: null };
-
-// Two roles (the server enforces the same rules):
-// - admin: everything — import, add/delete comments, settings, template, projects, users;
-// - reviewer: works the comments — status, resolution, discipline, commenter,
-//   custom fields, photos, bulk edit — and exports.
-// `canWrite` = may change the review's setup (admin); `canReview` = may edit comments.
-export const canWrite = (user = remoteState.user) => user?.role === 'admin';
-export const canReview = (user = remoteState.user) => user?.role === 'admin' || user?.role === 'reviewer';
 
 let _isRemote = null;
 export async function detectRemote() {
@@ -182,7 +172,6 @@ export async function createRecordRemote(rid, rec) {
 // refused: the photos are still saved, then it throws an error with code 409
 // and `record` = the current record (mapped).
 export async function syncRecord(id, patch, version) {
-  if (!remoteState.active) return { version };
   const fieldKeys = ['commenter', 'discipline', 'resolution', 'status', 'closedAt', 'commentText', 'extra'];
   const fields = {};
   for (const k of fieldKeys) if (k in patch) fields[k] = patch[k];
@@ -236,49 +225,6 @@ export function saveLastOpened(v) {
     else localStorage.removeItem(LAST_KEY);
   } catch { /* storage blocked — just don't remember */ }
 }
-
-// Exports embed photos from data URLs. Server records point at /api/files/…
-// instead, so fetch those and return copies with the photos inlined. Records
-// that already carry data URLs (offline mode) pass through untouched.
-export async function inlineImages(records) {
-  const blobToDataURL = (blob) =>
-    new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result);
-      fr.onerror = () => reject(fr.error);
-      fr.readAsDataURL(blob);
-    });
-  const fetchAsDataURL = async (url) => {
-    try {
-      const res = await fetch(url, { credentials: 'same-origin' });
-      return res.ok ? await blobToDataURL(await res.blob()) : '';
-    } catch {
-      return '';
-    }
-  };
-  const isRemote = (v) => typeof v === 'string' && v !== '' && !v.startsWith('data:');
-  const out = records.slice();
-  const jobs = [];
-  out.forEach((r, i) => {
-    for (const f of ['imageData', 'afterImageData']) if (isRemote(r[f])) jobs.push([i, f]);
-  });
-  let next = 0;
-  const worker = async () => {
-    while (next < jobs.length) {
-      const [i, f] = jobs[next++];
-      const data = await fetchAsDataURL(out[i][f]);
-      out[i] = { ...out[i], [f]: data };
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, worker));
-  return out;
-}
-
-// True for a reviewer on the server: setup controls (import, settings,
-// template, add/delete comments) are disabled or hidden.
-export const isReadOnly = () => remoteState.active && !canWrite();
-// True when the comments themselves can't be edited (no review role).
-export const isRecordReadOnly = () => remoteState.active && !canReview();
 
 // ---------- import (merge) + undo on the server ----------
 // Applies a planMerge() result: refreshes matched comments, optionally closes

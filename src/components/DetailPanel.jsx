@@ -7,8 +7,7 @@ import { chipStyle, statusColor, doneLabel as doneLabelOf } from '../lib/status.
 import { Icon, Select, StatusBadge, DisciplineBadge, Dialog, Button, discOptions, discLabel } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import { fmtStamp } from '../lib/overview.js';
-import { api, isReadOnly, isRecordReadOnly, remoteState } from '../lib/server.js';
-const remoteActive = () => remoteState.active;
+import { useData, data } from '../data/index.js';
 import Lightbox from './Lightbox.jsx';
 
 // ISO ⇄ <input type="datetime-local"> (which works in the viewer's local time).
@@ -171,8 +170,9 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
     return () => window.removeEventListener('keydown', h);
   }, [open]);
   // Viewers on the server see everything but can't change it.
-  const readOnly = isRecordReadOnly();
-  const canDelete = !isReadOnly(); // deleting a comment is for admins
+  const { caps } = useData();
+  const readOnly = !caps.canReview;
+  const canDelete = caps.canAdmin; // deleting a comment is for admins
   const beforeInputRef = useRef(null);
   const afterInputRef = useRef(null);
   const [crop, setCrop] = useState(null); // { src, target: 'before'|'after' }
@@ -550,7 +550,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
 
     <Dialog open={askDelete} onClose={() => setAskDelete(false)} labelledBy="del-title" width={420}>
       <h2 id="del-title" className="text-lg font-semibold">Delete this comment?</h2>
-      <p className="mt-2 text-sm text-on-surface-variant">{rec?.viewpoint} and its photos are removed{remoteActive() ? ' for everyone' : ''}. This can’t be undone.</p>
+      <p className="mt-2 text-sm text-on-surface-variant">{rec?.viewpoint} and its photos are removed{data().caps.shared ? ' for everyone' : ''}. This can’t be undone.</p>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="text" onClick={() => setAskDelete(false)}>Cancel</Button>
         <Button variant="danger" onClick={() => { setAskDelete(false); onDelete?.(rec.ID); }}>Delete comment</Button>
@@ -585,6 +585,7 @@ function describe(ev) {
   return parts.join(', ') || 'edited it';
 }
 function History({ rec }) {
+  const source = useData();
   const { settings } = useSettings();
   const [items, setItems] = useState(null);
   const [all, setAll] = useState(false);
@@ -592,16 +593,16 @@ function History({ rec }) {
   const id = rec?.ID;
   useEffect(() => { setItems(null); setAll(false); }, [id]);
   useEffect(() => {
-    if (!remoteState.active || id == null) return undefined;
+    if (!source.caps.hasHistory || id == null) return undefined;
     let live = true;
     // Wait a moment after an edit so the batched save has reached the server.
     const sameRecord = lastId.current === id;
     lastId.current = id;
-    const t = setTimeout(() => { api.recordHistory(id).then((x) => live && setItems(x)).catch(() => live && setItems([])); }, sameRecord ? 1500 : 0);
+    const t = setTimeout(() => { source.history(id).then((x) => live && setItems(x)).catch(() => live && setItems([])); }, sameRecord ? 1500 : 0);
     return () => { live = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, rec?.changedAt, rec?.imageData, rec?.afterImageData]);
-  if (!remoteState.active) return null;
+  if (!source.caps.hasHistory) return null;
   // Typing is saved in bursts: fold repeats by the same person within 10 minutes.
   const rows = [];
   for (const ev of items || []) {

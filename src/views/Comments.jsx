@@ -8,7 +8,7 @@ import { Icon, Button, Card, Select, StatusBadge, DisciplineBadge, EmptyState, d
 import DetailPanel from '../components/DetailPanel.jsx';
 import ExportButton from '../components/ExportButton.jsx';
 import AddCommentDialog from '../components/AddCommentDialog.jsx';
-import { isReadOnly, isRecordReadOnly } from '../lib/server.js';
+import { useData } from '../data/index.js';
 import { exportLogSheet } from '../lib/logsheet.js';
 import { parseTs } from '../lib/overview.js';
 
@@ -29,8 +29,9 @@ function FilterChip({ on, onClick, icon, label, count }) {
 
 export default function Comments({ detailId, setDetailId, initialFilter, goSettings }) {
   const { status, records, notify, removeRecords, bulkUpdate, addRecord } = useStore();
-  const canEdit = !isRecordReadOnly(); // edit / bulk-edit comments
-  const canAdmin = !isReadOnly(); // add / delete comments
+  const { caps } = useData();
+  const canEdit = caps.canReview; // edit / bulk-edit comments
+  const canAdmin = caps.canAdmin; // add / delete comments
   const { settings } = useSettings();
   const loading = status === 'loading';
 

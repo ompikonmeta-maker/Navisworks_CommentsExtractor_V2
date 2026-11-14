@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Icon, Card, SegmentedButtons } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
-import { remoteState } from '../lib/server.js';
+import { useData } from '../data/index.js';
 import shotPicker from '../assets/help/picker.webp';
 import shotOverview from '../assets/help/overview.webp';
 import shotReimport from '../assets/help/reimport.webp';
@@ -422,6 +422,7 @@ function Roles({ t }) {
 }
 
 function About({ t }) {
+  const source = useData();
   const a = t.about;
   return (
     <>
@@ -431,7 +432,7 @@ function About({ t }) {
         </span>
         <div className="min-w-0">
           <div className="text-lg font-bold">Tabelin <span className="text-sm font-semibold text-on-surface-variant">v{APP_VERSION}</span></div>
-          <p className="mt-0.5 text-sm text-on-surface-variant">{remoteState.active ? a.server : a.local}</p>
+          <p className="mt-0.5 text-sm text-on-surface-variant">{source.caps.shared ? a.server : a.local}</p>
         </div>
       </Card>
       <Card className="p-5 sm:p-6">

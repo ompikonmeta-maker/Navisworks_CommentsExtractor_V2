@@ -2,21 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from './store/store.jsx';
 import { useSettings, applyThemeMode } from './store/settings.jsx';
-import { loadSampleData } from './lib/sample.js';
 import { SIDEBAR_SPRING, animateThemeSwitch, setRevealDir } from './lib/motion.js';
-import {
-  FS_SUPPORTED,
-  requestPersistentStorage,
-  loadSessionLocal,
-  saveSessionLocal,
-  clearSessionLocal,
-  pickFolder,
-  getStoredFolder,
-  folderPermission,
-  writeSessionToFolder,
-} from './lib/persist.js';
 import { Icon, Button } from './components/ui.jsx';
-import { loadReviewRecords, canWrite, canReview } from './lib/server.js';
+import { useData } from './data/index.js';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Comments from './views/Comments.jsx';
@@ -40,9 +28,11 @@ function effectiveTheme() {
 const EXPANDED = 300;
 const RAIL = 96;
 
-export default function App({ remote = null, onExitProject, onSignOut } = {}) {
+export default function App({ onExitProject, onSignOut } = {}) {
   const store = useStore();
-  const { settings, update, ready: settingsReady, bindRemote, unbindRemote } = useSettings();
+  const source = useData(); // offline browser or a server review — see src/data
+  const { caps, place, user } = source;
+  const { settings, update, ready: settingsReady, bindShared, unbindShared } = useSettings();
   const [effTheme, setEffTheme] = useState(effectiveTheme);
   const [route, setRoute] = useState('dashboard');
   const [detailId, setDetailId] = useState(null);
@@ -50,10 +40,10 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   const [collapsed, setCollapsed] = useState(false);
   const [settingsSection, setSettingsSection] = useState('template');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // Admins in remote mode get an extra "Users" settings section.
+  // Admins on the server get an extra "Users" settings section.
   const settingsSections = useMemo(
-    () => (remote?.user?.role === 'admin' ? [...SECTIONS, { id: 'users', label: 'Users', icon: 'person' }] : SECTIONS),
-    [remote],
+    () => (caps.manageUsers ? [...SECTIONS, { id: 'users', label: 'Users', icon: 'person' }] : SECTIONS),
+    [caps.manageUsers],
   );
   const themeBtnRef = useRef(null);
   // The theme mode already reflected in the DOM. The animated toggle applies
@@ -87,62 +77,33 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
   const [saving, setSaving] = useState('idle'); // 'idle' | 'saving' | 'saved'
   const folderHandleRef = useRef(null);
 
-  // On the server, use the open project's / review's shared settings.
-  const reviewId = remote?.review.id;
+  // A source with shared settings (a server review) brings its own.
   useEffect(() => {
-    if (!remote || !settingsReady) return undefined;
-    bindRemote({ projectId: remote.project.id, reviewId, canWrite: canWrite(remote.user) });
-    return unbindRemote;
+    if (!caps.sharedSettings || !settingsReady) return undefined;
+    bindShared(source);
+    return unbindShared;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewId, settingsReady]);
+  }, [source.scopeKey, settingsReady]);
 
-  // Startup: restore the saved session (IndexedDB) if any, else the sample.
-  // In remote mode, load the chosen review's records from the server instead —
-  // no local session, no sample.
+  // Startup: load what the data source starts with — offline the saved session
+  // (or the sample), on the server the chosen review's records.
   useEffect(() => {
     let cancelled = false;
     store.setLoading();
-    if (remote) {
-      (async () => {
-        try {
-          const recs = await loadReviewRecords(remote.review.id);
-          if (!cancelled) {
-            store.setData(recs, `review:${remote.review.id}`, { comments: recs.length, html: 0, images: 0, linked: 0 });
-          }
-        } catch (e) {
-          if (!cancelled) store.setError(e.message);
-        }
-      })();
-      return () => { cancelled = true; };
-    }
     (async () => {
-      await requestPersistentStorage();
-      let restored = false;
-      const saved = await loadSessionLocal();
-      if (saved && !cancelled) {
-        store.setData(saved.records, saved.source || 'user', {
-          comments: saved.records.length,
-          html: 0,
-          images: 0,
-          linked: 0,
-        });
-        restored = true;
-      }
-      if (!restored && !cancelled) {
-        try {
-          const { records, stats } = await loadSampleData();
-          if (!cancelled) store.setData(records, 'sample', stats);
-        } catch (e) {
-          if (!cancelled) store.setError(e.message);
-        }
+      try {
+        const { records, source: from, stats } = await source.loadRecords();
+        if (!cancelled) store.setData(records, from, stats);
+      } catch (e) {
+        if (!cancelled) store.setError(e.message);
       }
       // Reconnect a previously chosen session folder (needs a gesture to re-grant).
-      if (FS_SUPPORTED) {
-        const h = await getStoredFolder();
+      if (source.folder) {
+        const h = await source.folder.stored();
         if (h && !cancelled) {
           folderHandleRef.current = h;
           setFolderName(h.name);
-          const perm = await folderPermission(h, false);
+          const perm = await source.folder.permission(h, false);
           setNeedsReconnect(perm !== 'granted');
         }
       }
@@ -153,18 +114,18 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Autosave: browser (IndexedDB) always; mirror to the folder when granted.
-  // Skipped in remote mode — edits are saved to the server per change instead.
+  // Autosave (offline): the whole session to the browser, mirrored to the
+  // folder when granted. A server source saves each change as it happens.
   useEffect(() => {
-    if (remote) return undefined;
+    if (!caps.autosave) return undefined;
     if (store.status !== 'ready') return undefined;
     const t = setTimeout(async () => {
       setSaving('saving');
-      await saveSessionLocal(store.records, store.meta.source);
+      await source.persistSession(store.records, store.meta.source);
       const h = folderHandleRef.current;
-      if (h && !needsReconnect) {
+      if (h && !needsReconnect && source.folder) {
         try {
-          await writeSessionToFolder(h, store.records, store.meta.source);
+          await source.folder.write(h, store.records, store.meta.source);
         } catch {
           setNeedsReconnect(true);
         }
@@ -172,29 +133,30 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
       setSaving('saved');
     }, 700);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.records, store.meta.source, store.status, needsReconnect]);
 
   const connectFolder = useCallback(async () => {
     try {
-      const h = await pickFolder();
+      const h = await source.folder.pick();
       folderHandleRef.current = h;
       setFolderName(h.name);
       setNeedsReconnect(false);
-      await writeSessionToFolder(h, store.records, store.meta.source);
+      await source.folder.write(h, store.records, store.meta.source);
       store.notify(`Session folder connected · ${h.name}/`, 'success');
     } catch (e) {
       if (e.name !== 'AbortError') store.notify(`Couldn’t open folder: ${e.message}`, 'error');
     }
-  }, [store]);
+  }, [store, source]);
 
   const reconnectFolder = useCallback(async () => {
     const h = folderHandleRef.current;
     if (!h) return;
-    const perm = await folderPermission(h, true);
+    const perm = await source.folder.permission(h, true);
     if (perm === 'granted') {
       setNeedsReconnect(false);
       try {
-        await writeSessionToFolder(h, store.records, store.meta.source);
+        await source.folder.write(h, store.records, store.meta.source);
       } catch {
         /* ignore */
       }
@@ -202,19 +164,18 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
     } else {
       store.notify('Folder permission denied.', 'error');
     }
-  }, [store]);
+  }, [store, source]);
 
   const resetToSample = useCallback(async () => {
     if (!window.confirm('Reset to the bundled sample? Your current edits and uploaded photos will be cleared.')) return;
-    await clearSessionLocal();
     try {
-      const { records, stats } = await loadSampleData();
-      store.setData(records, 'sample', stats);
+      const { records, source: from, stats } = await source.resetToSample();
+      store.setData(records, from, stats);
       store.notify('Reset to sample.', 'info');
     } catch (e) {
       store.notify(`Couldn’t load sample: ${e.message}`, 'error');
     }
-  }, [store]);
+  }, [store, source]);
 
   const openDetail = useCallback((id) => {
     setDetailId(id);
@@ -348,11 +309,11 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
             up exactly with the card edges below. */}
         <header className="t-appbar sticky top-0 z-10 border-b border-outline-variant/60 px-5 py-3 backdrop-blur md:top-3 md:-mx-4 md:rounded-card md:border-0 md:px-4 md:py-2.5">
           <div className="canvas-w flex items-center justify-between gap-4">
-            <h1 className={`${remote ? 'shrink-0' : 'truncate'} text-2xl font-bold tracking-tight md:text-3xl`}>
+            <h1 className={`${place ? 'shrink-0' : 'truncate'} text-2xl font-bold tracking-tight md:text-3xl`}>
               {NAV.find((n) => n.id === route)?.label}
             </h1>
-            <div className={`flex items-center gap-1 ${remote ? 'min-w-0' : 'shrink-0'}`}>
-              {remote && (
+            <div className={`flex items-center gap-1 ${place ? 'min-w-0' : 'shrink-0'}`}>
+              {place && (
                 <button
                   onClick={onExitProject}
                   title="Switch review"
@@ -360,13 +321,13 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
                 >
                   <Icon name="folder_open" className="shrink-0 text-[18px]" />
                   <span className="hidden min-w-0 items-center gap-1 sm:flex">
-                    <span className="truncate">{remote.project.name}</span>
+                    <span className="truncate">{place.project.name}</span>
                     <Icon name="chevron_right" className="shrink-0 text-[16px] opacity-60" />
                   </span>
-                  <span className="truncate font-semibold text-on-surface">{remote.review.name}</span>
+                  <span className="truncate font-semibold text-on-surface">{place.review.name}</span>
                 </button>
               )}
-              {!remote && FS_SUPPORTED &&
+              {caps.sessionFolder &&
                 (needsReconnect ? (
                   <Button variant="tonal" icon="folder_open" onClick={reconnectFolder}>Reconnect folder</Button>
                 ) : folderName ? (
@@ -382,7 +343,7 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
               >
                 <Icon name={effTheme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[22px]" />
               </button>
-              {remote && <AccountMenu user={remote.user} onSwitch={onExitProject} onSignOut={onSignOut} />}
+              {user && <AccountMenu user={user} onSwitch={onExitProject} onSignOut={onSignOut} />}
             </div>
           </div>
           <div className="canvas-w mt-1 flex items-center gap-2 text-xs text-on-surface-variant">
@@ -390,17 +351,17 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
               className={`h-2 w-2 rounded-full ${saving === 'saving' ? 'bg-status-review' : 'bg-status-closed'}`}
               title={saving === 'saving' ? 'Saving…' : 'Saved'}
             />
-            {remote ? (
-              <span title="Shared review, saved on the Tabelin server">{saving === 'saving' ? 'Saving…' : canReview(remote.user) ? 'Saved' : 'View only'}</span>
+            {caps.shared ? (
+              <span title="Shared review, saved on the Tabelin server">{saving === 'saving' ? 'Saving…' : caps.canReview ? 'Saved' : 'View only'}</span>
             ) : (
               <>
                 <span>
                   Autosaving · browser{folderName ? ` + ${folderName}/` : ''}
                   {needsReconnect && folderName ? ' (folder paused)' : ''}
                 </span>
-                <button onClick={resetToSample} className="ml-auto inline-flex items-center gap-1 text-on-surface-variant hover:text-primary">
+                {caps.sampleReset && <button onClick={resetToSample} className="ml-auto inline-flex items-center gap-1 text-on-surface-variant hover:text-primary">
                   <Icon name="restart_alt" className="text-[15px]" /> Reset to sample
-                </button>
+                </button>}
               </>
             )}
           </div>
@@ -417,7 +378,6 @@ export default function App({ remote = null, onExitProject, onSignOut } = {}) {
             settingsSection={settingsSection}
             setSettingsSection={selectSettings}
             settingsSections={settingsSections}
-            remoteUser={remote?.user || null}
           />
         </main>
       </div>
@@ -568,7 +528,7 @@ function SettingsNav({ item, i, collapsed, route, section, sections = SECTIONS, 
   );
 }
 
-function Screen({ route, detailId, setDetailId, openDetail, goComments, commentsFilter, settingsSection, setSettingsSection, settingsSections, remoteUser }) {
+function Screen({ route, detailId, setDetailId, openDetail, goComments, commentsFilter, settingsSection, setSettingsSection, settingsSections }) {
   const { status, error } = useStore();
 
   if (status === 'error') {
@@ -584,11 +544,11 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
 
   switch (route) {
     case 'dashboard':
-      return <Dashboard openDetail={openDetail} goComments={goComments} goSettings={setSettingsSection} remoteUser={remoteUser} />;
+      return <Dashboard openDetail={openDetail} goComments={goComments} goSettings={setSettingsSection} />;
     case 'comments':
       return <Comments detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} goSettings={setSettingsSection} />;
     case 'settings':
-      return <Settings section={settingsSection} setSection={setSettingsSection} sections={settingsSections} remoteUser={remoteUser} />;
+      return <Settings section={settingsSection} setSection={setSettingsSection} sections={settingsSections} />;
     case 'help':
       return <Help />;
     default:

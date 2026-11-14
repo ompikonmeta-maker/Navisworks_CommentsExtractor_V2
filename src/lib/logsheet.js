@@ -1,9 +1,9 @@
 // The log-sheet export (the review's main deliverable): fills the project's
 // Excel template with the given comments. Shared by Overview, Viewpoints and
 // Settings › Template.
-import { loadTemplate } from './persist.js';
+import { data } from '../data/index.js';
 import { fillTemplate } from './templateExcel.js';
-import { inlineImages } from './server.js';
+import { inlineImages } from './photos.js';
 
 export function downloadBytes(bytes, name, type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
   const blob = new Blob([bytes], { type });
@@ -19,7 +19,7 @@ export function downloadBytes(bytes, name, type = 'application/vnd.openxmlformat
 
 // Throws an error with code 'no-template' when no template is set up yet.
 export async function exportLogSheet(records, cfg, tplBytes = null) {
-  const bytes = tplBytes || (await loadTemplate())?.bytes;
+  const bytes = tplBytes || (await data().loadTemplate())?.bytes;
   if (!bytes) {
     const e = new Error('Choose the log-sheet template first.');
     e.code = 'no-template';

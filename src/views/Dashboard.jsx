@@ -5,9 +5,8 @@ import { useSettings } from '../store/settings.jsx';
 import { statusLabels } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
 import { ingestFiles } from '../lib/ingest.js';
-import { api, remoteState, isReadOnly, applyMergeRemote, undoImportRemote } from '../lib/server.js';
-import { loadTemplate } from '../lib/persist.js';
-import { planMerge, applyMergeLocal } from '../lib/merge.js';
+import { useData } from '../data/index.js';
+import { planMerge } from '../lib/merge.js';
 import ImportDialog from '../components/ImportDialog.jsx';
 import ExportButton from '../components/ExportButton.jsx';
 import { exportLogSheet } from '../lib/logsheet.js';
@@ -25,7 +24,8 @@ export default function Dashboard(props) {
   return <TipProvider><Overview {...props} /></TipProvider>;
 }
 
-function Overview({ openDetail, goComments, goSettings, remoteUser }) {
+function Overview({ openDetail, goComments, goSettings }) {
+  const source = useData();
   const { status, records, meta, notify, setData } = useStore();
   const { settings, update } = useSettings();
   const statuses = settings.statuses;
@@ -44,14 +44,15 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
     try { await snapshotNode(ref.current, name); } catch (e) { notify(`Snapshot failed: ${e.message}`, 'error'); }
   };
 
-  const readOnly = isReadOnly();
+  const readOnly = !source.caps.canAdmin;
   // Import. Into an empty review (or over the offline sample) it's a plain
   // load; into a review with comments it first shows what the new report
-  // changes and then merges by comment ID. Either way it can be undone.
+  // changes and then merges by comment ID. Either way it can be undone. The
+  // data source applies it (in memory offline, on the server otherwise).
   const [merge, setMerge] = useState(null); // { plan, stats, fileName, missingAction }
   const [targetSignal, setTargetSignal] = useState(0);
   const [busy, setBusy] = useState(false);
-  const fresh = !records.length || (!remoteState.active && meta.source === 'sample');
+  const fresh = source.isFreshImport(records, meta);
 
   const handleImport = async (fileList) => {
     const files = Array.from(fileList || []);
@@ -69,19 +70,14 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
 
   const runImport = async (plan, stats, missingAction) => {
     const doneLabel = ov.doneL;
-    const before = { records, source: meta.source };
     setBusy(true);
     try {
-      let undo;
-      if (remoteState.active) {
-        const res = await applyMergeRemote(remoteState.reviewId, plan, { missingAction, doneLabel });
-        setData(res.records, `review:${remoteState.reviewId}`, stats);
-        undo = async () => setData(await undoImportRemote(remoteState.reviewId, res.undo), `review:${remoteState.reviewId}`, stats);
-      } else {
-        const base = before.source === 'sample' ? [] : before.records;
-        setData(applyMergeLocal(base, plan, { missingAction, doneLabel }), 'user', stats);
-        undo = async () => setData(before.records, before.source, { comments: before.records.length, html: 0, images: 0, linked: 0 });
-      }
+      const res = await source.importMerge(plan, { missingAction, doneLabel }, { records, source: meta.source });
+      setData(res.records, res.source, stats);
+      const undo = async () => {
+        const back = await res.undo();
+        setData(back.records, back.source, { comments: back.records.length, html: 0, images: 0, linked: 0 });
+      };
       const msg = plan.matched.length
         ? `Review updated: ${plan.added.length} added, ${plan.changed} changed.`
         : `Imported ${plan.added.length} comments · ${stats.linked} images linked.`;
@@ -175,7 +171,7 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
             <SetupChecklist
               hasData={!fresh}
               target={settings.reviewTarget}
-              isAdmin={remoteState.active && remoteUser?.role === 'admin'}
+              isAdmin={source.caps.manageUsers}
               onImport={() => fileInputRef.current?.click()}
               onTarget={() => setTargetSignal((n) => n + 1)}
               onTemplate={() => goSettings('template')}
@@ -235,14 +231,15 @@ function Overview({ openDetail, goComments, goSettings, remoteUser }) {
 // Hidden once all are done, or for good when dismissed (per review, per
 // browser).
 function SetupChecklist({ hasData, target, isAdmin, onImport, onTarget, onTemplate, onInvite }) {
-  const key = `tabelin.setupDone.${remoteState.active ? remoteState.reviewId : 'local'}`;
+  const source = useData();
+  const key = `tabelin.setupDone.${source.scopeKey}`;
   const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(key) === '1'; } catch { return false; } });
   const [tpl, setTpl] = useState(null); // null = checking
   const [team, setTeam] = useState(null);
   useEffect(() => {
     let live = true;
-    (remoteState.active ? api.hasTemplate(remoteState.projectId) : loadTemplate().then(Boolean)).then((v) => live && setTpl(!!v)).catch(() => live && setTpl(false));
-    if (isAdmin) api.listUsers().then((u) => live && setTeam(u.filter((x) => x.id !== remoteState.user?.id).length)).catch(() => live && setTeam(0));
+    source.hasTemplate().then((v) => live && setTpl(!!v)).catch(() => live && setTpl(false));
+    if (isAdmin) source.teamSize().then((n) => live && setTeam(n)).catch(() => live && setTeam(0));
     return () => { live = false; };
   }, [isAdmin]);
   const steps = [

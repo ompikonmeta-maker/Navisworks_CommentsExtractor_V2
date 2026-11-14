@@ -1,7 +1,7 @@
 // Client side of saving to the office server: versions, conflicts, create,
 // import ids (lib/server.js) and merging server records into the store.
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { syncRecord, importParsedRecords, createRecordRemote, remoteState } from '../src/lib/server.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { syncRecord, importParsedRecords, createRecordRemote } from '../src/lib/server.js';
 import { reducer } from '../src/store/store.jsx';
 import { DEFAULT_STATUSES } from '../src/lib/status.js';
 
@@ -26,8 +26,7 @@ function fakeServer(routes) {
 
 const srvRec = (over) => ({ id: 7, reviewId: 1, viewpoint: 'VP', commentRaw: 'A: x', commentText: 'x', status: 'Open', resolution: '', discipline: 'PIP', commenter: 'A', extra: {}, version: 1, ...over });
 
-beforeEach(() => { remoteState.active = true; remoteState.reviewId = 1; });
-afterEach(() => { vi.unstubAllGlobals(); remoteState.active = false; remoteState.reviewId = null; });
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('syncRecord', () => {
   it('sends the version it last saw and returns the new one', async () => {
@@ -71,13 +70,6 @@ describe('syncRecord', () => {
     const err = await syncRecord(7, { status: 'Closed' }, 1).catch((e) => e);
     expect(err.code).toBe(403);
     expect(err.record).toBeUndefined();
-  });
-
-  it('does nothing offline', async () => {
-    remoteState.active = false;
-    const calls = fakeServer({});
-    expect(await syncRecord(7, { status: 'Closed' }, 2)).toEqual({ version: 2 });
-    expect(calls).toHaveLength(0);
   });
 });
 
