@@ -20,7 +20,9 @@ opens by double-click. Reports are parsed in the browser and never uploaded; the
 user-chosen folder (`tabelin-session.json`). "Reset to sample" returns to the bundled sample.
 
 The app picks the mode at startup: if the server API answers (`detectRemote` in
-`src/lib/server.js`) it runs against the server, otherwise offline. The mode is the global
+`src/lib/server.js`) it runs against the server, otherwise offline. "Answers" means
+`/api/health` is OK **and** JSON with `status: "ok"` — a static host whose SPA fallback
+returns `index.html` (200 text/html) for unknown paths stays offline; `file://` skips the probe. The mode is the global
 `remoteState` flag; storage code differs per mode, the screens are shared.
 
 Stack: **React 18 + Vite 5 + Tailwind CSS 3**. UI follows a Material Design 3 scheme
@@ -54,6 +56,8 @@ npm run smoke                         # build, then drive the offline app in hea
 - `tests/*.test.js` cover `parser.js` (the bundled sample report), `merge.js`, `overview.js`
   (fixed `today`, `TZ=UTC` set in `vitest.config.js`) and `templateExcel.js` (sample
   records into `docs/3D REVIEW LOG_MASTER_FORMAL_90_OFA.xlsx`, read back from the zip).
+  `server.test.js` covers `detectRemote` with a mocked `fetch` (`vi.resetModules()` + dynamic
+  import per case, since the answer is cached at module level).
   Files that need `DOMParser` start with `// @vitest-environment jsdom`.
 - `server/internal/api/api_test.go` runs the real routes and sign-in on `httptest` with a
   temp SQLite database: role checks (reviewer vs admin), history rows, delete rules.
