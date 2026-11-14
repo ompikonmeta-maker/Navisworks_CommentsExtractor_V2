@@ -123,6 +123,16 @@ try {
   if ((await rows.count()) !== 747) fail(`after merge + undo: ${await rows.count()} rows, expected 747`);
   step('re-import merged (0 added, 0 changed) and Undo kept the work');
 
+  // Set the review target from the Work strip; the headline then talks pace.
+  const target = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  await page.getByRole('button', { name: 'Work' }).first().click();
+  await page.getByRole('button', { name: /Set a target/ }).click();
+  await page.locator('#ov-target').fill(target);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByText(/Target \d/).first().waitFor();
+  await page.getByText(/^(\d+ days? behind\.|Over a year behind\.|On track\.|\d+ comments? to close in \d+ days?\.)$/).waitFor();
+  step(`target set from the Work strip; headline: "${(await page.locator('.wb-headline').innerText()).trim()}"`);
+
   // Help › About says how the app runs.
   await page.getByRole('button', { name: 'Help' }).first().click();
   await page.getByRole('button', { name: 'About' }).click();

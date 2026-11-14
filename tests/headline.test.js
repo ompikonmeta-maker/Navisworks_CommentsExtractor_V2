@@ -7,6 +7,8 @@ describe('the Work headline (option A sentence)', () => {
   it('behind: days late and the pace needed', () => {
     expect(headline(ov())).toEqual({ main: '37 days behind.', sub: 'Close 7.3 a day to finish on time.', tone: 'bad' });
     expect(headline(ov({ late: 1, needed: 12.6 }))).toMatchObject({ main: '1 day behind.', sub: 'Close 13 a day to finish on time.', tone: 'warn' });
+    expect(headline(ov({ late: 10384, needed: 12.4 }))).toEqual({ main: 'Over a year behind.', sub: 'Close 12 a day to finish on time.', tone: 'bad' });
+    expect(headline(ov({ late: 365 })).main).toBe('365 days behind.');
   });
   it('on track: early or on the day', () => {
     expect(headline(ov({ late: -4 }))).toEqual({ main: 'On track.', sub: 'At today’s pace you finish 4 days early.', tone: 'good' });

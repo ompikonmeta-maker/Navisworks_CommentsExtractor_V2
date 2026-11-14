@@ -67,7 +67,9 @@ npm run smoke:server                  # build, copy into server/web, two browser
   sources (same members and caps, offline import/undo/ids, server calls with a fake `fetch`)
   and **architecture guards**: no `remoteState` anywhere; only `src/data/`, `Root.jsx` and the
   server-only screens (`Login`, `ProjectPicker`, `UsersEditor`) import `lib/server.js`; only
-  `src/data/` and `store/settings.jsx` import `lib/persist.js`.
+  `src/data/` and `store/settings.jsx` import `lib/persist.js`. `queues.test.js` checks each
+  Work queue opens exactly its count and that Insights uses the same definitions;
+  `headline.test.js` covers the Work sentence.
   Files that need `DOMParser` start with `// @vitest-environment jsdom`.
 - `server/internal/api/api_test.go` runs the real routes and sign-in on `httptest` with a
   temp SQLite database: role checks (reviewer vs admin), history rows, delete rules;
@@ -83,9 +85,10 @@ npm run smoke:server                  # build, copy into server/web, two browser
   requests (409 PATCH; 404 on `…/template` while the project has none) are allowed; any other
   failed request or page error fails it.
 - `scripts/smoke.mjs` opens `dist/index.html` over `file://` (as the offline user does),
-  imports the full sample, opens a comment, sets it Closed and checks it survives a reload,
-  adds and deletes a comment, re-imports (merge + Undo), checks Help › About and resets to
-  the sample; any page error fails it. It uses `playwright-core` with the pre-installed Chromium
+  imports the full sample, clicks every Work queue (and Insights › Do next) and checks the list
+  holds exactly the count, opens a comment, sets it Closed and checks it survives a reload,
+  adds and deletes a comment, re-imports (merge + Undo), sets the target from the Work strip,
+  checks Help › About and resets to the sample; any page error fails it. It uses `playwright-core` with the pre-installed Chromium
   (`/opt/pw-browsers/chromium`, or `CHROME_PATH`) — never run `playwright install`.
 - Run all of them before a release and after any change to parsing, merge, roles or export.
 
@@ -254,15 +257,41 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   theme transition (`animateThemeSwitch`: View Transitions API clip-path circle — 590ms to 55%,
   a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
-  route switch: Dashboard (Overview), Comments (Viewpoints — list + editable detail
-  drawer), and Settings (`views/Settings.jsx`, v1.1 — a **two-pane** page: a category rail
+  route switch: **Work** (`views/Work.jsx`, the default), **Insights** (`views/Dashboard.jsx`,
+  the former Overview), Help, and Settings (`views/Settings.jsx`, v1.1 — a **two-pane** page: a category rail
   (Template · Labels · Detection · Appearance, plus Users for admins on the server; "Restore defaults" sits in Appearance) beside one focused panel. **Labels**
   merges Disciplines (colours) + Commenters behind an inner segmented toggle; **Detection** hosts
   `DetectionEditor`. The panel is wrapped in `<Reveal deps={[section]}>` so the staggered card
   reveal re-plays on every section switch). Theme is
   driven by `useSettings` (the toggle animates via `animateThemeSwitch`); there is no longer a
-  `lib/theme.js`. Import is a single action — the Overview Import button opens the file picker
-  and calls `ingestFiles` — not its own route. The **Overview is a close-out cockpit** (`views/Dashboard.jsx`):
+  `lib/theme.js`. Import is a single action (`components/ImportAction.jsx` → `useImport()`:
+  hidden file input + merge dialog + Undo toast, shared by Work and Insights) — not its own
+  route. On Work, below 1500 px window width the sidebar folds to its rail on the way in.
+  `goComments(filter)` (from Insights) and `openDetail(id)` jump to Work with that filter.
+- `src/views/Work.jsx` — **the Work screen** (Phase 4; mockup option C with option A's
+  sentence). Strip on top: the headline sentence (`lib/headline.js`: "37 days behind. Close
+  7.3 a day to finish on time.", "On track.", "Over a year behind." past 365 days, …),
+  % closed + `StatusBar`, the `TargetChip` (exported from Dashboard) and Import. Three panes:
+  **queues** (`lib/queues.js` `workQueues`: the five Do-next blockers ranked as in
+  `overview.attention` — unassigned, no after-photo, verify (`status: '~middle'` = any middle
+  status), no resolution, old > 90 days — then All and the done status), the **list** of the
+  chosen queue (`filterRecords`; search, discipline / status / commenter dropdowns, Add,
+  quiet ExportButton for the shown comments, row checkboxes → `.t-bulk` bar), and the
+  **detail** (`DetailPanel docked`). A queue is just a named filter: `queueFor(filter)` finds
+  it, a hand-tuned filter shows "Filtered comments". Work starts on `firstQueue` (first
+  Do-next queue with work, else All) and starts over whenever the dataset is replaced (store
+  `meta` changes: load, import, Undo, reset — a server refresh keeps `meta`). The docked
+  detail always shows a comment: the first of a picked queue; a comment that leaves the queue
+  while open (e.g. just closed in "Verify") stays shown and next/previous continue from its
+  old place (`anchor`). Under 1100 px of Work width the queues become a scrolling row and the
+  detail is the old drawer. Keys: J/K, 1–9, Ctrl/⌘+Enter, Ctrl+V (DetailPanel).
+- `src/components/DetailPanel.jsx` — one comment: photos (crop, paste, drop, inline Undo),
+  text, status, discipline/commenter, close date, resolution, custom fields, history, footer
+  (Next after closing, delete, **Next comment** = the one strong action). `docked` renders it
+  as the Work pane (no slide/close/click-outside); otherwise a drawer. `nav` may carry
+  `hasPrev`/`hasNext`. Split out: `detail/StatusPicker.jsx`, `detail/CustomFields.jsx`,
+  `detail/History.jsx`.
+- `src/views/Dashboard.jsx` — **Insights**, the close-out cockpit:
   all numbers come from the pure `lib/overview.js` (`computeOverview(records, statuses, {target})`
   — counts, pace = close-outs in the last 14 days from `closedAt`, needed pace and forecast vs
   the review target, log-sheet readiness = closed + after-photo + resolution, per-discipline
@@ -296,7 +325,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   opens `ImportDialog` with `planMerge(existing, incoming)` — matched by Navisworks comment ID
   (`recordKey`; viewpoint + raw text when a report has no IDs). Matched comments get only the
   Navisworks fields (`SOURCE_FIELDS`) refreshed; status, resolution, photos and custom fields
-  stay. Missing comments are kept or moved to the done status. The Overview calls
+  stay. Missing comments are kept or moved to the done status. `useImport` calls
   `source.importMerge(plan, …)`: offline `applyMergeLocal` (over the sample it replaces —
   `source.isFreshImport`); on the server `server.applyMergeRemote`, which stores an undo record
   in the review config key `lastImport` (`undoImportRemote`; also in the review ⋯ menu).
@@ -307,11 +336,13 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   (`components/ui.jsx`); reviews with comments need the name typed.
 - **Export**: `components/ExportButton.jsx` is a split button — "Export log sheet"
   (`lib/logsheet.js`, the template export; no template → toast linking to Settings › Template)
-  with Quick Excel in its menu. Used on Overview and Viewpoints.
-- **Viewpoints**: filter chips (no after-photo / no resolution / not closed > 3 months /
-  commenter, status `!done`), Overview tiles drill down into exactly the listed rows. Row
-  checkboxes open the `.t-bulk` bar (discipline / status / commenter → store `bulkUpdate`).
-  The drawer has prev/next (J/K), keys **1–9** = status (registry order), **Ctrl/⌘+Enter** =
+  with Quick Excel in its menu (`quiet` = tonal, for the Work list). Used on Insights (whole
+  review + Overview sheet) and Work (the comments shown).
+- **Work queues and drill-downs**: every count (Work queues, Insights Do next) opens exactly
+  the rows it counts — both use `lib/queues.js` (`tests/queues.test.js` checks each queue's
+  filter against `overview.attention`, the smoke clicks every queue). Row checkboxes open the
+  `.t-bulk` bar (discipline / status / commenter → store `bulkUpdate`).
+  The detail has prev/next (J/K), keys **1–9** = status (registry order), **Ctrl/⌘+Enter** =
   next comment, "Next after closing" (localStorage `tabelin.autoNext`), delete (admin), and a
   **History** section on the server: `record_events` rows written by patch / bulk patch /
   photo add-remove / import, read via `GET /api/records/{id}/history` (newest first; the
@@ -319,7 +350,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   (or empty) is shown as **"Unassigned"** everywhere (`discLabel`/`discOptions` in `ui.jsx`);
   the stored value stays `OTHER`. Dates read "9 Dec 2024, 07:25" (`overview.fmtStamp`).
   No UI text below 12 px.
-- **Manual comments**: Viewpoints › Add (`components/AddCommentDialog.jsx`, writers only) →
+- **Manual comments**: Work › Add (`components/AddCommentDialog.jsx`, writers only) →
   store `addRecord` (server: `POST /api/reviews/{rid}/records/one` → the new record with its
   id and version; `createRecordRemote`). They
   carry `source: 'manual'` (`merge.MANUAL`), so a re-import never lists them as missing.
@@ -354,9 +385,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   step with a real screenshot) and "Roles & limits" (role cards, permission matrix, safety nets,
   limits) and "About" (version, run mode, where each record field comes from), in EN / ID (`localStorage tabelin.helpLang`, default from the browser language).
   Screenshots are WebP files in `src/assets/help/`, inlined at build time so Help works
-  offline — re-capture them when a pictured screen changes. Keep the matrix in sync with the
+  offline — re-capture them when a pictured screen changes (`node scripts/help-shots.mjs`
+  after `npm run build` redoes overview/list/drawer/bulk from the offline build; needs Pillow). Keep the matrix in sync with the
   server's role checks (`isAdminRole` / `canReviewRole` / `requireAdmin`).
-- **Overview setup checklist** (import · target · template · invite team), dismissible per
+- **Insights setup checklist** (import · target · template · invite team), dismissible per
   review in localStorage `tabelin.setupDone.<reviewId|local>`. **Settings › Users** shows an
   invite card with the LAN address from `GET /api/server-info` and a copyable message.
 
@@ -392,9 +424,16 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   `index.css` to include that codepoint (see the `@font-face` data URL there), otherwise it
   won't render offline.
 - The record shape is defined in `parser.js` and mirrored by the Excel column map in
-  `excel.js`. If you add or rename a record field, update **both**, plus any filters in
-  `views/Comments.jsx`.
+  `excel.js`. If you add or rename a record field, update **both**, plus the search in
+  `lib/queues.js` (`baseFilter`).
 - `vite.config.js` sets `base: './'` for subpath/static hosting (e.g. GitHub Pages).
+- **Workbench tokens and primitives** (Phase 4, end of `index.css`): type scale
+  `--wb-text-xs…3xl` (12/13/14/16/20/26/34 px), spacing `--wb-space-1…8` (4-px steps), one
+  motion scale `--wb-dur-fast/base/slow` (120/200/320 ms) with `--tabelin-ease` and
+  `--wb-ease-enter`, colours = the MD3 roles. The ten primitives: Button, Field, Select,
+  Dialog, Menu (ExportButton), Chip (StatusBadge/DisciplineBadge), ListRow (`.wb-row`,
+  QueueItem), Pane (+PaneHeader), Toast, Tooltip (InfoTip) — `components/primitives.jsx` adds
+  Pane, PaneHeader, QueueItem, Kbd, Field. Build Work UI from these only; no one-off classes.
 - **Follow the MD3 reference** (`docs/material-design-3-project/`) for every UI addition —
   dropdowns (the `Select`/`.dd` component), segmented controls, buttons, tooltips (`InfoTip`),
   shape/motion tokens. Don't hand-roll a control when a shared primitive exists.

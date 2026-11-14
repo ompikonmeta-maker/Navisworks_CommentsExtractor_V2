@@ -219,7 +219,7 @@ function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
 
   // ---------------- pieces ----------------
   const strip = (
-    <Pane as="div" className="wb-strip !flex-row">
+    <Pane as="div" className="wb-strip relative z-20 !flex-row !overflow-visible">
       <div className="min-w-0 flex-[999_1_360px]">
         <div className="wb-headline" style={toneColor ? { color: toneColor } : undefined}>{head.main}</div>
         <div className="wb-headline-sub">{head.sub}</div>

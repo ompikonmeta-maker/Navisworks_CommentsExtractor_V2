@@ -222,3 +222,10 @@ Tick the phase box above and add one line here per finished phase (date, branch,
   entirely (boot code picks the source). Guards in `data.test.js`. Both smoke scripts extended
   (roles, shared target, history, template, merge + undo, add/delete, reset) and run green on
   the code before and after the change — no visible change.
+- 2026-11-14 — Phase 4 **built, waiting for the owner's approval** (box stays open), branch
+  `claude/v2`: owner chose C (Workbench) with A's headline sentence. Work screen (queues ·
+  list · docked detail, headline strip) replaces Overview + Viewpoints; charts stay on
+  Insights. Tokens + primitives in `index.css` / `components/primitives.jsx`; shared queue
+  filters (`lib/queues.js`), headline (`lib/headline.js`), import (`ImportAction.jsx`); detail
+  split into StatusPicker / CustomFields / History. Help text and 4 screenshots updated
+  (`scripts/help-shots.mjs`). Kept the app's own colours and sidebar, not the mockup's.

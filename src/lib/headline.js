@@ -18,6 +18,9 @@ export function headline(ov) {
   }
   const need = `Close ${perDay(ov.needed)} a day to finish on time.`;
   if (ov.forecast == null) return { main: `${plural(ov.remaining, 'comment')} to close in ${plural(ov.daysLeft, 'day')}.`, sub: need, tone: null };
+  // A pace measured on a handful of close-outs can put the finish years out;
+  // past a year the exact count says nothing useful.
+  if (ov.late > 365) return { main: 'Over a year behind.', sub: need, tone: 'bad' };
   if (ov.late > 0) return { main: `${plural(ov.late, 'day')} behind.`, sub: need, tone: ov.late > 14 ? 'bad' : 'warn' };
   return {
     main: 'On track.',
