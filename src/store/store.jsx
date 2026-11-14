@@ -51,7 +51,7 @@ const initialState = {
   toast: null, // { kind: 'success'|'error'|'info', message }
 };
 
-function reducer(state, action) {
+export function reducer(state, action) {
   switch (action.type) {
     case 'LOADING':
       return { ...state, status: 'loading', error: null };

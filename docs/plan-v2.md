@@ -91,7 +91,7 @@ Add `npm run smoke`. Document all three commands in `CLAUDE.md`.
 
 **Done when:** `npm test`, `go test ./...` and `npm run smoke` pass locally; nothing else changed.
 
-## Phase 2 — Server correctness: create, versions, refresh ☐
+## Phase 2 — Server correctness: create, versions, refresh ☑
 
 **Goal:** no silent lost work between two users. Mostly invisible; one small UI message.
 
@@ -212,3 +212,8 @@ Tick the phase box above and add one line here per finished phase (date, branch,
   rules), `npm run smoke` (offline file in headless Chromium). No app code changed. Found, not
   fixed: served from a static host that answers every path with `index.html` (e.g.
   `vite preview`), the app thinks it is on the office server and crashes on start.
+- 2026-11-14 — Phase 2, branch `claude/v2`: create-one endpoint (manual comments), import
+  returns ids, record `version` + 409 on stale saves (single and bulk), conflict toast with
+  "Save mine" for a typed resolution, `?since=` refresh every 30 s / on focus, `GET` one record.
+  Help › Limits text updated (no longer "last save wins"). New: `sync.test.js`,
+  `phase2_test.go`, `npm run smoke:server` (two browsers on the real server).

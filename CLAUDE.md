@@ -51,22 +51,32 @@ npx vitest run -t "fills a before-photo"   # tests whose name matches
 cd server && go test ./...            # server tests (temp data folder each run)
 cd server && go test ./internal/api -run TestDeleteRules   # one server test
 npm run smoke                         # build, then drive the offline app in headless Chromium
+npm run smoke:server                  # build, copy into server/web, two browsers on the real server (~45 s)
 ```
 
 - `tests/*.test.js` cover `parser.js` (the bundled sample report), `merge.js`, `overview.js`
   (fixed `today`, `TZ=UTC` set in `vitest.config.js`) and `templateExcel.js` (sample
   records into `docs/3D REVIEW LOG_MASTER_FORMAL_90_OFA.xlsx`, read back from the zip).
   `server.test.js` covers `detectRemote` with a mocked `fetch` (`vi.resetModules()` + dynamic
-  import per case, since the answer is cached at module level).
+  import per case, since the answer is cached at module level). `sync.test.js` covers
+  versioned saves / 409 conflicts / create / import ids in `lib/server.js` (fake `fetch`) and
+  the store's `MERGE_SERVER` reducer (exported as `reducer`).
   Files that need `DOMParser` start with `// @vitest-environment jsdom`.
 - `server/internal/api/api_test.go` runs the real routes and sign-in on `httptest` with a
-  temp SQLite database: role checks (reviewer vs admin), history rows, delete rules.
-  `server/internal/db/db_test.go` covers the `editor`/`viewer` → `reviewer` migration.
+  temp SQLite database: role checks (reviewer vs admin), history rows, delete rules;
+  `phase2_test.go` covers create-one, import ids, versions/409, bulk conflicts and `?since=`.
+  `server/internal/db/db_test.go` covers the `editor`/`viewer` → `reviewer` migration and
+  adding `version`/`modified_at` to an older database.
+- `scripts/smoke-server.mjs` builds the Go server into a temp folder, starts it on a temp data
+  dir, and drives two signed-in browsers on one comment: a stale save is refused (409), the
+  newer values show, the typed resolution stays and "Save mine" saves it; the other browser
+  sees the change within 30 s without reload. Expected failed requests (409 PATCH, the setup
+  checklist's `HEAD …/template` 404) are allowed; any other failed request or page error fails it.
 - `scripts/smoke.mjs` opens `dist/index.html` over `file://` (as the offline user does),
   imports the full sample, opens a comment, sets it Closed and checks it survives a reload;
   any page error fails it. It uses `playwright-core` with the pre-installed Chromium
   (`/opt/pw-browsers/chromium`, or `CHROME_PATH`) — never run `playwright install`.
-- Run all three before a release and after any change to parsing, merge, roles or export.
+- Run all of them before a release and after any change to parsing, merge, roles or export.
 
 The server embeds `server/web/index.html`. After a frontend change that should reach the
 server binary: `npm run build && cp dist/index.html server/web/index.html`.
@@ -168,8 +178,9 @@ Data flows in one direction: **files → parser → in-memory store → views**.
 - `src/store/store.jsx` — React context + `useReducer` in-memory store. `computeKpis` is the
   shared status aggregation. The `UPDATE_RECORD` reducer auto-stamps `closedAt` (ISO) when a
   record moves into `Closed` and clears it when it leaves — unless the patch sets `closedAt`
-  itself (the detail drawer's manual editor). Persistence lives in `App.jsx` (autosave
-  effect) + `lib/persist.js`.
+  itself (the detail drawer's manual editor). Offline persistence lives in `App.jsx` (autosave
+  effect) + `lib/persist.js`. **On the server** (see "Saving and refresh" below) edits save per
+  record with versions, and a refresh merges other people's changes.
 - `src/store/settings.jsx` — **v1.1** app settings context (`useSettings`), persisted to
   IndexedDB (separate `settings` key) and independent of the session: theme mode
   (`system`/`light`/`dark`, applied via `applyThemeMode` — `system` removes `data-theme` and
@@ -276,10 +287,30 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   the stored value stays `OTHER`. Dates read "9 Dec 2024, 07:25" (`overview.fmtStamp`).
   No UI text below 12 px.
 - **Manual comments**: Viewpoints › Add (`components/AddCommentDialog.jsx`, writers only) →
-  store `addRecord` (server: created via the import endpoint so it gets the server ID). They
+  store `addRecord` (server: `POST /api/reviews/{rid}/records/one` → the new record with its
+  id and version; `createRecordRemote`). They
   carry `source: 'manual'` (`merge.MANUAL`), so a re-import never lists them as missing.
   Blank discipline/commenter follow the text (`inferDiscipline`/`detectCommenter`); a chosen
   commenter is prefixed into `commentRaw`. A pasted/dropped snapshot becomes the before photo.
+- **Saving and refresh (server).** `records.version` goes +1 on every change (edit, bulk
+  edit, photo add/remove); `records.modified_at` (fixed-width UTC text) stamps every change
+  incl. the insert. Both columns are added to older databases by `db.addRecordColumns`.
+  `PATCH /api/records/{id}` takes an optional `version`; stale → **409** with the current
+  record, success → `{ ok, record }`. Bulk patch takes an optional per-row `version`; stale
+  rows are skipped and returned in `conflicts`, new versions in `versions`. Photo upload /
+  removal answer the new `version` (photos never conflict). Import answers `ids` in the order
+  sent (`importParsedRecords` uploads before-photos by those ids). `GET /api/records/{id}`
+  returns one record. Client: the store keeps the latest known version per id (`versions`
+  ref), sends saves of one record **one after another** (`inflight` chain) so a browser never
+  conflicts with itself, and on 409 shows the server's record with the toast "Someone else
+  changed this comment — showing the latest." If the refused save carried a resolution that
+  differs from the server's, the typed text stays in the field (unsaved) and the toast offers
+  **Save mine**. Light refresh: `GET /api/reviews/{rid}/records?since=<time>` →
+  `{ records: changed, ids: all, next }` (`next` starts 10 s back, `refreshOverlap`, so a save
+  landing mid-refresh is not missed); the store polls every `REFRESH_MS` (30 s), on window
+  focus and when the tab becomes visible, and merges with `MERGE_SERVER` — newer versions
+  replace, new ids are added, deleted ones dropped, and records with a pending or in-flight
+  save here are skipped (their save goes through or comes back as a conflict).
 - **Paste a snapshot (Ctrl+V)** in the drawer goes to the photo slot last hovered/focused
   (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
 - **Releases**: `.github/workflows/build.yml` runs only by hand (Actions → Build → Run workflow,
