@@ -48,7 +48,7 @@ One phase per session. Do them in order unless a phase says it is independent.
 
 ---
 
-## Phase 0 — Housekeeping (small, do first) ☐
+## Phase 0 — Housekeeping (small, do first) ☑
 
 **Goal:** a clean, truthful starting point.
 
@@ -203,3 +203,7 @@ findings in `docs/ux-review.md` and turn them into the next plan.
 ## Progress log
 
 Tick the phase box above and add one line here per finished phase (date, branch, what changed).
+
+- 2026-11-14 — Phase 0, branch `claude/v2`: removed the unused `recharts` dependency (build
+  output byte-identical); rewrote the `CLAUDE.md` intro to describe both modes (office server,
+  offline file). Owner asked whether to bring `main` up to date — answer pending.

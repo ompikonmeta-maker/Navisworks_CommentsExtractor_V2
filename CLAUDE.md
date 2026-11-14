@@ -4,13 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**Tabelin** — a browser-only web app that converts Autodesk Navisworks review-comment
-HTML reports into a searchable, filterable review workspace with Excel (`.xlsx`) export.
-Everything runs client-side: files are parsed in the browser and never uploaded. The
-working session (records, edits, and before/after images) is **autosaved to the browser
-(IndexedDB)** so a reload restores it, and can also be mirrored to a user-chosen
-**dedicated folder** (File System Access API → `tabelin-session.json`). "Reset to sample"
-clears the session and returns to the bundled sample dataset (`src/lib/persist.js`).
+**Tabelin** turns Autodesk Navisworks review-comment HTML reports into a searchable,
+filterable review workspace where comments are closed out (status, after-photo, resolution)
+and exported to Excel (`.xlsx`). It is one React app that runs in two modes:
+
+**Office server (team use).** A single Go binary (`server/`, SQLite + a `data/` folder) serves
+the same app plus a JSON API on the office network (default `:8787`). People sign in with a
+username + PIN; roles are `admin` and `reviewer`. Comments, photos, settings, the Excel
+template and change history live on the server, organised as Project › Review. Data stays on
+the office network — no cloud services.
+
+**Offline file (single user).** The same build is one self-contained `dist/index.html` that
+opens by double-click. Reports are parsed in the browser and never uploaded; the session
+(records, edits, photos) is autosaved to the browser (IndexedDB) and can be mirrored to a
+user-chosen folder (`tabelin-session.json`). "Reset to sample" returns to the bundled sample.
+
+The app picks the mode at startup: if the server API answers (`detectRemote` in
+`src/lib/server.js`) it runs against the server, otherwise offline. The mode is the global
+`remoteState` flag; storage code differs per mode, the screens are shared.
 
 Stack: **React 18 + Vite 5 + Tailwind CSS 3**. UI follows a Material Design 3 scheme
 seeded from `#1768f7` (generated with the `docs/material-design-3-project` dynamic-color
@@ -25,7 +36,12 @@ npm install        # install dependencies
 npm run dev        # Vite dev server (HMR) at http://localhost:5173
 npm run build      # production build → a single self-contained dist/index.html
 npm run preview    # serve the production build (default port 4173)
+
+cd server && go run .   # office server on :8787, data in ./data (see server/README.md)
 ```
+
+The server embeds `server/web/index.html`. After a frontend change that should reach the
+server binary: `npm run build && cp dist/index.html server/web/index.html`.
 
 ### Portable single-file build
 
@@ -33,7 +49,7 @@ npm run preview    # serve the production build (default port 4173)
 `vite-plugin-singlefile` — all JS/CSS inlined, the sample report + images embedded as
 data URLs, and a subset of the Material Symbols icon font embedded too. It has **no runtime
 dependencies**: open it by double-click (`file://`), copy it to a USB stick, or host it
-anywhere static. No server, no install, no admin rights, works fully offline. The
+anywhere static. In this offline mode: no server, no install, no admin rights. The
 `build.assetsInlineLimit` in `vite.config.js` is set very high specifically so nothing is
 emitted as a separate fetched asset.
 
