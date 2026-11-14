@@ -44,7 +44,7 @@ One phase per session. Do them in order unless a phase says it is independent.
   Do not run `playwright install`.
 - Sample input: `src/sample/report.html` (+ `vp00*.jpg`); the company template is
   `docs/3D REVIEW LOG_MASTER_FORMAL_90_OFA.xlsx`.
-- There is **no test runner yet** — Phase 1 adds it.
+- Tests: `npm test`, `cd server && go test ./...`, `npm run smoke` (see `CLAUDE.md` › Tests).
 
 ---
 
@@ -60,7 +60,7 @@ One phase per session. Do them in order unless a phase says it is independent.
 
 **Done when:** build passes; `CLAUDE.md` intro matches reality; owner answered the `main` question.
 
-## Phase 1 — Safety net: automated tests ☐
+## Phase 1 — Safety net: automated tests ☑
 
 **Goal:** the three risky areas can no longer break silently. No behaviour change.
 
@@ -206,4 +206,9 @@ Tick the phase box above and add one line here per finished phase (date, branch,
 
 - 2026-11-14 — Phase 0, branch `claude/v2`: removed the unused `recharts` dependency (build
   output byte-identical); rewrote the `CLAUDE.md` intro to describe both modes (office server,
-  offline file). Owner asked whether to bring `main` up to date — answer pending.
+  offline file). Owner said yes: `main` brought up to date with `claude/v2` (PR #1, merged).
+- 2026-11-14 — Phase 1, branch `claude/v2`: `npm test` (Vitest: parser, merge, overview,
+  template export — 44 tests), `go test ./...` (sign-in, roles, history, migration, delete
+  rules), `npm run smoke` (offline file in headless Chromium). No app code changed. Found, not
+  fixed: served from a static host that answers every path with `index.html` (e.g.
+  `vite preview`), the app thinks it is on the office server and crashes on start.

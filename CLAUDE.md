@@ -40,6 +40,30 @@ npm run preview    # serve the production build (default port 4173)
 cd server && go run .   # office server on :8787, data in ./data (see server/README.md)
 ```
 
+### Tests
+
+```bash
+npm test                              # frontend unit tests (Vitest), ~2 s
+npx vitest run tests/merge.test.js    # one test file
+npx vitest run -t "fills a before-photo"   # tests whose name matches
+cd server && go test ./...            # server tests (temp data folder each run)
+cd server && go test ./internal/api -run TestDeleteRules   # one server test
+npm run smoke                         # build, then drive the offline app in headless Chromium
+```
+
+- `tests/*.test.js` cover `parser.js` (the bundled sample report), `merge.js`, `overview.js`
+  (fixed `today`, `TZ=UTC` set in `vitest.config.js`) and `templateExcel.js` (sample
+  records into `docs/3D REVIEW LOG_MASTER_FORMAL_90_OFA.xlsx`, read back from the zip).
+  Files that need `DOMParser` start with `// @vitest-environment jsdom`.
+- `server/internal/api/api_test.go` runs the real routes and sign-in on `httptest` with a
+  temp SQLite database: role checks (reviewer vs admin), history rows, delete rules.
+  `server/internal/db/db_test.go` covers the `editor`/`viewer` → `reviewer` migration.
+- `scripts/smoke.mjs` opens `dist/index.html` over `file://` (as the offline user does),
+  imports the full sample, opens a comment, sets it Closed and checks it survives a reload;
+  any page error fails it. It uses `playwright-core` with the pre-installed Chromium
+  (`/opt/pw-browsers/chromium`, or `CHROME_PATH`) — never run `playwright install`.
+- Run all three before a release and after any change to parsing, merge, roles or export.
+
 The server embeds `server/web/index.html`. After a frontend change that should reach the
 server binary: `npm run build && cp dist/index.html server/web/index.html`.
 
@@ -53,10 +77,7 @@ anywhere static. In this offline mode: no server, no install, no admin rights. T
 `build.assetsInlineLimit` in `vite.config.js` is set very high specifically so nothing is
 emitted as a separate fetched asset.
 
-There is no test runner or linter configured yet. Verification during development was done
-with a headless Chromium smoke script (`playwright-core` driving the pre-installed browser
-against `npm run preview`) — not committed. If you add automated tests, wire them into
-`package.json` scripts and document the single-test command here.
+There is no linter configured.
 
 ## Architecture
 
