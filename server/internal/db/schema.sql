@@ -57,7 +57,14 @@ CREATE TABLE IF NOT EXISTS records (
   source          TEXT,
   extra           TEXT NOT NULL DEFAULT '{}',      -- JSON: custom (cf_) fields
   updated_by      INTEGER REFERENCES users(id),
-  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  -- version: +1 on every change (edit, photo); a save sent with an older
+  -- version is refused (409) so two people never silently overwrite each other.
+  -- modified_at: server time of the last change of any kind, incl. the insert
+  -- (fixed-width UTC, so it sorts as text); drives the light refresh (?since=).
+  -- Both are added to older databases by db.Open (addRecordColumns).
+  version         INTEGER NOT NULL DEFAULT 1,
+  modified_at     TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_records_review ON records(review_id);
 

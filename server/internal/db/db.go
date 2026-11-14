@@ -37,6 +37,10 @@ func Open(path string) (*sql.DB, error) {
 		d.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := addRecordColumns(d); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("add record columns: %w", err)
+	}
 	// Roles were simplified to admin | reviewer; older editor/viewer accounts
 	// become reviewers.
 	if _, err := d.Exec(`UPDATE users SET role='reviewer' WHERE role NOT IN ('admin','reviewer')`); err != nil {
@@ -44,6 +48,36 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("migrate roles: %w", err)
 	}
 	return d, nil
+}
+
+// addRecordColumns adds the columns introduced after a database may already
+// exist — CREATE TABLE IF NOT EXISTS never adds columns to an existing table.
+func addRecordColumns(d *sql.DB) error {
+	have := map[string]bool{}
+	rows, err := d.Query(`SELECT name FROM pragma_table_info('records')`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var name string
+		if rows.Scan(&name) == nil {
+			have[name] = true
+		}
+	}
+	rows.Close()
+	for _, c := range []struct{ name, def string }{
+		{"version", "INTEGER NOT NULL DEFAULT 1"},
+		{"modified_at", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		if have[c.name] {
+			continue
+		}
+		if _, err := d.Exec(`ALTER TABLE records ADD COLUMN ` + c.name + ` ` + c.def); err != nil {
+			return fmt.Errorf("%s: %w", c.name, err)
+		}
+	}
+	_, err = d.Exec(`CREATE INDEX IF NOT EXISTS idx_records_modified ON records(review_id, modified_at)`)
+	return err
 }
 
 func tableExists(d *sql.DB, name string) bool {

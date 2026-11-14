@@ -78,8 +78,9 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "insert image")
 		return
 	}
+	version := a.bumpVersion(id)
 	logEvent(a.exec, id, u.ID, "photo", map[string]any{"kind": kind, "op": "add"})
-	writeJSON(w, http.StatusCreated, map[string]any{"key": key, "url": "/api/files/" + key, "kind": kind})
+	writeJSON(w, http.StatusCreated, map[string]any{"key": key, "url": "/api/files/" + key, "kind": kind, "version": version})
 }
 
 // deleteImage removes a record's before/after photo (admins and reviewers).
@@ -115,10 +116,24 @@ func (a *API) deleteImage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "delete image")
 		return
 	}
+	var version int64
 	if n, _ := res.RowsAffected(); n > 0 {
+		version = a.bumpVersion(id)
 		logEvent(a.exec, id, auth.FromContext(r.Context()).ID, "photo", map[string]any{"kind": kind, "op": "remove"})
+	} else {
+		a.DB.QueryRow(`SELECT version FROM records WHERE id=?`, id).Scan(&version)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": version})
+}
+
+// bumpVersion marks a record changed (a photo added or removed) so other
+// clients pick it up on refresh, and returns its new version. Photos never
+// conflict: the last photo saved wins, as before.
+func (a *API) bumpVersion(id int64) int64 {
+	a.DB.Exec(`UPDATE records SET version=version+1, modified_at=? WHERE id=?`, modNow(), id)
+	var v int64
+	a.DB.QueryRow(`SELECT version FROM records WHERE id=?`, id).Scan(&v)
+	return v
 }
 
 // unlinkFilesWhere removes the image files of every record matched by the

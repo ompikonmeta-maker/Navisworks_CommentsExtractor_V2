@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 )
@@ -67,5 +68,49 @@ func TestOpenIsRepeatable(t *testing.T) {
 		if n != 1 {
 			t.Fatalf("reopen %d: record count %d, want 1", i, n)
 		}
+	}
+}
+
+// A database from before record versions gets the new columns on open, and
+// its records start at version 1.
+func TestOpenAddsVersionColumns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tabelin.db")
+	raw, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE projects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+		`CREATE TABLE reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, name TEXT NOT NULL, created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+		`CREATE TABLE records (id INTEGER PRIMARY KEY AUTOINCREMENT, review_id INTEGER NOT NULL, comment_id TEXT, viewpoint TEXT,
+		   commenter TEXT, discipline TEXT, comment_raw TEXT, comment_text TEXT, resolution TEXT, status TEXT, closed_at TEXT,
+		   comment_date TEXT, author_code TEXT, camera_position TEXT, image_ref TEXT, source TEXT, extra TEXT NOT NULL DEFAULT '{}',
+		   updated_by INTEGER, updated_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+		`INSERT INTO projects(name) VALUES('P')`,
+		`INSERT INTO reviews(project_id, name) VALUES(1, 'R')`,
+		`INSERT INTO records(review_id, comment_id, status) VALUES(1, '7', 'Open')`,
+	} {
+		if _, err := raw.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q[:30], err)
+		}
+	}
+	raw.Close()
+
+	d, err := Open(path)
+	if err != nil {
+		t.Fatalf("open old db: %v", err)
+	}
+	defer d.Close()
+	var version int
+	var mod string
+	if err := d.QueryRow(`SELECT version, modified_at FROM records WHERE comment_id='7'`).Scan(&version, &mod); err != nil {
+		t.Fatalf("read new columns: %v", err)
+	}
+	if version != 1 || mod != "" {
+		t.Errorf("version=%d modified_at=%q, want 1 and empty", version, mod)
+	}
+	d.Close()
+	if d, err = Open(path); err != nil { // a second open must not try to add them again
+		t.Fatalf("reopen: %v", err)
 	}
 }
