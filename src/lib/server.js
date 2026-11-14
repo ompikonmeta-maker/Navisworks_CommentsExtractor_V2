@@ -1,9 +1,10 @@
 // V2 remote mode: talk to the Tabelin server that serves this page.
 //
-// "Remote mode" is on only when the app is served BY the Go server (there is an
-// /api/health on the same origin). Opened as a single file (file://) or from a
-// plain static host, detectRemote() is false and the app stays fully offline —
-// V1 behaviour is untouched.
+// "Remote mode" is on only when the app is served BY the Go server (its
+// /api/health on the same origin answers JSON {"status":"ok"}). Opened as a
+// single file (file://) or from a plain static host — including one with an SPA
+// fallback that answers /api/health with index.html — detectRemote() is false and
+// the app stays fully offline — V1 behaviour is untouched.
 
 async function req(method, path, body) {
   // keepalive lets a small save finish even if the tab is closing.
@@ -92,8 +93,15 @@ export async function detectRemote() {
     return _isRemote;
   }
   try {
+    // `r.ok` alone is not enough: a static host with an SPA fallback answers
+    // 200 text/html here. Only the Go server's JSON {"status":"ok"} counts.
     const r = await fetch('/api/health', { credentials: 'same-origin' });
-    _isRemote = r.ok;
+    if (!r.ok) {
+      _isRemote = false;
+    } else {
+      const body = await r.json();
+      _isRemote = body?.status === 'ok';
+    }
   } catch {
     _isRemote = false;
   }
