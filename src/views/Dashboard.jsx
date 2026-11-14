@@ -4,10 +4,8 @@ import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { statusLabels } from '../lib/status.js';
 import { exportToExcel } from '../lib/excel.js';
-import { ingestFiles } from '../lib/ingest.js';
 import { useData } from '../data/index.js';
-import { planMerge } from '../lib/merge.js';
-import ImportDialog from '../components/ImportDialog.jsx';
+import { useImport } from '../components/ImportAction.jsx';
 import ExportButton from '../components/ExportButton.jsx';
 import { exportLogSheet } from '../lib/logsheet.js';
 import { computeOverview, parseDay, parseTs } from '../lib/overview.js';
@@ -35,7 +33,6 @@ function Overview({ openDetail, goComments, goSettings }) {
   const ov = useMemo(() => computeOverview(records, statuses, { target }), [records, statuses, target]);
   const tp = useTipProps();
 
-  const fileInputRef = useRef(null);
   const overviewRef = useRef(null);
   const burnRef = useRef(null);
   const scoreRef = useRef(null);
@@ -45,55 +42,10 @@ function Overview({ openDetail, goComments, goSettings }) {
   };
 
   const readOnly = !source.caps.canAdmin;
-  // Import. Into an empty review (or over the offline sample) it's a plain
-  // load; into a review with comments it first shows what the new report
-  // changes and then merges by comment ID. Either way it can be undone. The
-  // data source applies it (in memory offline, on the server otherwise).
-  const [merge, setMerge] = useState(null); // { plan, stats, fileName, missingAction }
+  // Import lives in ImportAction (shared with Work).
+  const importer = useImport();
+  const fresh = importer.fresh;
   const [targetSignal, setTargetSignal] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const fresh = source.isFreshImport(records, meta);
-
-  const handleImport = async (fileList) => {
-    const files = Array.from(fileList || []);
-    if (!files.length) return;
-    try {
-      const { records: recs, stats, errors } = await ingestFiles(files);
-      if (recs.length === 0) { notify(errors[0] || 'No comments could be imported.', 'error'); return; }
-      const fileName = files.find((f) => /\.html?$/i.test(f.name))?.name || files[0].name;
-      if (fresh) await runImport(planMerge([], recs), stats, 'keep');
-      else setMerge({ plan: planMerge(records, recs), stats, fileName, missingAction: 'keep' });
-    } catch (e) {
-      notify(`Import failed: ${e.message}`, 'error');
-    }
-  };
-
-  const runImport = async (plan, stats, missingAction) => {
-    const doneLabel = ov.doneL;
-    setBusy(true);
-    try {
-      const res = await source.importMerge(plan, { missingAction, doneLabel }, { records, source: meta.source });
-      setData(res.records, res.source, stats);
-      const undo = async () => {
-        const back = await res.undo();
-        setData(back.records, back.source, { comments: back.records.length, html: 0, images: 0, linked: 0 });
-      };
-      const msg = plan.matched.length
-        ? `Review updated: ${plan.added.length} added, ${plan.changed} changed.`
-        : `Imported ${plan.added.length} comments · ${stats.linked} images linked.`;
-      notify(msg, 'success', {
-        label: 'Undo',
-        onClick: async () => {
-          try { await undo(); notify('Import undone.', 'success'); } catch (e) { notify(`Couldn’t undo: ${e.message}`, 'error'); }
-        },
-      });
-      setMerge(null);
-    } catch (e) {
-      notify(`Import failed: ${e.message}`, 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const logSheet = async () => {
     try {
@@ -150,8 +102,8 @@ function Overview({ openDetail, goComments, goSettings }) {
       <div className="flex flex-wrap items-center justify-between gap-2" data-nosnap>
         <TargetChip value={settings.reviewTarget} onChange={(v) => update({ reviewTarget: v })} readOnly={readOnly} openSignal={targetSignal} />
         <div className="flex flex-wrap items-center gap-1">
-          {!readOnly && <Button variant="text" icon="upload_file" onClick={() => fileInputRef.current?.click()} title="Import a Navisworks report">Import</Button>}
-          <input ref={fileInputRef} type="file" multiple accept=".html,.htm,.jpg,.jpeg,.png,.zip" className="hidden" onChange={(e) => { handleImport(e.target.files); e.target.value = ''; }} />
+          {!readOnly && <Button variant="text" icon="upload_file" onClick={() => importer.pick()} title="Import a Navisworks report">Import</Button>}
+          {importer.ui}
           <Button variant="text" icon="image" onClick={() => snap(overviewRef, 'overview')} disabled={!records.length} title="Save the whole Overview as an image">Snapshot</Button>
           <ExportButton onLogSheet={logSheet} onQuick={handleExport} quickNote="All comments + this Overview" disabled={!records.length} />
         </div>
@@ -163,7 +115,7 @@ function Overview({ openDetail, goComments, goSettings }) {
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
           <Icon name="upload_file" className="text-[32px] text-primary" />
           <div className="text-base font-semibold">No comments yet</div>
-          {!readOnly && <Button variant="tonal" icon="upload_file" onClick={() => fileInputRef.current?.click()}>Import a Navisworks report</Button>}
+          {!readOnly && <Button variant="tonal" icon="upload_file" onClick={() => importer.pick()}>Import a Navisworks report</Button>}
         </Card>
       ) : (
         <>
@@ -172,7 +124,7 @@ function Overview({ openDetail, goComments, goSettings }) {
               hasData={!fresh}
               target={settings.reviewTarget}
               isAdmin={source.caps.manageUsers}
-              onImport={() => fileInputRef.current?.click()}
+              onImport={() => importer.pick()}
               onTarget={() => setTargetSignal((n) => n + 1)}
               onTemplate={() => goSettings('template')}
               onInvite={() => goSettings('users')}
@@ -219,8 +171,6 @@ function Overview({ openDetail, goComments, goSettings }) {
         </>
       )}
 
-      <ImportDialog state={merge} onChange={setMerge} onCancel={() => setMerge(null)} busy={busy}
-        onConfirm={() => runImport(merge.plan, merge.stats, merge.missingAction)} />
     </div>
   );
 }

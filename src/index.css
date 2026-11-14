@@ -1605,3 +1605,117 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant);
 }
 [aria-pressed="true"] > .st-kbd { background: var(--md-sys-color-surface); color: inherit; }
+
+/* =====================================================================
+   Workbench (Phase 4) — one token set, and the primitives built from it.
+   The Work screen uses ONLY these tokens and the primitives in
+   components/primitives.jsx (plus Button / Select / Dialog / InfoTip / Toast
+   from ui.jsx). Colours are the MD3 roles above, so dark mode follows.
+   ===================================================================== */
+:root {
+  /* type scale (px): caption · label · body · lead · title · headline · display */
+  --wb-text-xs: 12px;
+  --wb-text-sm: 13px;
+  --wb-text-md: 14px;
+  --wb-text-lg: 16px;
+  --wb-text-xl: 20px;
+  --wb-text-2xl: 26px;
+  --wb-text-3xl: 34px;
+  /* spacing (4-px steps) */
+  --wb-space-1: 4px;
+  --wb-space-2: 8px;
+  --wb-space-3: 12px;
+  --wb-space-4: 16px;
+  --wb-space-5: 20px;
+  --wb-space-6: 24px;
+  --wb-space-8: 32px;
+  /* one motion scale, one easing (--tabelin-ease); enter uses the emphasized curve */
+  --wb-dur-fast: 120ms;
+  --wb-dur-base: 200ms;
+  --wb-dur-slow: 320ms;
+  --wb-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  /* shape */
+  --wb-radius-pane: var(--tabelin-radius-card);
+  --wb-radius-item: 14px;
+  --wb-pane-gap: var(--wb-space-4);
+}
+
+/* Pane: a white surface that scrolls inside itself. */
+.wb-pane {
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+  background: var(--md-sys-color-surface); border-radius: var(--wb-radius-pane);
+  box-shadow: var(--tabelin-elev-card); overflow: hidden;
+}
+:root[data-theme="dark"] .wb-pane { box-shadow: var(--tabelin-elev-card), inset 0 0 0 1px var(--md-sys-color-outline-variant); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wb-pane { box-shadow: var(--tabelin-elev-card), inset 0 0 0 1px var(--md-sys-color-outline-variant); } }
+.wb-pane-head { padding: var(--wb-space-5) var(--wb-space-5) var(--wb-space-4); border-bottom: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 60%, transparent); }
+.wb-pane-body { flex: 1; min-height: 0; overflow-y: auto; }
+.wb-label { font-size: var(--wb-text-xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--md-sys-color-on-surface-variant); }
+
+/* Queue item: rank · label · count; the selected one is the only filled item. */
+.wb-queue {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: var(--wb-space-3);
+  width: 100%; min-height: 48px; padding: var(--wb-space-2) var(--wb-space-3); border-radius: var(--wb-radius-item);
+  text-align: left; font-size: var(--wb-text-md); font-weight: 500; color: var(--md-sys-color-on-surface);
+  transition: background-color var(--wb-dur-base) var(--tabelin-ease), color var(--wb-dur-base) var(--tabelin-ease);
+}
+.wb-queue:hover { background: var(--md-sys-color-surface-container-low); }
+.wb-queue:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--md-sys-color-primary); }
+.wb-queue[aria-pressed="true"] { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.wb-queue-rank {
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px;
+  font-size: var(--wb-text-xs); font-weight: 700; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant);
+}
+.wb-queue[aria-pressed="true"] .wb-queue-rank { background: var(--md-sys-color-on-primary); color: var(--md-sys-color-primary); }
+.wb-queue-n { font-size: var(--wb-text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.wb-queue[data-empty="true"]:not([aria-pressed="true"]) { color: var(--md-sys-color-on-surface-variant); }
+.wb-queue[data-empty="true"]:not([aria-pressed="true"]) .wb-queue-n { font-weight: 500; }
+
+/* Comment row in the list. */
+.wb-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--wb-space-3);
+  padding: var(--wb-space-3) var(--wb-space-5); border-bottom: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 45%, transparent);
+  cursor: pointer; transition: background-color var(--wb-dur-fast) var(--tabelin-ease), box-shadow var(--wb-dur-fast) var(--tabelin-ease);
+  animation: wb-row-in var(--wb-dur-slow) var(--wb-ease-enter) both;
+}
+.wb-row:hover { background: var(--md-sys-color-surface-container-low); }
+.wb-row[aria-selected="true"] { background: var(--md-sys-color-primary-container); box-shadow: inset 4px 0 0 var(--md-sys-color-primary); }
+.wb-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--md-sys-color-primary); }
+.wb-row-vp { font-size: var(--wb-text-md); font-weight: 600; }
+.wb-row-text { font-size: var(--wb-text-md); line-height: 1.45; color: var(--md-sys-color-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wb-row-meta { font-size: var(--wb-text-xs); color: var(--md-sys-color-on-surface-variant); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@keyframes wb-row-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+
+/* Keyboard hint. */
+.wb-kbd {
+  display: inline-block; min-width: 20px; padding: 2px 6px; border-radius: 6px; text-align: center;
+  font: inherit; font-size: var(--wb-text-xs); font-weight: 600; line-height: 1.3;
+  background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant);
+  box-shadow: inset 0 -1px 0 var(--md-sys-color-outline-variant);
+}
+
+/* Field: text inputs that sit quiet until hover / focus. */
+.wb-field {
+  width: 100%; height: 40px; padding: 0 var(--wb-space-3); border-radius: var(--tabelin-radius-control);
+  border: 1px solid var(--md-sys-color-outline-variant); background: var(--md-sys-color-surface-container-low);
+  font-size: var(--wb-text-md); color: var(--md-sys-color-on-surface);
+  transition: border-color var(--wb-dur-fast) var(--tabelin-ease);
+}
+.wb-field:hover { border-color: var(--md-sys-color-outline); }
+.wb-field:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--md-sys-color-primary); }
+.wb-field::placeholder { color: var(--md-sys-color-on-surface-variant); }
+
+/* The headline strip on top of Work (sentence from option A). */
+.wb-strip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--wb-space-4) var(--wb-space-6); padding: var(--wb-space-4) var(--wb-space-6); }
+.wb-headline { font-size: var(--wb-text-2xl); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }
+.wb-headline-sub { margin-top: var(--wb-space-1); font-size: var(--wb-text-lg); color: var(--md-sys-color-on-surface-variant); }
+
+/* Work layout: queues · list · detail. Narrow: queues become a scrolling row
+   above the list and the detail goes back to a drawer. */
+.wb-panes { display: grid; gap: var(--wb-pane-gap); grid-template-columns: 240px minmax(320px, 1fr) minmax(380px, 460px); min-height: 0; }
+.wb-panes.is-narrow { grid-template-columns: minmax(0, 1fr); }
+.wb-queues-row { display: flex; gap: var(--wb-space-2); overflow-x: auto; padding: var(--wb-space-3); }
+.wb-queues-row .wb-queue { width: auto; min-width: max-content; }
+.wb-detail-swap { animation: wb-detail-in var(--wb-dur-slow) var(--wb-ease-enter) both; }
+@keyframes wb-detail-in { from { opacity: 0.25; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wb-row, .wb-detail-swap { animation: none; } }

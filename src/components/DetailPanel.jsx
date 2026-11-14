@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store/store.jsx';
 import { useSettings } from '../store/settings.jsx';
 import { DISCIPLINES } from '../lib/parser.js';
-import { attrFields, attrType } from '../lib/templateExcel.js';
-import { chipStyle, statusColor, doneLabel as doneLabelOf } from '../lib/status.js';
-import { Icon, Select, StatusBadge, DisciplineBadge, Dialog, Button, discOptions, discLabel } from './ui.jsx';
+import { attrFields } from '../lib/templateExcel.js';
+import { doneLabel as doneLabelOf } from '../lib/status.js';
+import { Icon, Select, StatusBadge, DisciplineBadge, Dialog, Button, discOptions } from './ui.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import { fmtStamp } from '../lib/overview.js';
 import { useData, data } from '../data/index.js';
 import Lightbox from './Lightbox.jsx';
+import History from './detail/History.jsx';
+import StatusPicker from './detail/StatusPicker.jsx';
+import CustomFields from './detail/CustomFields.jsx';
 
 // ISO ⇄ <input type="datetime-local"> (which works in the viewer's local time).
 function toLocalInput(iso) {
@@ -73,24 +76,12 @@ const TrashIcon = () => (
 // `transform` transition (no flicker, no mount/unmount). The main table is
 // never dimmed and stays interactive: clicking another row swaps the
 // drawer's content in place; clicking anywhere else closes it.
-// "2024-10-07T…" → "2 hours ago" (falls back to a date after a week).
-function timeAgo(iso) {
-  const t = Date.parse(iso);
-  if (!t) return '';
-  const m = Math.round((Date.now() - t) / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
-  const d = Math.round(h / 24);
-  if (d < 7) return `${d} day${d === 1 ? '' : 's'} ago`;
-  return new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-// nav: { index, total, prev, next } over the list as filtered on Viewpoints;
+// docked: shown as the right pane of the Work screen (no slide, no close, no
+// click-outside); otherwise a drawer over the list.
+// nav: { index, total, prev, next, hasPrev?, hasNext? } over the list shown;
 // onClosedOut(id) is called when this comment moves to the done status (the
 // list can then move on); onDelete(id) removes the comment.
-export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelete }) {
+export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelete, docked = false, empty = null }) {
   const { updateRecord, records } = useStore();
   const [askDelete, setAskDelete] = useState(false);
   const { settings } = useSettings();
@@ -114,12 +105,14 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
   }, [record]);
 
   useEffect(() => {
-    if (open) closeRef.current?.focus();
-  }, [open, shown?.ID]);
+    if (open && !docked) closeRef.current?.focus();
+  }, [open, shown?.ID, docked]);
+  const hasNext = nav ? (nav.hasNext ?? (nav.index >= 0 && nav.index < nav.total - 1)) : false;
+  const hasPrev = nav ? (nav.hasPrev ?? nav.index > 0) : false;
 
   // Esc + click-outside close. A click on a table row is a switch, not a close.
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || docked) return undefined;
     const onKey = (e) => {
       if (e.key === 'Escape' && !document.querySelector('.t-dlg, .crop-card')) onClose(); // a dialog on top closes first
     };
@@ -136,7 +129,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onDown);
     };
-  }, [open, onClose]);
+  }, [open, onClose, docked]);
 
   // While open, render the live store record so edits (image add/remove,
   // undo) reflect immediately; `shown` is only the frozen copy kept for the
@@ -155,7 +148,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
   keyRef.current = (e) => {
     if (!rec || document.querySelector('.t-dlg, .crop-card')) return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      if (nav && nav.index >= 0 && nav.index < nav.total - 1) { e.preventDefault(); nav.next(); }
+      if (hasNext) { e.preventDefault(); nav.next(); }
       return;
     }
     if (readOnly || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -269,20 +262,19 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
     transition: `transform ${open ? 300 : 250}ms ${open ? 'cubic-bezier(0.05,0.7,0.1,1)' : 'cubic-bezier(0.3,0,0.8,0.15)'}`,
   };
 
+  const Shell = docked ? 'section' : 'div';
+  const shellProps = docked
+    ? { 'aria-label': 'Comment details', 'data-drawer': true, className: 'wb-pane h-full' }
+    : {
+      'data-drawer': true, role: 'dialog', 'aria-modal': 'false', 'aria-label': 'Viewpoint detail', 'aria-hidden': !open, style,
+      className: `fixed bottom-3 right-3 top-3 z-40 flex w-[min(483px,92vw)] flex-col overflow-hidden rounded-card border border-outline-variant/60 bg-surface shadow-md-3 ${open ? '' : 'pointer-events-none'}`,
+    };
+
   return (
    <>
-    <div
-      data-drawer
-      role="dialog"
-      aria-modal="false"
-      aria-label="Viewpoint detail"
-      aria-hidden={!open}
-      style={style}
-      className={`fixed bottom-3 right-3 top-3 z-40 flex w-[min(483px,92vw)] flex-col overflow-hidden rounded-card border border-outline-variant/60 bg-surface shadow-md-3 ${
-        open ? '' : 'pointer-events-none'
-      }`}
-    >
-      {rec && (
+    <Shell {...shellProps}>
+      {docked && !record && empty}
+      {(docked ? record : rec) && (
         <>
           {/* Header */}
           <div className="flex items-start justify-between gap-3 border-b border-outline-variant/60 px-5 py-4">
@@ -297,34 +289,34 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              {nav && nav.total > 1 && nav.index >= 0 && (
+              {nav && nav.total > 0 && (hasPrev || hasNext) && (
                 <>
-                  <span className="mr-1.5 text-[13px] tabular-nums text-on-surface-variant">{nav.index + 1} of {nav.total}</span>
+                  {nav.index >= 0 && <span className="mr-1.5 text-[13px] tabular-nums text-on-surface-variant">{nav.index + 1} of {nav.total}</span>}
                   <span role="group" aria-label="Move between comments" className="flex gap-0.5 rounded-[14px] bg-surface-container p-[3px]">
-                    <button type="button" onClick={nav.prev} disabled={nav.index <= 0} aria-label="Previous comment (K)" title="Previous · K"
+                    <button type="button" onClick={nav.prev} disabled={!hasPrev} aria-label="Previous comment (K)" title="Previous · K"
                       className="dr-nav t-press grid h-9 w-9 place-items-center rounded-[11px] text-on-surface disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                       <Icon name="keyboard_arrow_up" className="text-[24px]" />
                     </button>
-                    <button type="button" onClick={nav.next} disabled={nav.index >= nav.total - 1} aria-label="Next comment (J)" title="Next · J"
+                    <button type="button" onClick={nav.next} disabled={!hasNext} aria-label="Next comment (J)" title="Next · J"
                       className="dr-nav t-press grid h-9 w-9 place-items-center rounded-[11px] text-on-surface disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                       <Icon name="keyboard_arrow_down" className="text-[24px]" />
                     </button>
                   </span>
                 </>
               )}
-              <button
+              {!docked && <button
                 ref={closeRef}
                 onClick={onClose}
                 aria-label="Close" title="Close · Esc"
                 className="t-press ml-1 grid h-10 w-10 place-items-center rounded-[14px] text-on-surface hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <Icon name="close" className="text-[24px]" />
-              </button>
+              </button>}
             </div>
           </div>
 
           {/* Body — re-keyed by record so switching rows cross-fades in place */}
-          <div key={rec.ID} className="drawer-swap flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <div key={rec.ID} className={`${docked ? 'wb-detail-swap' : 'drawer-swap'} flex-1 space-y-5 overflow-y-auto px-5 py-4`}>
             {/* Before / after — side-by-side squares, tap to enlarge; the
                 after upload passes through the crop dialog and marks Closed. */}
             <div className="space-y-2">
@@ -415,31 +407,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
               </label>
             </div>
 
-            <div>
-              <div className="mb-1 text-xs font-medium text-on-surface-variant">Status</div>
-              <div role="group" aria-label="Status" className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(settings.statuses.length, 4)}, minmax(0, 1fr))` }}>
-                {settings.statuses.map((s, i) => {
-                  const on = rec.status === s.label;
-                  return (
-                    <button
-                      key={s.key}
-                      type="button"
-                      aria-pressed={on}
-                      aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
-                      title={i < 9 ? `${s.label} · ${i + 1}` : s.label}
-                      onClick={() => pickStatus(s.label)}
-                      style={on ? chipStyle(s.color) : undefined}
-                      className={`t-press inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-[12px] border px-2 text-[14px] font-semibold transition-colors ${
-                        on ? '' : 'border-outline-variant text-on-surface hover:bg-surface-container'
-                      }`}
-                    >
-                      {i < 9 && !readOnly && <kbd className="st-kbd">{i + 1}</kbd>}
-                      <span className="truncate">{s.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <StatusPicker statuses={settings.statuses} value={rec.status} onPick={pickStatus} readOnly={readOnly} />
 
             {rec.status === doneLabel && (
               <label className="block text-xs font-medium text-on-surface-variant">
@@ -465,58 +433,8 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
               />
             </label>
 
-            {/* Custom attributes for the template export — driven by the Export
-                mapping's Custom (attr) fields. Blank falls back to the field's
-                default at export time. */}
-            {exportAttrs.length > 0 && (
-              <details className="rounded-control border border-outline-variant bg-surface-container/40">
-                <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-on-surface-variant">Custom fields (template export)</summary>
-                <div className="space-y-3 px-3 pb-3">
-                  {exportAttrs.map((a) => {
-                    const key = a.source.key;
-                    const type = attrType(a);
-                    const val = rec.extra?.[key];
-                    const setExtra = (v) => set({ extra: { ...(rec.extra || {}), [key]: v } });
-                    const inputCls = 'mt-1 w-full rounded-control border border-outline-variant bg-surface-low hover:border-outline px-3 py-2 text-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
-                    if (type === 'checkbox') {
-                      const arr = Array.isArray(val) ? val : [];
-                      const toggle = (opt) => setExtra(arr.includes(opt) ? arr.filter((x) => x !== opt) : [...arr, opt]);
-                      return (
-                        <div key={a.id} className="text-xs font-medium text-on-surface-variant">
-                          {a.label}
-                          <div className="mt-1 flex flex-col gap-1.5">
-                            {(a.options || []).length ? a.options.map((opt) => (
-                              <label key={opt} className="flex items-center gap-2 font-normal text-on-surface">
-                                <input type="checkbox" checked={arr.includes(opt)} onChange={() => toggle(opt)} /> {opt}
-                              </label>
-                            )) : <span className="font-normal italic">No options set.</span>}
-                          </div>
-                        </div>
-                      );
-                    }
-                    if (type === 'select') {
-                      return (
-                        <div key={a.id} className="text-xs font-medium text-on-surface-variant">
-                          {a.label}
-                          <Select className="mt-1 w-full" aria-label={a.label} value={val ?? ''} onChange={setExtra}
-                            options={[{ value: '', label: '— none —' }, ...(a.options || []).map((o) => ({ value: o, label: o }))]} />
-                        </div>
-                      );
-                    }
-                    return (
-                      <label key={a.id} className="block text-xs font-medium text-on-surface-variant">
-                        {a.label}
-                        {type === 'multiline' ? (
-                          <textarea rows={2} value={val ?? ''} onChange={(e) => setExtra(e.target.value)} placeholder={a.default || ''} className={`${inputCls} resize-y`} />
-                        ) : (
-                          <input value={val ?? ''} onChange={(e) => setExtra(e.target.value)} placeholder={a.default || ''} className={inputCls} />
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-              </details>
-            )}
+            {/* Custom attributes for the template export (Export mapping's attr fields). */}
+            <CustomFields attrs={exportAttrs} extra={rec.extra} onChange={(extra) => set({ extra })} />
             </fieldset>
 
             <History rec={rec} />
@@ -537,16 +455,16 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                 <Icon name="delete" className="text-[20px]" />
               </button>
             )}
-            {nav && nav.index >= 0 && nav.index < nav.total - 1 && (
+            {hasNext && (
               <button type="button" onClick={nav.next} title="Next comment · Ctrl+Enter" aria-keyshortcuts="Control+Enter"
-                className="t-press inline-flex h-10 items-center gap-2 rounded-control bg-secondary-container pl-4 pr-3 text-[14px] font-semibold text-on-secondary-container hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                className={`t-press inline-flex h-10 items-center gap-2 rounded-control pl-4 pr-3 text-[14px] font-semibold hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${docked ? 'bg-primary text-on-primary' : 'bg-secondary-container text-on-secondary-container'}`}>
                 Next comment<Icon name="arrow_forward" className="text-[20px]" />
               </button>
             )}
           </div>
         </>
       )}
-    </div>
+    </Shell>
 
     <Dialog open={askDelete} onClose={() => setAskDelete(false)} labelledBy="del-title" width={420}>
       <h2 id="del-title" className="text-lg font-semibold">Delete this comment?</h2>
@@ -567,73 +485,3 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
   );
 }
 
-// ---- History (server only): who changed what, newest first ----
-const SOURCE_KEYS = ['commentRaw', 'commentText', 'viewpoint', 'commentDate', 'authorCode', 'cameraPosition', 'imageRef'];
-function describe(ev) {
-  const d = ev.detail || {};
-  if (ev.action === 'import') return d.source === 'manual' ? 'added this comment' : `imported it${d.source ? ` from ${d.source}` : ''}`;
-  if (ev.action === 'photo') return `${d.op === 'remove' ? 'removed' : 'added'} the ${d.kind === 'after' ? 'after' : 'before'}-photo`;
-  const f = d.fields || [];
-  const parts = [];
-  if (f.includes('status')) parts.push(`set status to ${d.status || '—'}`);
-  if (f.includes('discipline')) parts.push(`set discipline to ${discLabel(d.discipline)}`);
-  if (f.includes('commenter')) parts.push(d.commenter ? `set commenter to ${d.commenter}` : 'cleared the commenter');
-  if (f.includes('resolution')) parts.push('wrote the resolution');
-  if (f.includes('closedAt') && !f.includes('status')) parts.push('changed the close date');
-  if (f.includes('extra')) parts.push('filled in custom fields');
-  if (f.some((k) => SOURCE_KEYS.includes(k))) parts.push('updated it from a new report');
-  return parts.join(', ') || 'edited it';
-}
-function History({ rec }) {
-  const source = useData();
-  const { settings } = useSettings();
-  const [items, setItems] = useState(null);
-  const [all, setAll] = useState(false);
-  const lastId = useRef(null);
-  const id = rec?.ID;
-  useEffect(() => { setItems(null); setAll(false); }, [id]);
-  useEffect(() => {
-    if (!source.caps.hasHistory || id == null) return undefined;
-    let live = true;
-    // Wait a moment after an edit so the batched save has reached the server.
-    const sameRecord = lastId.current === id;
-    lastId.current = id;
-    const t = setTimeout(() => { source.history(id).then((x) => live && setItems(x)).catch(() => live && setItems([])); }, sameRecord ? 1500 : 0);
-    return () => { live = false; clearTimeout(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, rec?.changedAt, rec?.imageData, rec?.afterImageData]);
-  if (!source.caps.hasHistory) return null;
-  // Typing is saved in bursts: fold repeats by the same person within 10 minutes.
-  const rows = [];
-  for (const ev of items || []) {
-    const text = describe(ev);
-    const prev = rows[rows.length - 1];
-    if (prev && prev.user === ev.user && prev.text === text && Math.abs(Date.parse(prev.at) - Date.parse(ev.at)) < 600000) continue;
-    rows.push({ ...ev, text });
-  }
-  const shown = all ? rows : rows.slice(0, 5);
-  const dot = (ev) => (ev.action === 'import' ? 'var(--md-sys-color-outline)' : ev.detail?.status ? statusColor(settings.statuses, ev.detail.status) : 'var(--md-sys-color-primary)');
-  return (
-    <section aria-label="History">
-      <h3 className="mb-2 flex items-center gap-2 text-[14px] font-semibold"><Icon name="history" className="text-[18px] text-on-surface-variant" />History</h3>
-      {items == null ? <div className="skeleton h-12 w-full rounded-control" /> : rows.length === 0 ? (
-        <p className="text-[13px] text-on-surface-variant">No changes recorded yet.</p>
-      ) : (
-        <ol className="hist space-y-2.5">
-          {shown.map((ev, i) => (
-            <li key={i} className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-baseline gap-2.5 text-[13px]">
-              <span className="h-2 w-2 translate-y-[1px] rounded-full" style={{ background: dot(ev) }} />
-              <span className="min-w-0"><b className="font-semibold">{ev.user || 'Someone'}</b> {ev.text}</span>
-              <span className="whitespace-nowrap text-on-surface-variant" title={new Date(ev.at).toLocaleString()}>{timeAgo(ev.at)}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-      {rows.length > 5 && (
-        <button type="button" onClick={() => setAll((v) => !v)} className="mt-2 rounded-full px-2 py-1 text-[13px] font-medium text-primary hover:bg-surface-container focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-          {all ? 'Show less' : `Show all ${rows.length}`}
-        </button>
-      )}
-    </section>
-  );
-}
