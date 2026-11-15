@@ -109,6 +109,18 @@ func TestOpenAddsVersionColumns(t *testing.T) {
 	if version != 1 || mod != "" {
 		t.Errorf("version=%d modified_at=%q, want 1 and empty", version, mod)
 	}
+	// Phase 5 columns: nothing is in the Trash and no project is restricted
+	var recDel, revDel string
+	var restricted int
+	if err := d.QueryRow(`SELECT r.deleted_at, v.deleted_at, p.restricted FROM records r JOIN reviews v ON v.id = r.review_id JOIN projects p ON p.id = v.project_id`).Scan(&recDel, &revDel, &restricted); err != nil {
+		t.Fatalf("read Phase 5 columns: %v", err)
+	}
+	if recDel != "" || revDel != "" || restricted != 0 {
+		t.Errorf("deleted_at=%q/%q restricted=%d, want empty and 0", recDel, revDel, restricted)
+	}
+	if !tableExists(d, "project_members") || !tableExists(d, "pin_attempts") {
+		t.Errorf("Phase 5 tables missing")
+	}
 	d.Close()
 	if d, err = Open(path); err != nil { // a second open must not try to add them again
 		t.Fatalf("reopen: %v", err)

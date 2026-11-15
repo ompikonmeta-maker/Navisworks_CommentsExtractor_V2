@@ -25,7 +25,15 @@ CREATE TABLE IF NOT EXISTS projects (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT NOT NULL,
   created_by INTEGER REFERENCES users(id),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  restricted INTEGER NOT NULL DEFAULT 0   -- 1: only admins and project_members may open it
+);
+
+-- Who may open a restricted project (Phase 5). Admins always may.
+CREATE TABLE IF NOT EXISTS project_members (
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, user_id)
 );
 
 -- A review is one Navisworks comment round inside a project; records hang off it.
@@ -34,7 +42,10 @@ CREATE TABLE IF NOT EXISTS reviews (
   project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
   created_by INTEGER REFERENCES users(id),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Trash (Phase 5): set when deleted; restorable for 30 days, then purged.
+  deleted_at TEXT NOT NULL DEFAULT '',
+  deleted_by INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_reviews_project ON reviews(project_id);
 
@@ -64,7 +75,10 @@ CREATE TABLE IF NOT EXISTS records (
   -- (fixed-width UTC, so it sorts as text); drives the light refresh (?since=).
   -- Both are added to older databases by db.Open (addRecordColumns).
   version         INTEGER NOT NULL DEFAULT 1,
-  modified_at     TEXT NOT NULL DEFAULT ''
+  modified_at     TEXT NOT NULL DEFAULT '',
+  -- Trash (Phase 5): set when deleted; restorable for 30 days, then purged.
+  deleted_at      TEXT NOT NULL DEFAULT '',
+  deleted_by      INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_records_review ON records(review_id);
 

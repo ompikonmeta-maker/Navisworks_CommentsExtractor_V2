@@ -9,8 +9,9 @@ import (
 	"tabelin/server/internal/auth"
 )
 
-// Project > Review. Every signed-in user can see all projects and reviews (the
-// small-team model); only admins create or rename them.
+// Project > Review. Every signed-in user sees every project that is not
+// restricted (and the restricted ones they are a member of — access.go); only
+// admins create, rename or delete them. Deleted reviews sit in the Trash.
 
 func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	if auth.FromContext(r.Context()).Role != "admin" {
@@ -31,12 +32,15 @@ func decodeName(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return strings.TrimSpace(body.Name), true
 }
 
-// listProjects returns every project with its number of reviews.
+// listProjects returns the projects the caller may open, with their number
+// of reviews (not counting the Trash) and whether access is restricted.
 func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
+	where, args := visibleProjectsSQL(auth.FromContext(r.Context()))
 	rows, err := a.DB.Query(`
-		SELECT p.id, p.name, p.created_at, COUNT(v.id)
-		FROM projects p LEFT JOIN reviews v ON v.project_id = p.id
-		GROUP BY p.id ORDER BY p.id DESC`)
+		SELECT p.id, p.name, p.created_at, p.restricted, COUNT(v.id)
+		FROM projects p LEFT JOIN reviews v ON v.project_id = p.id AND v.deleted_at = ''
+		WHERE `+where+`
+		GROUP BY p.id ORDER BY p.id DESC`, args...)
 	if err != nil {
 		writeErr(w, 500, "query projects")
 		return
@@ -45,12 +49,13 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var id, n int64
+		var restricted int
 		var name, created string
-		if err := rows.Scan(&id, &name, &created, &n); err != nil {
+		if err := rows.Scan(&id, &name, &created, &restricted, &n); err != nil {
 			writeErr(w, 500, "scan project")
 			return
 		}
-		out = append(out, map[string]any{"id": id, "name": name, "createdAt": created, "reviews": n})
+		out = append(out, map[string]any{"id": id, "name": name, "createdAt": created, "reviews": n, "restricted": restricted == 1})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -109,8 +114,8 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := a.DB.Query(`
 		SELECT v.id, v.name, v.created_at, COUNT(c.id)
-		FROM reviews v LEFT JOIN records c ON c.review_id = v.id
-		WHERE v.project_id = ? GROUP BY v.id ORDER BY v.id DESC`, pid)
+		FROM reviews v LEFT JOIN records c ON c.review_id = v.id AND c.deleted_at = ''
+		WHERE v.project_id = ? AND v.deleted_at = '' GROUP BY v.id ORDER BY v.id DESC`, pid)
 	if err != nil {
 		writeErr(w, 500, "query reviews")
 		return
@@ -179,7 +184,7 @@ func (a *API) renameReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": rid, "name": name})
 }
 
-// deleteReview removes a review with all its records and photos (admin).
+// deleteReview moves a review (with its comments) to the Trash (admin).
 func (a *API) deleteReview(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
@@ -189,8 +194,8 @@ func (a *API) deleteReview(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
-	a.unlinkFilesWhere(`r.review_id=?`, rid)
-	res, err := a.DB.Exec(`DELETE FROM reviews WHERE id=?`, rid)
+	res, err := a.DB.Exec(`UPDATE reviews SET deleted_at=?, deleted_by=? WHERE id=? AND deleted_at=''`,
+		trashNow(), auth.FromContext(r.Context()).ID, rid)
 	if err != nil {
 		writeErr(w, 500, "delete review")
 		return
@@ -199,12 +204,12 @@ func (a *API) deleteReview(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "review not found")
 		return
 	}
-	a.DB.Exec(`DELETE FROM config WHERE scope=?`, reviewScope(rid))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// deleteProject removes an empty project (admin). Reviews must be deleted
-// first, so a project's comments are never lost by one click.
+// deleteProject removes an empty project (admin). Reviews must be deleted —
+// and emptied from the Trash — first, so a project's comments are never lost
+// by one click.
 func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
@@ -214,10 +219,15 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad project id")
 		return
 	}
-	var n int
-	a.DB.QueryRow(`SELECT COUNT(*) FROM reviews WHERE project_id=?`, pid).Scan(&n)
-	if n > 0 {
+	var live, trashed int
+	a.DB.QueryRow(`SELECT COUNT(*) FROM reviews WHERE project_id=? AND deleted_at=''`, pid).Scan(&live)
+	a.DB.QueryRow(`SELECT COUNT(*) FROM reviews WHERE project_id=? AND deleted_at!=''`, pid).Scan(&trashed)
+	if live > 0 {
 		writeErr(w, http.StatusConflict, "project still has reviews")
+		return
+	}
+	if trashed > 0 {
+		writeErr(w, http.StatusConflict, "project has reviews in the Trash — delete them for good first")
 		return
 	}
 	a.removeTemplates(pid)

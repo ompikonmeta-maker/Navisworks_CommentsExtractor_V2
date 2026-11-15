@@ -484,8 +484,20 @@ func TestDeleteRules(t *testing.T) {
 		t.Fatalf("a refused project delete removed data")
 	}
 
-	// deleting a review removes its comments, photos, history and settings
+	// deleting a review moves it to the Trash: gone from every list and route…
 	e.want(200, e.admin, "DELETE", fmt.Sprintf("/api/reviews/%d", rid), nil)
+	if list := decode[[]map[string]any](t, e.want(200, e.admin, "GET", fmt.Sprintf("/api/projects/%d/reviews", pid), nil)); len(list) != 0 {
+		t.Errorf("deleted review still listed: %v", list)
+	}
+	e.want(404, e.admin, "GET", fmt.Sprintf("/api/reviews/%d/records", rid), nil)
+	e.want(404, e.reviewer, "GET", fmt.Sprintf("/api/records/%d", f.ids[0]), nil)
+	if filesOnDisk() != 2 {
+		t.Errorf("photos must stay while the review is in the Trash")
+	}
+	// …a project with only Trash in it still can't go…
+	e.want(409, e.admin, "DELETE", fmt.Sprintf("/api/projects/%d", pid), nil)
+	// …and deleting it for good from the Trash removes comments, photos, history and settings
+	e.want(200, e.admin, "POST", "/api/trash/purge", map[string]any{"reviews": []int64{rid}})
 	for table, q := range map[string]string{
 		"records":       `SELECT COUNT(*) FROM records`,
 		"images":        `SELECT COUNT(*) FROM images`,

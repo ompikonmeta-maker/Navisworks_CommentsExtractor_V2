@@ -51,48 +51,60 @@ func (a *API) ResolveUser(username string) (*auth.User, error) {
 }
 
 // Routes returns the /api/* handler. Auth (except health) is applied by caller.
+// Every route that names a project, review, record or file goes through
+// a.guard (access.go): a project the caller may not open, or something in the
+// Trash, answers 404.
 func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
+	P, R, C, F := byProject, byReview, byRecord, byFile
+	g := a.guard
 	mux.HandleFunc("GET /api/health", a.health)
 	mux.HandleFunc("GET /api/me", a.me)
-	// Project > Review (admins create both; everyone signed in can read)
+	// Project > Review (admins create both; signed-in users read what they may open)
 	mux.HandleFunc("GET /api/projects", a.listProjects)
 	mux.HandleFunc("POST /api/projects", a.createProject)        // admin
 	mux.HandleFunc("PATCH /api/projects/{pid}", a.renameProject) // admin
-	mux.HandleFunc("GET /api/projects/{pid}/reviews", a.listReviews)
-	mux.HandleFunc("POST /api/projects/{pid}/reviews", a.createReview) // admin
-	mux.HandleFunc("PATCH /api/reviews/{rid}", a.renameReview)
-	mux.HandleFunc("DELETE /api/reviews/{rid}", a.deleteReview)   // admin
-	mux.HandleFunc("DELETE /api/projects/{pid}", a.deleteProject) // admin, empty projects only
-	mux.HandleFunc("GET /api/server-info", a.serverInfo)          // admin         // admin
-	mux.HandleFunc("GET /api/users", a.listUsers)                 // admin
-	mux.HandleFunc("POST /api/users", a.createUser)               // admin
-	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)         // admin
-	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)        // admin
-	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin)  // admin
+	mux.HandleFunc("GET /api/projects/{pid}/reviews", g(P, a.listReviews))
+	mux.HandleFunc("POST /api/projects/{pid}/reviews", a.createReview)   // admin
+	mux.HandleFunc("PATCH /api/reviews/{rid}", a.renameReview)           // admin
+	mux.HandleFunc("DELETE /api/reviews/{rid}", a.deleteReview)          // admin → Trash
+	mux.HandleFunc("DELETE /api/projects/{pid}", a.deleteProject)        // admin, empty projects only
+	mux.HandleFunc("GET /api/projects/{pid}/access", a.getProjectAccess) // admin
+	mux.HandleFunc("PUT /api/projects/{pid}/access", a.putProjectAccess) // admin
+	mux.HandleFunc("GET /api/server-info", a.serverInfo)                 // admin
+	mux.HandleFunc("GET /api/users", a.listUsers)                        // admin
+	mux.HandleFunc("POST /api/users", a.createUser)                      // admin
+	mux.HandleFunc("PATCH /api/users/{id}", a.updateUser)                // admin
+	mux.HandleFunc("DELETE /api/users/{id}", a.deleteUser)               // admin
+	mux.HandleFunc("POST /api/users/{id}/reset-pin", a.resetPin)         // admin
+	// Trash and backup (admin)
+	mux.HandleFunc("GET /api/trash", a.listTrash)
+	mux.HandleFunc("POST /api/trash/restore", a.restoreTrash)
+	mux.HandleFunc("POST /api/trash/purge", a.purgeTrash)
+	mux.HandleFunc("GET /api/backup", a.backup)
 	// records + images
-	mux.HandleFunc("GET /api/reviews/{rid}/records", a.listRecords)
-	mux.HandleFunc("POST /api/reviews/{rid}/records", a.importRecords)
-	mux.HandleFunc("POST /api/reviews/{rid}/records/one", a.createRecord) // admin
-	mux.HandleFunc("GET /api/records/{id}", a.getRecordHandler)
-	mux.HandleFunc("PATCH /api/reviews/{rid}/records", a.bulkPatchRecords)
-	mux.HandleFunc("PATCH /api/records/{id}", a.patchRecord)
-	mux.HandleFunc("DELETE /api/records/{id}", a.deleteRecord)
-	mux.HandleFunc("POST /api/records/{id}/images", a.uploadImage)
-	mux.HandleFunc("DELETE /api/records/{id}/images", a.deleteImage)
-	mux.HandleFunc("GET /api/records/{id}/history", a.recordHistory)
-	mux.HandleFunc("POST /api/reviews/{rid}/records/delete", a.bulkDeleteRecords)
-	mux.HandleFunc("GET /api/files/{key}", a.getFile)
+	mux.HandleFunc("GET /api/reviews/{rid}/records", g(R, a.listRecords))
+	mux.HandleFunc("POST /api/reviews/{rid}/records", g(R, a.importRecords))
+	mux.HandleFunc("POST /api/reviews/{rid}/records/one", g(R, a.createRecord)) // admin
+	mux.HandleFunc("PATCH /api/reviews/{rid}/records", g(R, a.bulkPatchRecords))
+	mux.HandleFunc("POST /api/reviews/{rid}/records/delete", g(R, a.bulkDeleteRecords))
+	mux.HandleFunc("GET /api/records/{id}", g(C, a.getRecordHandler))
+	mux.HandleFunc("PATCH /api/records/{id}", g(C, a.patchRecord))
+	mux.HandleFunc("DELETE /api/records/{id}", g(C, a.deleteRecord))
+	mux.HandleFunc("POST /api/records/{id}/images", g(C, a.uploadImage))
+	mux.HandleFunc("DELETE /api/records/{id}/images", g(C, a.deleteImage))
+	mux.HandleFunc("GET /api/records/{id}/history", g(C, a.recordHistory))
+	mux.HandleFunc("GET /api/files/{key}", g(F, a.getFile))
 	// central configuration (settings, detection, statuses, template mapping, custom fields)
 	mux.HandleFunc("GET /api/config", a.getGlobalConfig)
 	mux.HandleFunc("PUT /api/config", a.putGlobalConfig)
-	mux.HandleFunc("GET /api/projects/{pid}/config", a.getProjectConfig)
-	mux.HandleFunc("PUT /api/projects/{pid}/config", a.putProjectConfig)
-	mux.HandleFunc("GET /api/projects/{pid}/template", a.getTemplate)
-	mux.HandleFunc("PUT /api/projects/{pid}/template", a.putTemplate)
-	mux.HandleFunc("DELETE /api/projects/{pid}/template", a.deleteTemplate)
-	mux.HandleFunc("GET /api/reviews/{rid}/config", a.getReviewConfig)
-	mux.HandleFunc("PUT /api/reviews/{rid}/config", a.putReviewConfig)
+	mux.HandleFunc("GET /api/projects/{pid}/config", g(P, a.getProjectConfig))
+	mux.HandleFunc("PUT /api/projects/{pid}/config", g(P, a.putProjectConfig))
+	mux.HandleFunc("GET /api/projects/{pid}/template", g(P, a.getTemplate))
+	mux.HandleFunc("PUT /api/projects/{pid}/template", g(P, a.putTemplate))
+	mux.HandleFunc("DELETE /api/projects/{pid}/template", g(P, a.deleteTemplate))
+	mux.HandleFunc("GET /api/reviews/{rid}/config", g(R, a.getReviewConfig))
+	mux.HandleFunc("PUT /api/reviews/{rid}/config", g(R, a.putReviewConfig))
 	return mux
 }
 

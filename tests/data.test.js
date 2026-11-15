@@ -142,7 +142,9 @@ describe('serverSource', () => {
     expect(lastImport).toMatchObject({ key: 'lastImport', json: { added: [12] } });
     const back = await res.undo();
     expect(back.source).toBe('review:9');
-    expect(calls.find((c) => c.url.endsWith('/records/delete')).body).toEqual({ ids: [12] });
+    const del = calls.find((c) => c.url.includes('/records/delete'));
+    expect(del.url).toContain('?forGood=1'); // an undone import doesn't go to the Trash
+    expect(del.body).toEqual({ ids: [12] });
   });
 
   it('shares settings per project and per review', async () => {

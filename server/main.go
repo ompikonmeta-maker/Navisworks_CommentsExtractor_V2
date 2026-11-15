@@ -53,6 +53,7 @@ func main() {
 		return urls
 	}
 	bootstrapAdmin(database)
+	a.PurgeExpired() // the Trash keeps deleted things for api.TrashDays days
 
 	root := http.NewServeMux()
 	// Health is unauthenticated (for uptime checks); it is the more specific

@@ -148,7 +148,7 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	if !q.Has("since") {
-		out, err := a.queryRecords(`r.review_id=?`, rid)
+		out, err := a.queryRecords(`r.review_id=? AND r.deleted_at=''`, rid)
 		if err != nil {
 			writeErr(w, 500, "query records")
 			return
@@ -166,13 +166,13 @@ func (a *API) listRecords(w http.ResponseWriter, r *http.Request) {
 		since = t.UTC().Format(modStamp)
 	}
 	next := time.Now().UTC().Add(-refreshOverlap).Format(modStamp)
-	changed, err := a.queryRecords(`r.review_id=? AND r.modified_at >= ?`, rid, since)
+	changed, err := a.queryRecords(`r.review_id=? AND r.modified_at >= ? AND r.deleted_at=''`, rid, since)
 	if err != nil {
 		writeErr(w, 500, "query records")
 		return
 	}
 	ids := []int64{}
-	rows, err := a.DB.Query(`SELECT id FROM records WHERE review_id=? ORDER BY id`, rid)
+	rows, err := a.DB.Query(`SELECT id FROM records WHERE review_id=? AND deleted_at='' ORDER BY id`, rid)
 	if err != nil {
 		writeErr(w, 500, "query ids")
 		return
@@ -457,7 +457,7 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 		if set == "" {
 			continue
 		}
-		q, qargs := `UPDATE records SET `+set+` WHERE id=? AND review_id=?`, append(args, up.ID, rid)
+		q, qargs := `UPDATE records SET `+set+` WHERE id=? AND review_id=? AND deleted_at=''`, append(args, up.ID, rid)
 		if up.Version != nil {
 			q, qargs = q+` AND version=?`, append(qargs, *up.Version)
 		}
@@ -473,7 +473,7 @@ func (a *API) bulkPatchRecords(w http.ResponseWriter, r *http.Request) {
 			logEvent(txExec(tx), up.ID, u.ID, "edit", editDetail(up.Patch, keys))
 		} else if up.Version != nil {
 			var n int
-			tx.QueryRow(`SELECT COUNT(*) FROM records WHERE id=? AND review_id=?`, up.ID, rid).Scan(&n)
+			tx.QueryRow(`SELECT COUNT(*) FROM records WHERE id=? AND review_id=? AND deleted_at=''`, up.ID, rid).Scan(&n)
 			if n > 0 {
 				stale = append(stale, up.ID)
 			}
@@ -538,15 +538,17 @@ func buildPatch(patch map[string]json.RawMessage, userID int64, admin bool) (str
 	return set, append(args, userID, time.Now().UTC().Format(time.RFC3339), modNow()), keys
 }
 
-// bulkDeleteRecords removes many records of a review (and their photos) in
-// one go — used to undo an import. Admins only.
+// bulkDeleteRecords moves many comments of a review to the Trash (admin).
+// ?forGood=1 deletes them at once instead — used to undo an import, whose
+// added comments should not linger in the Trash.
 func (a *API) bulkDeleteRecords(w http.ResponseWriter, r *http.Request) {
+	u := auth.FromContext(r.Context())
 	rid, ok := pathID(r, "rid")
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "bad review id")
 		return
 	}
-	if !isAdminRole(auth.FromContext(r.Context())) {
+	if !isAdminRole(u) {
 		writeErr(w, http.StatusForbidden, "cannot delete records")
 		return
 	}
@@ -558,18 +560,17 @@ func (a *API) bulkDeleteRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n := 0
-	for _, id := range body.IDs {
-		a.unlinkFilesWhere(`r.id=? AND r.review_id=?`, id, rid)
-		if res, err := a.DB.Exec(`DELETE FROM records WHERE id=? AND review_id=?`, id, rid); err == nil {
-			if c, _ := res.RowsAffected(); c > 0 {
-				n++
-			}
+	if r.URL.Query().Get("forGood") == "1" {
+		for _, id := range body.IDs {
+			n += a.purgeRecords(`r.id=? AND r.review_id=?`, id, rid)
 		}
+	} else {
+		n = a.trashRecords(rid, body.IDs, u.ID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
 }
 
-// deleteRecord removes a record and its image files (admins only).
+// deleteRecord moves one comment to the Trash (admins only).
 func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 	u := auth.FromContext(r.Context())
 	id, ok := pathID(r, "id")
@@ -577,7 +578,8 @@ func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad id")
 		return
 	}
-	if _, err := a.recordReview(id); err != nil {
+	rid, err := a.recordReview(id)
+	if err != nil {
 		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
@@ -585,9 +587,8 @@ func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "cannot delete record")
 		return
 	}
-	a.unlinkRecordFiles(id)
-	if _, err := a.DB.Exec(`DELETE FROM records WHERE id=?`, id); err != nil {
-		writeErr(w, 500, "delete record")
+	if a.trashRecords(rid, []int64{id}, u.ID) == 0 {
+		writeErr(w, http.StatusNotFound, "record not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -595,7 +596,7 @@ func (a *API) deleteRecord(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) recordReview(id int64) (int64, error) {
 	var rid int64
-	err := a.DB.QueryRow(`SELECT review_id FROM records WHERE id=?`, id).Scan(&rid)
+	err := a.DB.QueryRow(`SELECT review_id FROM records WHERE id=? AND deleted_at=''`, id).Scan(&rid)
 	return rid, err
 }
 

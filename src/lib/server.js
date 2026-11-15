@@ -61,7 +61,8 @@ export const api = {
   uploadImage: (id, kind, blob) => req('POST', `/api/records/${id}/images?kind=${kind}`, blob),
   deleteImage: (id, kind) => req('DELETE', `/api/records/${id}/images?kind=${kind}`),
   recordHistory: (id) => req('GET', `/api/records/${id}/history`),
-  deleteRecords: (rid, ids) => req('POST', `/api/reviews/${rid}/records/delete`, { ids }),
+  // To the Trash; forGood deletes at once (used to undo an import).
+  deleteRecords: (rid, ids, forGood = false) => req('POST', `/api/reviews/${rid}/records/delete${forGood ? '?forGood=1' : ''}`, { ids }),
   deleteReview: (rid) => req('DELETE', `/api/reviews/${rid}`),
   deleteProject: (pid) => req('DELETE', `/api/projects/${pid}`),
   serverInfo: () => req('GET', '/api/server-info'),
@@ -269,7 +270,7 @@ export async function applyMergeRemote(rid, plan, { missingAction, doneLabel }) 
 }
 
 export async function undoImportRemote(rid, undo) {
-  if (undo?.added?.length) await api.deleteRecords(rid, undo.added);
+  if (undo?.added?.length) await api.deleteRecords(rid, undo.added, true);
   if (undo?.restore?.length) await api.bulkPatchRecords(rid, undo.restore);
   for (const id of undo?.removeBefore || []) { try { await api.deleteImage(id, 'before'); } catch { /* already gone */ } }
   try { await api.putReviewConfig(rid, 'lastImport', null); } catch { /* ignore */ }

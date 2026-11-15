@@ -8,7 +8,7 @@ no admin install. Users are identified by their office (AD) account.
 
 Working: SQLite schema + migrations, sign-in (username + PIN session cookie),
 users and roles (admin / reviewer), the **Project › Review** hierarchy
-(admins create projects and reviews; every signed-in user sees all of them),
+(admins create projects and reviews; signed-in users see the projects they may open),
 records, before/after images, and config at global / project / review scope:
 the project holds the Excel template file + its column mapping, statuses,
 detection rules, labels and custom fields; the review holds its target date.
@@ -17,6 +17,30 @@ Not yet: the Windows (AD) handshake.
 Data model: `projects` → `reviews` → `records` → `images`. A database from
 before Project › Review is upgraded on startup: each old "project" becomes a
 review inside a project called "General", which an admin can rename.
+
+## Access, Trash and backup (Phase 5)
+
+- **Wrong PINs:** after 5 wrong PINs in a row an account is locked for 5 minutes
+  (answer 429 with `Retry-After`). A correct PIN or an admin **Reset PIN** clears it.
+- **Per-project access:** every project is open to all signed-in users until an admin
+  restricts it (`PUT /api/projects/{pid}/access` `{ "restricted": true, "members": [user ids] }`).
+  Admins always see everything; anyone else gets 404 for a project they may not open.
+- **Trash:** deleting a comment or a review moves it to the Trash for 30 days
+  (`GET /api/trash`, `POST /api/trash/restore`, `POST /api/trash/purge` — admin). After
+  30 days it is deleted for good (checked at startup and whenever the Trash is opened).
+  Undoing an import deletes its comments at once (`…/records/delete?forGood=1`).
+- **Backup:** `GET /api/backup` (admin) downloads `tabelin-backup-<date>.zip` with
+  `tabelin.db` (a consistent copy, safe while people work), the `files/` folder (photos,
+  templates) and `RESTORE.txt`.
+
+### Restore from a backup
+
+1. Close the Tabelin server window.
+2. In the server's `data` folder, move the old `tabelin.db` and `files` somewhere safe.
+3. Copy `tabelin.db` and `files` from the backup zip into the `data` folder.
+4. Start `tabelin-server.exe` and check that a review opens with its photos.
+
+`go test ./internal/api -run TestBackupRestores` does exactly this against a fresh folder.
 
 ## Run (development)
 

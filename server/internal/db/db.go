@@ -50,11 +50,11 @@ func Open(path string) (*sql.DB, error) {
 	return d, nil
 }
 
-// addRecordColumns adds the columns introduced after a database may already
-// exist — CREATE TABLE IF NOT EXISTS never adds columns to an existing table.
-func addRecordColumns(d *sql.DB) error {
+// addColumns adds columns introduced after a database may already exist —
+// CREATE TABLE IF NOT EXISTS never adds columns to an existing table.
+func addColumns(d *sql.DB, table string, cols []struct{ name, def string }) error {
 	have := map[string]bool{}
-	rows, err := d.Query(`SELECT name FROM pragma_table_info('records')`)
+	rows, err := d.Query(`SELECT name FROM pragma_table_info('` + table + `')`)
 	if err != nil {
 		return err
 	}
@@ -65,19 +65,55 @@ func addRecordColumns(d *sql.DB) error {
 		}
 	}
 	rows.Close()
-	for _, c := range []struct{ name, def string }{
-		{"version", "INTEGER NOT NULL DEFAULT 1"},
-		{"modified_at", "TEXT NOT NULL DEFAULT ''"},
-	} {
+	for _, c := range cols {
 		if have[c.name] {
 			continue
 		}
-		if _, err := d.Exec(`ALTER TABLE records ADD COLUMN ` + c.name + ` ` + c.def); err != nil {
-			return fmt.Errorf("%s: %w", c.name, err)
+		if _, err := d.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + c.name + ` ` + c.def); err != nil {
+			return fmt.Errorf("%s.%s: %w", table, c.name, err)
 		}
 	}
-	_, err = d.Exec(`CREATE INDEX IF NOT EXISTS idx_records_modified ON records(review_id, modified_at)`)
-	return err
+	return nil
+}
+
+type col = struct{ name, def string }
+
+// addRecordColumns brings an older database up to the current columns:
+// record versions (Phase 2), the Trash (Phase 5: deleted_at/deleted_by on
+// records and reviews) and per-project access (Phase 5: projects.restricted).
+func addRecordColumns(d *sql.DB) error {
+	steps := []struct {
+		table string
+		cols  []col
+	}{
+		{"records", []col{
+			{"version", "INTEGER NOT NULL DEFAULT 1"},
+			{"modified_at", "TEXT NOT NULL DEFAULT ''"},
+			{"deleted_at", "TEXT NOT NULL DEFAULT ''"},
+			{"deleted_by", "INTEGER"},
+		}},
+		{"reviews", []col{
+			{"deleted_at", "TEXT NOT NULL DEFAULT ''"},
+			{"deleted_by", "INTEGER"},
+		}},
+		{"projects", []col{
+			{"restricted", "INTEGER NOT NULL DEFAULT 0"},
+		}},
+	}
+	for _, s := range steps {
+		if err := addColumns(d, s.table, s.cols); err != nil {
+			return err
+		}
+	}
+	for _, q := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_records_modified ON records(review_id, modified_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_records_deleted ON records(deleted_at)`,
+	} {
+		if _, err := d.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func tableExists(d *sql.DB, name string) bool {
