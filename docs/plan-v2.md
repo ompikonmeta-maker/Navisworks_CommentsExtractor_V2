@@ -229,3 +229,8 @@ Tick the phase box above and add one line here per finished phase (date, branch,
   filters (`lib/queues.js`), headline (`lib/headline.js`), import (`ImportAction.jsx`); detail
   split into StatusPicker / CustomFields / History. Help text and 4 screenshots updated
   (`scripts/help-shots.mjs`). Kept the app's own colours and sidebar, not the mockup's.
+- 2026-11-15 — Phase 5 in progress, branch `claude/v2`: owner accepted all four items.
+  Done and tested: wrong-PIN limit (server + sign-in message). Server done and tested, UI to
+  come after the mockup is approved: Trash (soft delete, restore, purge, 30-day expiry),
+  per-project access (unrestricted by default, guards on every scoped route), backup download
+  with a tested restore. Mockups: design canvas, row "Fase 5".

@@ -73,7 +73,9 @@ npm run smoke:server                  # build, copy into server/web, two browser
   Files that need `DOMParser` start with `// @vitest-environment jsdom`.
 - `server/internal/api/api_test.go` runs the real routes and sign-in on `httptest` with a
   temp SQLite database: role checks (reviewer vs admin), history rows, delete rules;
-  `phase2_test.go` covers create-one, import ids, versions/409, bulk conflicts and `?since=`.
+  `phase2_test.go` covers create-one, import ids, versions/409, bulk conflicts and `?since=`;
+  `phase5_test.go` the wrong-PIN lock (fake `clock`), Trash (restore, purge, 30-day expiry),
+  restricted projects (404 on every scoped route) and backup → restore into a fresh folder.
   `server/internal/db/db_test.go` covers the `editor`/`viewer` → `reviewer` migration and
   adding `version`/`modified_at` to an older database.
 - `scripts/smoke-server.mjs` builds the Go server into a temp folder, starts it on a temp data
@@ -375,6 +377,21 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   focus and when the tab becomes visible, and merges with `MERGE_SERVER` — newer versions
   replace, new ids are added, deleted ones dropped, and records with a pending or in-flight
   save here are skipped (their save goes through or comes back as a conflict).
+- **Access and recovery (Phase 5, server).** *Wrong PINs:* 5 wrong in a row lock the account
+  for 5 minutes (`pin_attempts`; 429 + `Retry-After`; cleared by a correct PIN or admin Reset
+  PIN; `Login.jsx` shows the server's message). *Per-project access:* `projects.restricted` +
+  `project_members`; unrestricted by default; admins always see all. Every route that names
+  a project / review / record / file is wrapped in `a.guard(scope, h)` in `api.Routes()`
+  (`access.go`) → 404 when the caller may not open it **or it is in the Trash**; a new scoped
+  route must be wrapped too. `GET/PUT /api/projects/{pid}/access`. *Trash:* deleting a
+  comment or review sets `deleted_at/deleted_by` (`trash.go`); lists and counts filter
+  `deleted_at=''`; `GET /api/trash`, `POST /api/trash/restore|purge` (admin); purged after
+  `TrashDays` (30) at startup and on listing; a project with reviews in the Trash can't be
+  deleted; Undo import deletes for good (`deleteRecords(rid, ids, true)` → `?forGood=1`).
+  *Backup:* `GET /api/backup` (admin) → zip of a `VACUUM INTO` copy of `tabelin.db` + `files/`
+  + `RESTORE.txt`; restore steps in `server/README.md`, tested by `TestBackupRestores`.
+  Columns are added to older databases by `db.addRecordColumns` (generic `addColumns`).
+  The UI for Trash, backup and access is still to be built (mockups in the design canvas).
 - **Paste a snapshot (Ctrl+V)** in the drawer goes to the photo slot last hovered/focused
   (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
 - **Releases**: `.github/workflows/build.yml` runs only by hand (Actions → Build → Run workflow,
