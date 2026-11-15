@@ -18,7 +18,7 @@ export default function Login({ onSuccess }) {
       const u = await api.login(username.trim(), pin);
       onSuccess(u);
     } catch (e2) {
-      setErr(e2.code === 401 ? 'Account or PIN is not correct.' : 'Could not sign in. Try again.');
+      setErr(e2.code === 401 ? 'Account or PIN is not correct.' : e2.code === 429 ? e2.message : 'Could not sign in. Try again.');
       setBusy(false);
     }
   };

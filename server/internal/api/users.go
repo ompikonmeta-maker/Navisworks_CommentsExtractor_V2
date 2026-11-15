@@ -77,6 +77,7 @@ func (a *API) resetPin(w http.ResponseWriter, r *http.Request) {
 	}
 	// Sign the user out of any active sessions so the new PIN is required.
 	a.DB.Exec(`DELETE FROM sessions WHERE username=(SELECT username FROM users WHERE id=?)`, id)
+	a.clearPinFailures(id) // a reset also lifts a wrong-PIN lock
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

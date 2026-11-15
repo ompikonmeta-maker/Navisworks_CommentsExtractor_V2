@@ -110,3 +110,12 @@ CREATE TABLE IF NOT EXISTS record_events (
   detail    TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_record_events_record ON record_events(record_id);
+
+-- Wrong-PIN attempts per account (Phase 5). After maxPinFailures wrong PINs in
+-- a row the account cannot sign in until locked_until; a correct PIN or an
+-- admin "Reset PIN" clears the row.
+CREATE TABLE IF NOT EXISTS pin_attempts (
+  user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  failures     INTEGER NOT NULL DEFAULT 0,
+  locked_until TEXT NOT NULL DEFAULT ''
+);
