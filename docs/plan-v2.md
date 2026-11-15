@@ -137,7 +137,7 @@ Do this only after Phases 1–2 (the tests are the safety net).
 **Done when:** `remoteState` is referenced only inside `src/data/` and the boot code;
 all tests and the smoke script pass in both modes; behaviour is unchanged.
 
-## Phase 4 — Workbench screen (needs the owner's choice first) ☐
+## Phase 4 — Workbench screen (needs the owner's choice first) ☑
 
 **Goal:** the work happens on one screen.
 
@@ -222,7 +222,7 @@ Tick the phase box above and add one line here per finished phase (date, branch,
   entirely (boot code picks the source). Guards in `data.test.js`. Both smoke scripts extended
   (roles, shared target, history, template, merge + undo, add/delete, reset) and run green on
   the code before and after the change — no visible change.
-- 2026-11-14 — Phase 4 **built, waiting for the owner's approval** (box stays open), branch
+- 2026-11-14 — Phase 4 built (approved by the owner 2026-11-15), branch
   `claude/v2`: owner chose C (Workbench) with A's headline sentence. Work screen (queues ·
   list · docked detail, headline strip) replaces Overview + Viewpoints; charts stay on
   Insights. Tokens + primitives in `index.css` / `components/primitives.jsx`; shared queue
