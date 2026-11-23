@@ -56,6 +56,54 @@ function useLayout(rootRef, panesRef) {
   return { width, height };
 }
 
+// Widths of the queue and detail panes (the list takes the rest, never under
+// 320 px). Dragging a handle changes them; kept per browser.
+const COLS_KEY = 'tabelin.workCols';
+const COLS_DEFAULT = { queue: 256, detail: 440 };
+function useColumns(width) {
+  const [cols, setCols] = useState(() => {
+    try { return { ...COLS_DEFAULT, ...JSON.parse(localStorage.getItem(COLS_KEY) || '{}') }; } catch { return COLS_DEFAULT; }
+  });
+  const gaps = 32;
+  const clamp = (c) => {
+    const queue = Math.min(Math.max(c.queue, 200), 380);
+    const maxDetail = Math.max(360, width - queue - gaps - 320);
+    const detail = Math.min(Math.max(c.detail, 360), Math.min(820, maxDetail));
+    return { queue, detail };
+  };
+  const shown = clamp(cols);
+  const save = (c) => { try { localStorage.setItem(COLS_KEY, JSON.stringify(c)); } catch { /* ignore */ } };
+  const move = (which, dx) => setCols((c) => { const n = clamp({ ...clamp(c), [which]: clamp(c)[which] + dx }); save(n); return n; });
+  const reset = () => { setCols(COLS_DEFAULT); save(COLS_DEFAULT); };
+  return { ...shown, move, reset };
+}
+
+// A drag handle between two panes (also keyboard: ← → move it 16 px).
+function ColumnHandle({ label, onMove, onReset, style }) {
+  const [dragging, setDragging] = useState(false);
+  const down = (e) => {
+    e.preventDefault();
+    let last = e.clientX;
+    setDragging(true);
+    document.body.classList.add('wb-resizing');
+    const mv = (ev) => { const dx = ev.clientX - last; last = ev.clientX; if (dx) onMove(dx); };
+    const up = () => {
+      setDragging(false);
+      document.body.classList.remove('wb-resizing');
+      window.removeEventListener('pointermove', mv);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', mv);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div role="separator" aria-orientation="vertical" aria-label={label} tabIndex={0} title={`${label} · double-click to reset`}
+      className="wb-handle" data-dragging={dragging} style={style}
+      onPointerDown={down} onDoubleClick={onReset}
+      onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.preventDefault(); onMove(-16); } if (e.key === 'ArrowRight') { e.preventDefault(); onMove(16); } }} />
+  );
+}
+
 export default function Work(props) {
   return <TipProvider><WorkScreen {...props} /></TipProvider>;
 }
@@ -112,6 +160,7 @@ function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
   const panesRef = useRef(null);
   const { width, height } = useLayout(rootRef, panesRef);
   const narrow = width < NARROW;
+  const cols = useColumns(width);
 
   // ---- selection and moving through the list ----
   // A comment that leaves the queue while open (e.g. it was just closed in
@@ -369,9 +418,12 @@ function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
   return (
     <div ref={rootRef} className="flex min-w-0 flex-col gap-[var(--wb-pane-gap)]">
       {strip}
-      <div ref={panesRef} className={`wb-panes ${narrow ? 'is-narrow' : ''}`}>
+      <div ref={panesRef} className={`wb-panes ${narrow ? 'is-narrow' : 'is-resizable'}`}
+        style={narrow ? undefined : { gridTemplateColumns: `${cols.queue}px var(--wb-pane-gap) minmax(320px, 1fr) var(--wb-pane-gap) ${cols.detail}px` }}>
         {queuePane}
+        {!narrow && <ColumnHandle label="Resize the queues and the list" onMove={(dx) => cols.move('queue', dx)} onReset={cols.reset} style={{ height }} />}
         {listPane}
+        {!narrow && <ColumnHandle label="Resize the list and the details" onMove={(dx) => cols.move('detail', -dx)} onReset={cols.reset} style={{ height }} />}
         {narrow ? null : <div style={{ height }} className="min-w-0">{detail}</div>}
       </div>
       {narrow && detail}

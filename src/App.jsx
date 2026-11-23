@@ -320,7 +320,7 @@ export default function App({ onExitProject, onSignOut } = {}) {
         {/* Floating title over the canvas — no border/fill on desktop. The box
             reaches 16px into the gutters (-mx-4) so its padded content lines
             up exactly with the card edges below. */}
-        <header className="t-appbar sticky top-0 z-10 border-b border-outline-variant/60 px-5 py-3 backdrop-blur md:top-3 md:-mx-4 md:rounded-card md:border-0 md:px-4 md:py-2.5">
+        <header className="t-appbar sticky top-0 z-30 border-b border-outline-variant/60 px-5 py-3 backdrop-blur md:top-3 md:-mx-4 md:rounded-card md:border-0 md:px-4 md:py-2.5">
           <div className="canvas-w flex items-center justify-between gap-4">
             <h1 className={`${place ? 'shrink-0' : 'truncate'} text-2xl font-bold tracking-tight md:text-3xl`}>
               {NAV.find((n) => n.id === route)?.label}

@@ -1713,6 +1713,8 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 /* Work layout: queues · list · detail. Narrow: queues become a scrolling row
    above the list and the detail goes back to a drawer. */
 .wb-panes { display: grid; gap: var(--wb-pane-gap); grid-template-columns: 256px minmax(320px, 1fr) minmax(380px, 460px); min-height: 0; }
+/* Wide: the gaps are the resize handles (columns set inline by Work.jsx). */
+.wb-panes.is-resizable { gap: 0; }
 .wb-pane .ba-thumb { aspect-ratio: 16 / 10; }
 .wb-panes.is-narrow { grid-template-columns: minmax(0, 1fr); }
 .wb-queues-row { display: flex; gap: var(--wb-space-2); overflow-x: auto; padding: var(--wb-space-3); }
@@ -1720,3 +1722,29 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 .wb-detail-swap { animation: wb-detail-in var(--wb-dur-slow) var(--wb-ease-enter) both; }
 @keyframes wb-detail-in { from { opacity: 0.25; transform: translateX(12px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wb-row, .wb-detail-swap { animation: none; } }
+
+/* Scrollbars in the Work panes: thin, and hidden until the pointer is over the
+   pane (or it has focus) — the content shows there is more. */
+.wb-pane-body, .wb-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color var(--wb-dur-base) var(--tabelin-ease);
+}
+.wb-pane-body:hover, .wb-scroll:hover, .wb-pane-body:focus-within, .wb-scroll:focus-within {
+  scrollbar-color: color-mix(in srgb, var(--md-sys-color-outline) 55%, transparent) transparent;
+}
+
+/* Column handles between the Work panes: drag to resize, double-click resets. */
+.wb-handle {
+  position: relative; cursor: col-resize; touch-action: none;
+  display: flex; justify-content: center; align-items: stretch;
+}
+.wb-handle::before {
+  content: ''; width: 3px; margin: 24px 0; border-radius: 3px; background: transparent;
+  transition: background-color var(--wb-dur-fast) var(--tabelin-ease);
+}
+.wb-handle:hover::before, .wb-handle:focus-visible::before, .wb-handle[data-dragging="true"]::before {
+  background: var(--md-sys-color-primary);
+}
+.wb-handle:focus-visible { outline: none; }
+body.wb-resizing, body.wb-resizing * { cursor: col-resize !important; user-select: none !important; }

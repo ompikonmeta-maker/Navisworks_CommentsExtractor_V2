@@ -235,6 +235,35 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
   // Paste an image anywhere in the drawer (Ctrl+V after a snapshot). It goes
   // to the photo slot last pointed at or focused — After by default.
   const [pasteTo, setPasteTo] = useState('after');
+  // "Snip" (Windows): opens the Snipping Tool's area picker through the
+  // ms-screenclip: link; the snip lands on the clipboard. Back in the tab,
+  // Ctrl+V pastes it into After — or, where the browser lets the page read the
+  // clipboard (localhost, the offline file), it is picked up on its own.
+  const [snipping, setSnipping] = useState(false);
+  const canSnip = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent || '');
+  const startSnip = () => { setPasteTo('after'); setSnipping(true); };
+  useEffect(() => { setSnipping(false); }, [record?.ID]);
+  useEffect(() => {
+    if (!snipping) return undefined;
+    const onFocus = async () => {
+      if (!window.isSecureContext || !navigator.clipboard?.read) return;
+      try {
+        for (const item of await navigator.clipboard.read()) {
+          const type = item.types.find((t) => t.startsWith('image/'));
+          if (type) {
+            const blob = await item.getType(type);
+            setSnipping(false);
+            pickImage([new File([blob], 'snip.png', { type })], 'after');
+            return;
+          }
+        }
+      } catch { /* not allowed — Ctrl+V still works */ }
+    };
+    window.addEventListener('focus', onFocus);
+    const stop = setTimeout(() => setSnipping(false), 120000);
+    return () => { window.removeEventListener('focus', onFocus); clearTimeout(stop); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snipping, rec?.ID]);
   const pasteRef = useRef('after');
   pasteRef.current = pasteTo;
   useEffect(() => { setPasteTo('after'); }, [record?.ID]);
@@ -243,7 +272,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
     const onPaste = (e) => {
       if (document.querySelector('.t-dlg, .crop-card')) return; // a dialog has it
       const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
-      if (item) { e.preventDefault(); pickImage([item.getAsFile()], pasteRef.current); }
+      if (item) { e.preventDefault(); setSnipping(false); pickImage([item.getAsFile()], pasteRef.current); }
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -283,10 +312,12 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                 <DisciplineBadge discipline={rec.discipline} />
                 <StatusBadge status={rec.status} />
               </div>
-              <h2 className="mt-2 truncate text-lg font-semibold">{rec.viewpoint}</h2>
-              <p className="text-[13px] text-on-surface-variant" title={rec.commentDate}>
-                {rec.commentId ? `#${rec.commentId} · ` : ''}{fmtStamp(rec.commentDate)}
-              </p>
+              {/* Comment no., date, camera and Navisworks user stay in the tooltip,
+                  not as labels (they are rarely needed while closing a comment). */}
+              <h2 className="mt-2 truncate text-lg font-semibold"
+                title={[rec.commentId && `Comment #${rec.commentId}`, rec.commentDate && fmtStamp(rec.commentDate), rec.cameraPosition && `Camera ${rec.cameraPosition}`, rec.authorCode && `Navisworks user ${rec.authorCode}`].filter(Boolean).join('\n')}>
+                {rec.viewpoint}
+              </h2>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {nav && nav.total > 0 && (hasPrev || hasNext) && (
@@ -316,7 +347,7 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
           </div>
 
           {/* Body — re-keyed by record so switching rows cross-fades in place */}
-          <div key={rec.ID} className={`${docked ? 'wb-detail-swap' : 'drawer-swap'} flex-1 space-y-5 overflow-y-auto px-5 py-4`}>
+          <div key={rec.ID} className={`${docked ? 'wb-detail-swap' : 'drawer-swap'} wb-scroll flex-1 space-y-5 overflow-y-auto px-5 py-4`}>
             {/* Before / after — side-by-side squares, tap to enlarge; the
                 after upload passes through the crop dialog and marks Closed. */}
             <div className="space-y-2">
@@ -329,8 +360,22 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
                     onMouseEnter={() => setPasteTo(slot.target)} onFocus={() => setPasteTo(slot.target)}>
                     <span className="flex items-center justify-between gap-2">
                       <span className="ba-cap">{slot.caption}</span>
-                      {!readOnly && <kbd className={`ba-kbd ${pasteTo === slot.target ? 'on' : ''}`} title={`Ctrl+V pastes a snapshot here`}>Ctrl V</kbd>}
+                      <span className="flex items-center gap-1.5">
+                        {!readOnly && canSnip && slot.target === 'after' && (
+                          <a href="ms-screenclip:" onClick={startSnip} title="Snip an area of the screen (Snipping Tool), then press Ctrl+V here"
+                            className="t-press inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                            <Icon name="photo_camera" className="text-[15px]" />Snip
+                          </a>
+                        )}
+                        {!readOnly && <kbd className={`ba-kbd ${pasteTo === slot.target ? 'on' : ''}`} title={`Ctrl+V pastes a snapshot here`}>Ctrl V</kbd>}
+                      </span>
                     </span>
+                    {snipping && slot.target === 'after' && (
+                      <div role="status" className="rounded-[10px] bg-primary-container px-2.5 py-1.5 text-[12px] font-medium text-on-primary-container">
+                        Pick the area, then come back and press <b>Ctrl+V</b>.
+                        <button type="button" onClick={() => setSnipping(false)} className="ml-1 underline">Cancel</button>
+                      </div>
+                    )}
                     {undo?.target === slot.target ? (
                       <div className="ba-thumb ba-undo">
                         <span className="ba-undo-msg">Photo removed</span>
@@ -380,20 +425,10 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
               {!rec.afterImageData && !readOnly && !docked && (
                 <p className="text-xs text-on-surface-variant">An after photo is cropped to a uniform size and marks this comment Closed.</p>
               )}
-              {rec.cameraPosition && (
-                <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-                  <Icon name="videocam" className="text-[16px]" /> {rec.cameraPosition}
-                </div>
-              )}
             </div>
 
             <p className="whitespace-pre-line text-sm leading-relaxed">{rec.commentText}</p>
 
-            {rec.authorCode && (
-              <div className="inline-flex items-center gap-1.5 text-sm text-on-surface-variant">
-                <Icon name="person" className="text-[18px]" /> {rec.authorCode}
-              </div>
-            )}
 
             <fieldset disabled={readOnly} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
             <StatusPicker statuses={settings.statuses} value={rec.status} onPick={pickStatus} readOnly={readOnly} />

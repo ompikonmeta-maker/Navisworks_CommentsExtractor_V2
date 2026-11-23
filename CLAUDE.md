@@ -271,7 +271,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   driven by `useSettings` (the toggle animates via `animateThemeSwitch`); there is no longer a
   `lib/theme.js`. Import is a single action (`components/ImportAction.jsx` → `useImport()`:
   hidden file input + merge dialog + Undo toast, shared by Work and Insights) — not its own
-  route. On Work, below 1500 px window width the sidebar folds to its rail on the way in.
+  route. While it runs, `ImportProgress` (fixed card, `role="status"`) shows two steps: reading
+  the files (`ingestFiles(files, onProgress)`) and saving (`source.importMerge(…, {onProgress})` →
+  `applyMergeRemote` / `importParsedRecords` report saving, photo uploads, reloading). The app
+  header sits at `z-30` so the account menu opens above the Work strip (`z-20`). On Work, below 1500 px window width the sidebar folds to its rail on the way in.
   `goComments(filter)` (from Insights) and `openDetail(id)` jump to Work with that filter.
 - `src/views/Work.jsx` — **the Work screen** (Phase 4; mockup option C with option A's
   sentence). Strip on top: the headline sentence (`lib/headline.js`: "37 days behind. Close
@@ -289,9 +292,13 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   detail always shows a comment: the first of a picked queue; a comment that leaves the queue
   while open (e.g. just closed in "Verify") stays shown and next/previous continue from its
   old place (`anchor`). Under 1100 px of Work width the queues become a scrolling row and the
-  detail is the old drawer. Keys: J/K, 1–9, Ctrl/⌘+Enter, Ctrl+V (DetailPanel).
+  detail is the old drawer. On wide screens the list/detail widths are resizable: two
+  `ColumnHandle` separators (drag, arrow keys ±16, double-click resets) drive `useColumns`
+  (localStorage `tabelin.workCols`; the list never gets narrower than 320 px). Pane bodies and
+  `.wb-scroll` hide their scrollbar until hover/focus. Keys: J/K, 1–9, Ctrl/⌘+Enter, Ctrl+V (DetailPanel).
 - `src/components/DetailPanel.jsx` — one comment: photos (crop, paste, drop, inline Undo),
-  text, status, discipline/commenter, close date, resolution, custom fields, history, footer
+  text, status, discipline/commenter (the comment number, date, camera and Navisworks user are
+  only in the title's tooltip), close date, resolution, custom fields, history, footer
   (Next after closing, delete, **Next comment** = the one strong action). `docked` renders it
   as the Work pane (no slide/close/click-outside); otherwise a drawer. `nav` may carry
   `hasPrev`/`hasNext`. Split out: `detail/StatusPicker.jsx`, `detail/CustomFields.jsx`,
@@ -405,7 +412,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   `listProjects` `restricted`/`members`). Offline nothing changes: `caps.trash/backup` false,
   delete stays final.
 - **Paste a snapshot (Ctrl+V)** in the drawer goes to the photo slot last hovered/focused
-  (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
+  (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog. On
+  Windows the After slot also has **Snip** (`ms-screenclip:` link → Snipping Tool's clip mode);
+  back in the tab the clip is read from the clipboard automatically only in a secure context
+  (localhost / file://), otherwise the hint asks for Ctrl+V.
 - **Releases**: `.github/workflows/build.yml` runs only by hand (Actions → Build → Run workflow,
   inputs `version`, `release`). It builds the web app, the Windows `tabelin-server.exe`
   (`main.version` set via `-ldflags -X`) and attaches both exe and `tabelin-offline.html` to a

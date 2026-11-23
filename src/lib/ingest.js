@@ -24,14 +24,18 @@ function readAsDataURL(blob) {
 
 /**
  * @param {File[]} files
+ * @param {(p: {step: string, done: number, total: number}) => void} [onProgress]
  * @returns {Promise<{records:object[], stats:{html:number, comments:number, images:number, linked:number}, errors:string[]}>}
  */
-export async function ingestFiles(files) {
+export async function ingestFiles(files, onProgress = () => {}) {
   const errors = [];
   const htmlDocs = []; // { name, text }
   const imagesByName = {}; // lowercased basename -> dataURL
 
+  let done = 0;
+  onProgress({ step: 'Reading files', done, total: files.length });
   for (const file of files) {
+    onProgress({ step: `Reading ${file.name}`, done, total: files.length });
     try {
       if (ZIP_RE.test(file.name)) {
         await ingestZip(file, htmlDocs, imagesByName, errors);
@@ -44,7 +48,10 @@ export async function ingestFiles(files) {
     } catch (e) {
       errors.push(`Couldn’t read ${file.name}: ${e.message}`);
     }
+    done += 1;
+    onProgress({ step: 'Reading files', done, total: files.length });
   }
+  onProgress({ step: 'Reading the comments', done: files.length, total: files.length });
 
   if (htmlDocs.length === 0) {
     return {

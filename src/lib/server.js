@@ -154,11 +154,18 @@ async function uploadBefore(id, dataUrl) {
 // Import parsed records (from ingestFiles) into a review: POST the metadata,
 // then upload each linked "before" image to the id the server gave that
 // record (answered in the order sent). Returns the fresh mapped list.
-export async function importParsedRecords(rid, recs) {
+// onProgress({ step, done, total }) follows the comments, then each photo.
+export async function importParsedRecords(rid, recs, onProgress = () => {}) {
+  onProgress({ step: `Saving ${recs.length} comments`, done: 0, total: 1 });
   const { ids = [] } = await api.importRecords(rid, recs);
-  for (let i = 0; i < recs.length; i += 1) {
-    if (ids[i]) await uploadBefore(ids[i], recs[i].imageData);
+  const withPhoto = recs.map((r, i) => [ids[i], r.imageData]).filter(([id, d]) => id && typeof d === 'string' && d.startsWith('data:'));
+  let done = 0;
+  for (const [id, d] of withPhoto) {
+    onProgress({ step: 'Uploading photos', done, total: withPhoto.length });
+    await uploadBefore(id, d);
+    done += 1;
   }
+  onProgress({ step: 'Loading the review', done: 1, total: 1 });
   return loadReviewRecords(rid);
 }
 
@@ -237,7 +244,7 @@ export function saveLastOpened(v) {
 // the ones missing from the new report, adds the new ones (with their before
 // photos), and stores what it did as the review's "lastImport" so it can be
 // undone later — from the toast or the review's menu.
-export async function applyMergeRemote(rid, plan, { missingAction, doneLabel }) {
+export async function applyMergeRemote(rid, plan, { missingAction, doneLabel, onProgress = () => {} }) {
   const updates = [];
   const restore = [];
   const newBefore = [];
@@ -257,13 +264,19 @@ export async function applyMergeRemote(rid, plan, { missingAction, doneLabel }) 
       restore.push({ id: r.ID, patch: { status: r.status, closedAt: r.closedAt || '' } });
     }
   }
-  if (updates.length) await api.bulkPatchRecords(rid, updates);
+  if (updates.length) {
+    onProgress({ step: `Updating ${updates.length} comments`, done: 0, total: 1 });
+    await api.bulkPatchRecords(rid, updates);
+  }
+  let n = 0;
   for (const [id, data] of newBefore) {
+    onProgress({ step: 'Uploading photos', done: n, total: newBefore.length });
     const blob = dataURLtoBlob(data);
     if (blob) { try { await api.uploadImage(id, 'before', blob); } catch { /* keep going */ } }
+    n += 1;
   }
   const existingIds = new Set([...plan.matched.map((m) => m.old.ID), ...plan.missing.map((r) => r.ID)]);
-  const records = plan.added.length ? await importParsedRecords(rid, plan.added) : (await api.getRecords(rid)).map(mapServerRecord);
+  const records = plan.added.length ? await importParsedRecords(rid, plan.added, onProgress) : (await api.getRecords(rid)).map(mapServerRecord);
   const undo = {
     at: new Date().toISOString(),
     added: records.filter((r) => !existingIds.has(r.ID)).map((r) => r.ID),
