@@ -69,7 +69,8 @@ npm run smoke:server                  # build, copy into server/web, two browser
   server-only screens (`Login`, `ProjectPicker`, `UsersEditor`) import `lib/server.js`; only
   `src/data/` and `store/settings.jsx` import `lib/persist.js`. `queues.test.js` checks each
   Work queue opens exactly its count and that Insights uses the same definitions;
-  `headline.test.js` covers the Work sentence.
+  `headline.test.js` covers the Work sentence. `importSummary.test.js` checks the summary of
+  the sample report and the import log.
   Files that need `DOMParser` start with `// @vitest-environment jsdom`.
 - `server/internal/api/api_test.go` runs the real routes and sign-in on `httptest` with a
   temp SQLite database: role checks (reviewer vs admin), history rows, delete rules;
@@ -274,7 +275,16 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   route. While it runs, `ImportProgress` (fixed card, `role="status"`) shows two steps: reading
   the files (`ingestFiles(files, onProgress)`) and saving (`source.importMerge(…, {onProgress})` →
   `applyMergeRemote` / `importParsedRecords` report saving, photo uploads, reloading). The app
-  header sits at `z-30` so the account menu opens above the Work strip (`z-20`). On Work, below 1500 px window width the sidebar folds to its rail on the way in.
+  header sits at `z-30` so the account menu opens above the Work strip (`z-20`). A **first
+  import** (fresh: empty review / offline sample) first shows `components/ImportSummary.jsx`
+  ("Check this import": totals, by discipline, checks with View / Pick again, raised by, comments
+  per month; Download PNG) and saves only on Save; "View" saves and opens those comments in Work
+  (`useImport({ onView })`; Work applies it via `viewAfter` when the new dataset lands). The
+  numbers come from the pure `lib/importSummary.js` (`summarizeImport`; sessions = runs of
+  comment days split by gaps over 7 days). Every saved import (re-imports too, with merge
+  counts) is kept in an **import log**: `source.imports()` / `recordImport` / `markImportUndone`
+  — offline IndexedDB key `imports` (cleared by Reset to sample), on the server the review
+  config key `imports` (newest 50, `addToLog`). On Work, below 1500 px window width the sidebar folds to its rail on the way in.
   `goComments(filter)` (from Insights) and `openDetail(id)` jump to Work with that filter.
 - `src/views/Work.jsx` — **the Work screen** (Phase 4; mockup option C with option A's
   sentence). Strip on top: the headline sentence (`lib/headline.js`: "37 days behind. Close

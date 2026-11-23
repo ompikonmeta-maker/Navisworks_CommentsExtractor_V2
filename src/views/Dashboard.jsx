@@ -44,7 +44,7 @@ function Overview({ openDetail, goComments, goSettings }) {
 
   const readOnly = !source.caps.canAdmin;
   // Import lives in ImportAction (shared with Work).
-  const importer = useImport();
+  const importer = useImport({ onView: goComments });
   const fresh = importer.fresh;
   const [targetSignal, setTargetSignal] = useState(0);
 

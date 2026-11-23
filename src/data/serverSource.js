@@ -6,6 +6,7 @@ import {
   api, loadReviewRecords, syncRecord, createRecordRemote, applyMergeRemote, undoImportRemote, mapServerRecord,
 } from '../lib/server.js';
 import { loadTemplateLocal } from '../lib/persist.js';
+import { addToLog, markUndone } from '../lib/importSummary.js';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -66,6 +67,14 @@ export function createServerSource({ project, review, user }) {
         undo: async () => ({ records: await undoImportRemote(rid, res.undo), source: recordsSource }),
       };
     },
+
+    // Past import summaries live in the review's config (key "imports").
+    async imports() {
+      const cfg = await api.getReviewConfig(rid);
+      return Array.isArray(cfg?.imports) ? cfg.imports : [];
+    },
+    recordImport: async (summary) => api.putReviewConfig(rid, 'imports', addToLog(await source.imports(), summary)),
+    markImportUndone: async (id) => api.putReviewConfig(rid, 'imports', markUndone(await source.imports(), id)),
 
     // The template belongs to the project, so everyone exports with the same one.
     async loadTemplate() {

@@ -137,11 +137,17 @@ function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
   // A new dataset (first load, an import, Undo, reset): start over on the
   // first queue with work in it. (A refresh from the server keeps `meta`.)
   const lastMeta = useRef(meta);
+  const viewAfter = useRef(null); // a filter picked on the import summary ("View")
   useEffect(() => {
     if (lastMeta.current === meta) return;
     lastMeta.current = meta;
-    started.current = false;
     setDetailId(null);
+    if (viewAfter.current) {
+      setFilterState(toFilter(viewAfter.current));
+      viewAfter.current = null;
+      started.current = true;
+      selectFirst.current = true;
+    } else started.current = false;
   }, [meta, setDetailId]);
   // First load: start on the first queue with work in it.
   useEffect(() => {
@@ -231,7 +237,7 @@ function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
   };
 
   // ---- add / delete / export / import ----
-  const importer = useImport();
+  const importer = useImport({ onView: (f) => { viewAfter.current = f; } });
   const [adding, setAdding] = useState(false);
   const addOne = async (rec) => {
     try {
@@ -348,7 +354,7 @@ function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
           <Select aria-label="Filter by status" className="dd-compact" value={filter.status} onChange={(v) => setFilter({ status: v })}
             options={[{ value: 'all', label: 'All statuses' }, { value: '!done', label: `Not ${ov.doneL.toLowerCase()}` }, ...(filter.status === '~middle' ? [{ value: '~middle', label: 'Fixed, not verified' }] : []), ...statusLabels(statuses).map((s) => ({ value: s, label: s }))]} />
           <Select aria-label="Filter by commenter" className="dd-compact" value={filter.commenter} onChange={(v) => setFilter({ commenter: v })}
-            options={[{ value: 'all', label: 'Any commenter' }, ...commenters.map((c) => ({ value: c, label: c }))]} />
+            options={[{ value: 'all', label: 'Any commenter' }, ...(filter.commenter === '' ? [{ value: '', label: 'No commenter' }] : []), ...commenters.map((c) => ({ value: c, label: c }))]} />
           {filtersOn && <Button variant="text" icon="filter_alt_off" onClick={() => setFilter({ query: '', discipline: 'all', status: queue ? filter.status : 'all', commenter: 'all' })}>Reset</Button>}
         </div>
       </PaneHeader>

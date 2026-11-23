@@ -11,28 +11,37 @@ import { ingestFiles } from '../lib/ingest.js';
 import { planMerge } from '../lib/merge.js';
 import { doneLabel as doneLabelOf } from '../lib/status.js';
 import ImportDialog from './ImportDialog.jsx';
+import ImportSummary from './ImportSummary.jsx';
+import { summarizeImport } from '../lib/importSummary.js';
 
-/** → { pick(): open the file picker, ui: the hidden input + merge dialog, busy } */
-export function useImport() {
+/**
+ * → { pick(): open the file picker, ui: the hidden input + dialogs, busy }
+ * onView(filter): after a "View" on the summary, show those comments in Work.
+ */
+export function useImport({ onView } = {}) {
   const source = useData();
   const { records, meta, notify, setData } = useStore();
   const { settings } = useSettings();
   const inputRef = useRef(null);
-  const [merge, setMerge] = useState(null); // { plan, stats, fileName, missingAction }
+  const [merge, setMerge] = useState(null); // { plan, stats, fileName, missingAction, summary }
+  const [first, setFirst] = useState(null); // first import waiting for Save: { plan, stats, summary }
   const [busy, setBusy] = useState(false);
   // Progress of a running import: { step, done, total, phase } — phase 1 reads
   // the files here, phase 2 saves to the data source (photos one by one).
   const [progress, setProgress] = useState(null);
 
-  const runImport = async (plan, stats, missingAction) => {
+  const runImport = async (plan, stats, missingAction, summary, then) => {
     const doneLabel = doneLabelOf(settings.statuses);
     setBusy(true);
     try {
       setProgress({ step: 'Saving', done: 0, total: 1, phase: 2 });
       const res = await source.importMerge(plan, { missingAction, doneLabel, onProgress: (p) => setProgress({ ...p, phase: 2 }) }, { records, source: meta.source });
       setData(res.records, res.source, stats);
+      // Keep the summary with the review so it can be opened again later.
+      if (summary) source.recordImport({ ...summary, at: new Date().toISOString() }).catch(() => {});
       const undo = async () => {
         const back = await res.undo();
+        if (summary) source.markImportUndone(summary.id).catch(() => {});
         setData(back.records, back.source, { comments: back.records.length, html: 0, images: 0, linked: 0 });
       };
       const msg = plan.matched.length
@@ -45,6 +54,8 @@ export function useImport() {
         },
       });
       setMerge(null);
+      setFirst(null);
+      then?.();
     } catch (e) {
       notify(`Import failed: ${e.message}`, 'error');
     } finally {
@@ -61,8 +72,14 @@ export function useImport() {
       setProgress(null);
       if (recs.length === 0) { notify(errors[0] || 'No comments could be imported.', 'error'); return; }
       const fileName = files.find((f) => /\.html?$/i.test(f.name))?.name || files[0].name;
-      if (source.isFreshImport(records, meta)) await runImport(planMerge([], recs), stats, 'keep');
-      else setMerge({ plan: planMerge(records, recs), stats, fileName, missingAction: 'keep' });
+      const by = source.user?.displayName || source.user?.username || '';
+      if (source.isFreshImport(records, meta)) {
+        const plan = planMerge([], recs);
+        setFirst({ plan, stats, summary: summarizeImport(recs, { fileName, stats, by }) });
+      } else {
+        const plan = planMerge(records, recs);
+        setMerge({ plan, stats, fileName, missingAction: 'keep', summary: summarizeImport(recs, { fileName, stats, plan, by }) });
+      }
     } catch (e) {
       setProgress(null);
       notify(`Import failed: ${e.message}`, 'error');
@@ -74,7 +91,13 @@ export function useImport() {
       <input ref={inputRef} type="file" multiple accept=".html,.htm,.jpg,.jpeg,.png,.zip" className="hidden"
         onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }} />
       <ImportDialog state={merge} onChange={setMerge} onCancel={() => setMerge(null)} busy={busy}
-        onConfirm={() => runImport(merge.plan, merge.stats, merge.missingAction)} />
+        onConfirm={() => runImport(merge.plan, merge.stats, merge.missingAction, merge.summary)} />
+      <ImportSummary open={!!first} summary={first?.summary} mode="confirm" busy={busy}
+        place={source.place ? `${source.place.project.name} › ${source.place.review.name}` : ''}
+        onClose={() => setFirst(null)}
+        onSave={() => runImport(first.plan, first.stats, 'keep', first.summary)}
+        onView={(filter) => runImport(first.plan, first.stats, 'keep', first.summary, () => onView?.(filter))}
+        onPickAgain={() => { setFirst(null); inputRef.current?.click(); }} />
       <ImportProgress progress={progress} />
     </>
   );

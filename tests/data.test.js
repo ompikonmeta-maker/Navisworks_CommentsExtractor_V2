@@ -30,7 +30,7 @@ const srv = (role, extra = {}) => createServerSource({ ...place, user: { id: 1, 
 const rec = (over) => ({ ID: 1, commentId: '1', viewpoint: 'V', commentRaw: 'A: x', commentText: 'x', status: 'Open', resolution: '', source: 'r.html', ...over });
 
 const MEMBERS = ['kind', 'caps', 'place', 'user', 'scopeKey', 'loadRecords', 'persistSession', 'resetToSample', 'folder',
-  'saveRecord', 'saveMany', 'addRecord', 'deleteRecords', 'changes', 'history', 'editStamp', 'isFreshImport', 'importMerge',
+  'saveRecord', 'saveMany', 'addRecord', 'deleteRecords', 'changes', 'history', 'editStamp', 'isFreshImport', 'importMerge', 'imports', 'recordImport', 'markImportUndone',
   'loadTemplate', 'saveTemplate', 'clearTemplate', 'hasTemplate', 'loadSharedSettings', 'saveSharedSetting', 'teamSize',
   'trash', 'restore', 'purge', 'restoreRecord', 'backupUrl'];
 const CAPS = ['canAdmin', 'canReview', 'hasHistory', 'shared', 'autosave', 'sessionFolder', 'sampleReset', 'refresh', 'sharedSettings', 'manageUsers', 'trash', 'backup'];

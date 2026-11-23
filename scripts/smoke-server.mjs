@@ -203,7 +203,9 @@ try {
   await A.page.getByRole('button', { name: 'Undo' }).click();
   await A.page.getByText('Import undone.').waitFor({ timeout: 60000 });
   if ((await count()) !== 3) fail(`after Undo: ${await count()} comments, expected 3`);
-  step('the admin imported the sample (750 comments) and undid it (3)');
+  const imps = (await boss.call('GET', `/api/reviews/${review.id}/config`)).imports || [];
+  if (imps.length !== 1 || imps[0].comments !== 747 || !imps[0].undone) fail(`import log: ${JSON.stringify(imps.map((x) => ({ c: x.comments, u: x.undone })))}`);
+  step('the admin imported the sample (750 comments) and undid it (3); the import log kept it, marked undone');
 
   await A.page.getByRole('button', { name: 'Add', exact: true }).click();
   await A.page.getByPlaceholder('e.g. CPY_Dito: Provide access platform for the valve').fill('CPY_Dito: PIP to add a pipe support');

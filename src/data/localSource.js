@@ -20,6 +20,8 @@
 //   editStamp()          → { changedBy, changedAt } for a local edit, or null
 //   isFreshImport(records, meta)      → true when an import simply replaces the list
 //   importMerge(plan, opts, current)  → { records, source, undo: () => { records, source } }
+//   imports()            → summaries of past imports, newest first (lib/importSummary.js)
+//   recordImport(summary) / markImportUndone(id)   keep that log
 //   loadTemplate() / saveTemplate(name, bytes) / clearTemplate() / hasTemplate()
 //   loadSharedSettings() → { project, review } config maps, or null when not shared
 //   saveSharedSetting(scope, key, value)   scope 'project' | 'review'
@@ -36,10 +38,11 @@
 // screen), backup (an admin can download one).
 import { loadSampleData } from '../lib/sample.js';
 import { applyMergeLocal } from '../lib/merge.js';
+import { addToLog, markUndone } from '../lib/importSummary.js';
 import {
   FS_SUPPORTED, requestPersistentStorage, loadSessionLocal, saveSessionLocal, clearSessionLocal,
   pickFolder, getStoredFolder, folderPermission, writeSessionToFolder,
-  loadTemplateLocal, saveTemplateLocal, clearTemplateLocal,
+  loadTemplateLocal, saveTemplateLocal, clearTemplateLocal, loadImportsLocal, saveImportsLocal,
 } from '../lib/persist.js';
 
 const statsFor = (records) => ({ comments: records.length, html: 0, images: 0, linked: 0 });
@@ -67,6 +70,7 @@ export function createLocalSource() {
     persistSession: (records, source) => saveSessionLocal(records, source),
     async resetToSample() {
       await clearSessionLocal();
+      await saveImportsLocal([]);
       const { records, stats } = await loadSampleData();
       return { records, source: 'sample', stats };
     },
@@ -97,6 +101,10 @@ export function createLocalSource() {
         undo: async () => before,
       };
     },
+
+    imports: () => loadImportsLocal(),
+    recordImport: async (summary) => saveImportsLocal(addToLog(await loadImportsLocal(), summary)),
+    markImportUndone: async (id) => saveImportsLocal(markUndone(await loadImportsLocal(), id)),
 
     loadTemplate: () => loadTemplateLocal(),
     saveTemplate: (name, bytes) => saveTemplateLocal(name, bytes),

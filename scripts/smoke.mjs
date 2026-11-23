@@ -43,8 +43,15 @@ try {
   // Import the full sample report with its viewpoint images.
   const files = ['report.html', ...fs.readdirSync(SAMPLE).filter((f) => f.endsWith('.jpg'))].map((f) => path.join(SAMPLE, f));
   await page.locator('input[type=file][accept*=".html"]').setInputFiles(files);
+  // First import: the summary shows before anything is saved.
+  const sum = page.getByRole('dialog', { name: 'Check this import' });
+  await sum.waitFor();
+  for (const t of ['274 comments have no discipline', 'No duplicate comment IDs', '260', 'Most comments come from CPY']) {
+    if (!(await sum.getByText(t, { exact: true }).count())) fail(`import summary: "${t}" missing`);
+  }
+  await sum.getByRole('button', { name: 'Save 747 comments' }).click();
   await page.getByText(/Imported 747 comments · \d+ images linked\./).waitFor();
-  step('imported the sample report: 747 comments');
+  step('first import showed its summary (274 unassigned, 260 viewpoints, CPY on top), then saved 747 comments');
 
   // Work starts on the first Do-next queue; open All comments and the first one.
   const rows = page.locator('li.wb-row');

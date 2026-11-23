@@ -15,6 +15,7 @@ const SESSION_KEY = 'session';
 const SETTINGS_KEY = 'settings';
 const HANDLE_KEY = 'folderHandle';
 const TEMPLATE_KEY = 'excelTemplate';
+const IMPORTS_KEY = 'imports';
 const SESSION_FILE = 'tabelin-session.json';
 const SCHEMA_VERSION = 1;
 
@@ -81,6 +82,15 @@ export async function loadTemplateLocal() {
 }
 export async function clearTemplateLocal() {
   try { await idbDel(TEMPLATE_KEY); } catch { /* ignore */ }
+}
+
+// ---------- import log (offline) ----------
+// Summaries of past imports (lib/importSummary.js), newest first.
+export async function loadImportsLocal() {
+  try { const v = await idbGet(IMPORTS_KEY); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+export async function saveImportsLocal(list) {
+  try { await idbSet(IMPORTS_KEY, list); } catch { /* ignore quota / private-mode errors */ }
 }
 
 // ---------- session object ----------
