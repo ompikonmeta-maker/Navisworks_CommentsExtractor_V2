@@ -382,7 +382,9 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   save here are skipped (their save goes through or comes back as a conflict).
 - **Access and recovery (Phase 5, server).** *Wrong PINs:* 5 wrong in a row lock the account
   for 5 minutes (`pin_attempts`; 429 + `Retry-After`; cleared by a correct PIN or admin Reset
-  PIN; `Login.jsx` shows the server's message). *Per-project access:* `projects.restricted` +
+  PIN; `Login.jsx` shows the server's message). A forgotten PIN (e.g. the only admin's):
+  `tabelin-server.exe -reset-pin <account>` (`api.ResetPIN`, run with the server closed) clears
+  it and quits. *Per-project access:* `projects.restricted` +
   `project_members`; unrestricted by default; admins always see all. Every route that names
   a project / review / record / file is wrapped in `a.guard(scope, h)` in `api.Routes()`
   (`access.go`) → 404 when the caller may not open it **or it is in the Trash**; a new scoped

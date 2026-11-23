@@ -416,3 +416,28 @@ func TestBackupRestores(t *testing.T) {
 		t.Errorf("restored photo differs")
 	}
 }
+
+func TestResetPINFromTheCommandLine(t *testing.T) {
+	now := time.Date(2026, 11, 23, 9, 0, 0, 0, time.UTC)
+	useClock(t, &now)
+	e := newEnv(t)
+	for i := 0; i < maxPinFailures; i++ {
+		e.pinTry("boss", "0000")
+	}
+	if code, _, _ := e.pinTry("boss", "1111"); code != 429 {
+		t.Fatalf("not locked: %d", code)
+	}
+	if err := ResetPIN(e.db, " BOSS "); err != nil {
+		t.Fatal(err)
+	}
+	e.want(401, e.admin, "GET", "/api/me", nil) // signed out everywhere
+	if code, _, _ := e.pinTry("boss", "4321"); code != 200 {
+		t.Errorf("sign-in with a new PIN after the reset: %d", code)
+	}
+	if code, _, _ := e.pinTry("boss", "1111"); code != 401 {
+		t.Errorf("the old PIN still works: %d", code)
+	}
+	if err := ResetPIN(e.db, "nobody"); err == nil {
+		t.Errorf("resetting an unknown account should fail")
+	}
+}

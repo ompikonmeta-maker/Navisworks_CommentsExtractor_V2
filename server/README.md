@@ -33,6 +33,18 @@ review inside a project called "General", which an admin can rename.
   `tabelin.db` (a consistent copy, safe while people work), the `files/` folder (photos,
   templates) and `RESTORE.txt`.
 
+### Forgot the admin PIN
+
+Close the server window, then in a Command Prompt in the server's folder:
+
+```
+tabelin-server.exe -reset-pin admin
+```
+
+(any account name works; with no name it means `admin`). It clears that account's PIN, lifts
+a wrong-PIN lock and signs it out everywhere, then quits. Start Tabelin and sign in: the PIN
+you type becomes the new one — do it straight away.
+
 ### Restore from a backup
 
 1. Close the Tabelin server window.

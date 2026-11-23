@@ -44,6 +44,7 @@ func main() {
 	}
 	defer database.Close()
 
+
 	a := &api.API{DB: database, Version: version, FilesDir: filepath.Join(dataDir, "files")}
 	a.ServerURLs = func() []string {
 		var urls []string
@@ -53,6 +54,15 @@ func main() {
 		return urls
 	}
 	bootstrapAdmin(database)
+	// tabelin-server -reset-pin <account>: clear a forgotten PIN and quit.
+	if name, ok := resetPinArg(os.Args[1:]); ok {
+		if err := api.ResetPIN(database, name); err != nil {
+			fmt.Printf("\nCould not reset the PIN: %v.\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("\nThe PIN of %q is cleared. Start Tabelin and sign in as %q: the PIN you type then becomes the new one.\n", auth.Normalize(name), auth.Normalize(name))
+		return
+	}
 	a.PurgeExpired() // the Trash keeps deleted things for api.TrashDays days
 
 	root := http.NewServeMux()
@@ -86,6 +96,23 @@ func main() {
 	if err := http.Serve(ln, handler); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// resetPinArg finds "-reset-pin <account>" (or --reset-pin, -reset-pin=<account>).
+// With no account given it means "admin".
+func resetPinArg(args []string) (string, bool) {
+	for i, a := range args {
+		switch {
+		case a == "-reset-pin" || a == "--reset-pin":
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				return args[i+1], true
+			}
+			return "admin", true
+		case strings.HasPrefix(a, "-reset-pin=") || strings.HasPrefix(a, "--reset-pin="):
+			return a[strings.Index(a, "=")+1:], true
+		}
+	}
+	return "", false
 }
 
 // printBanner tells a non-technical user what to do: where to open the tool,

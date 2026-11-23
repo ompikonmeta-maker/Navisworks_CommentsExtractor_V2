@@ -1,7 +1,9 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"tabelin/server/internal/auth"
@@ -120,4 +122,22 @@ func (a *API) activeAdmins() int {
 	var n int
 	a.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE role='admin' AND active=1`).Scan(&n)
 	return n
+}
+
+// ResetPIN clears an account's PIN from the command line
+// (`tabelin-server -reset-pin admin`), for when the only admin forgot theirs:
+// the next sign-in sets a new PIN. Also lifts a wrong-PIN lock and signs the
+// account out everywhere. Returns an error when the account doesn't exist.
+func ResetPIN(d *sql.DB, username string) error {
+	name := auth.Normalize(username)
+	var id int64
+	if err := d.QueryRow(`SELECT id FROM users WHERE username=?`, name).Scan(&id); err != nil {
+		return fmt.Errorf("no account called %q", name)
+	}
+	if _, err := d.Exec(`UPDATE users SET pin_hash='', active=1 WHERE id=?`, id); err != nil {
+		return err
+	}
+	d.Exec(`DELETE FROM pin_attempts WHERE user_id=?`, id)
+	d.Exec(`DELETE FROM sessions WHERE username=?`, name)
+	return nil
 }
