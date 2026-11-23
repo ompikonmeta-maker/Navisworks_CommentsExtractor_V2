@@ -284,7 +284,9 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   comment days split by gaps over 7 days). Every saved import (re-imports too, with merge
   counts) is kept in an **import log**: `source.imports()` / `recordImport` / `markImportUndone`
   — offline IndexedDB key `imports` (cleared by Reset to sample), on the server the review
-  config key `imports` (newest 50, `addToLog`). On Work, below 1500 px window width the sidebar folds to its rail on the way in.
+  config key `imports` (newest 50, `addToLog`). Insights shows them in the **Imports** card (under Disciplines, hidden while
+  empty; `ImportsCard` in `Dashboard.jsx`): when/by, report, type (first / re-import / undone),
+  counts, photos, checks; **Summary** reopens `ImportSummary` in `mode="view"`. On Work, below 1500 px window width the sidebar folds to its rail on the way in.
   `goComments(filter)` (from Insights) and `openDetail(id)` jump to Work with that filter.
 - `src/views/Work.jsx` — **the Work screen** (Phase 4; mockup option C with option A's
   sentence). Strip on top: the headline sentence (`lib/headline.js`: "37 days behind. Close

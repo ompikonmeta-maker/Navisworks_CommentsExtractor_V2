@@ -75,6 +75,15 @@ try {
   step(`each queue lists exactly its count (${counted.join(', ')})`);
   // …and so does Insights' Do next.
   await page.getByRole('button', { name: 'Insights' }).first().click();
+  // The import is in the Imports card; its summary opens again, read-only.
+  const imps = page.getByRole('table', { name: 'Imports' });
+  await imps.getByText('First import').waitFor();
+  await imps.getByRole('button', { name: 'Summary' }).first().click();
+  const again = page.getByRole('dialog', { name: 'Import summary' });
+  await again.getByText('274 comments have no discipline').waitFor();
+  await again.getByRole('button', { name: 'Close' }).click();
+  await again.waitFor({ state: 'detached' });
+  step('Insights › Imports lists the first import and reopens its summary');
   await page.getByRole('button', { name: /Give these comments a discipline/ }).click();
   await page.getByRole('heading', { name: 'Give these comments a discipline' }).waitFor();
   const want = Number((await page.getByRole('navigation', { name: 'Queues' }).getByRole('button', { name: /Give a discipline/ }).locator('.wb-queue-n').innerText()).trim());

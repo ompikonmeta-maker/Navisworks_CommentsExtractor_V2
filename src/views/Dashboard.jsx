@@ -9,9 +9,10 @@ import { useImport } from '../components/ImportAction.jsx';
 import { workQueues } from '../lib/queues.js';
 import ExportButton from '../components/ExportButton.jsx';
 import { exportLogSheet } from '../lib/logsheet.js';
-import { computeOverview, parseDay, parseTs } from '../lib/overview.js';
+import { computeOverview, parseDay, parseTs, fmtStamp } from '../lib/overview.js';
 import { Icon, Button, Card, InfoTip } from '../components/ui.jsx';
 import Reveal from '../components/Reveal.jsx';
+import ImportSummary from '../components/ImportSummary.jsx';
 import {
   TipProvider, TipRows, useTipProps, StatusBar, ForecastRunway, BurnUp, WeeklyPace, PaceHeadline, PaceCoverage, Pipeline, AgeHeatmap, RaisedBy,
   VERDICT, tint, hatch, discName, discCode, fmtDay, fmtDayY,
@@ -151,6 +152,8 @@ function Overview({ openDetail, goComments, goSettings }) {
               <Scorecard ov={ov} onPick={pickDisc} />
             </Card>
           </Reveal>
+
+          <ImportsCard meta={meta} goComments={goComments} />
 
           <Reveal className="grid gap-4 lg:grid-cols-12" deps={[status, meta.source]}>
             <Card ref={burnRef} className="relative min-w-0 p-6 lg:col-span-7">
@@ -544,5 +547,67 @@ function Scorecard({ ov, onPick }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ---- Imports: every report imported into this review (source.imports()),
+// newest first; each opens its summary again (read-only). Hidden until there
+// is one. Reloads when the dataset changes (an import or Undo changes `meta`).
+const issuesOf = (c = {}) => [c.unassigned, c.vpNoPhoto, c.noCommenter, c.dupIds, c.empty].filter((n) => n > 0).length;
+
+function ImportsCard({ meta, goComments }) {
+  const source = useData();
+  const [log, setLog] = useState([]);
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    // The new entry is written just after the import lands; read again shortly after.
+    const read = () => source.imports().then((l) => { if (alive) setLog(l || []); }).catch(() => {});
+    read();
+    const t = setTimeout(read, 1500);
+    return () => { alive = false; clearTimeout(t); };
+  }, [source, meta]);
+  if (!log.length) return null;
+  const place = source.place ? `${source.place.project.name} › ${source.place.review.name}` : '';
+  return (
+    <Card className="relative p-6">
+      <Head icon="history" title="Imports" tip="Every Navisworks report imported into this review, newest first. Summary opens what that report held (the newest 50 are kept)."
+        right={<Button variant="text" className="!h-9 !px-3" onClick={() => setOpen(log[0])}>Open the latest summary</Button>} />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-[13.5px]" aria-label="Imports">
+          <thead>
+            <tr className="border-b border-outline-variant/60 text-left text-xs uppercase tracking-wide text-on-surface-variant">
+              {['When', 'Report', 'Type', 'Comments', 'Photos', 'To look at', ''].map((h) => <th key={h} className="px-2.5 py-2 font-medium">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {log.map((x) => {
+              const n = issuesOf(x.checks);
+              const type = x.undone ? 'Undone' : x.merge ? 'Re-import' : 'First import';
+              return (
+                <tr key={x.id} className="border-b border-outline-variant/40 hover:bg-surface-container">
+                  <td className="whitespace-nowrap px-2.5 py-3">{fmtStamp(x.at)}{x.by && <div className="text-[12.5px] text-on-surface-variant">by {x.by}</div>}</td>
+                  <td className="max-w-[240px] truncate px-2.5 py-3" title={x.file}>{x.file || '—'}</td>
+                  <td className="px-2.5 py-3">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${x.undone ? 'bg-surface-container text-on-surface-variant line-through' : x.merge ? 'bg-surface-container text-on-surface' : 'bg-primary-container text-on-primary-container'}`}>{type}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-2.5 py-3">
+                    {x.merge ? (
+                      <><b className="tabular-nums">+{x.merge.added}</b> new · <b className="tabular-nums">{x.merge.changed}</b> changed
+                        {x.merge.missing > 0 && <div className="text-[12.5px] text-on-surface-variant">{x.merge.missing} no longer in the report</div>}</>
+                    ) : <><b className="tabular-nums">{x.comments.toLocaleString()}</b> comments</>}
+                  </td>
+                  <td className="whitespace-nowrap px-2.5 py-3 font-semibold tabular-nums">{x.vpWithPhoto} / {x.viewpoints}</td>
+                  <td className="whitespace-nowrap px-2.5 py-3 font-semibold" style={{ color: n ? 'var(--tabelin-warn)' : 'var(--tabelin-good)' }}>{n ? `${n} check${n === 1 ? '' : 's'}` : 'All clear'}</td>
+                  <td className="px-2.5 py-2 text-right"><Button variant="text" className="!h-9 !px-3" onClick={() => setOpen(x)}>Summary</Button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <ImportSummary open={!!open} summary={open} mode="view" place={place} onClose={() => setOpen(null)}
+        onView={(f) => { setOpen(null); goComments(f); }} />
+    </Card>
   );
 }
