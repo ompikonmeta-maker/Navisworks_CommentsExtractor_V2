@@ -61,7 +61,7 @@ export default function Work(props) {
 }
 
 function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
-  const { status, records, meta, notify, removeRecords, bulkUpdate, addRecord } = useStore();
+  const { status, records, meta, notify, removeRecords, bulkUpdate, addRecord, putBack } = useStore();
   const { settings, update } = useSettings();
   const { caps } = useData();
   const canEdit = caps.canReview; // edit / bulk-edit comments
@@ -198,7 +198,16 @@ function WorkScreen({ detailId, setDetailId, initialFilter, goSettings }) {
   const deleteOne = async (id) => {
     const n = nextRec || prevRec;
     setDetailId(n && n.ID !== id ? n.ID : null);
-    try { await removeRecords([id]); notify('Comment deleted.', 'success'); } catch { /* the store reports it */ }
+    try {
+      await removeRecords([id]);
+      if (!caps.trash) { notify('Comment deleted.', 'success'); return; }
+      notify('Comment moved to the Trash.', 'success', {
+        label: 'Undo',
+        onClick: async () => {
+          try { const r = await putBack(id); if (r) setDetailId(r.ID); notify('Comment restored.', 'success'); } catch { notify('Couldn’t restore it. Try the Trash.', 'error'); }
+        },
+      });
+    } catch { /* the store reports it */ }
   };
   const quickExport = async () => {
     if (!filtered.length) return;

@@ -337,6 +337,11 @@ func TestRestrictedProjects(t *testing.T) {
 	if len(projects) != 2 {
 		t.Errorf("reviewer sees %d projects after joining, want 2", len(projects))
 	}
+	for _, p := range decode[[]map[string]any](t, e.want(200, e.admin, "GET", "/api/projects", nil)) {
+		if int64(p["id"].(float64)) == f.pid && (p["restricted"] != true || p["members"].(float64) != 1) {
+			t.Errorf("project list for the admin = %v, want restricted with 1 member", p)
+		}
+	}
 	// open it again
 	e.want(200, e.admin, "PUT", fmt.Sprintf("/api/projects/%d/access", f.pid), map[string]any{"restricted": false})
 	e.want(404, e.admin, "GET", "/api/projects/9999/access", nil)

@@ -8,6 +8,8 @@
 //      reviewer has no Import or Delete, an admin sees history, uploads the
 //      project template, imports the sample report (merge + Undo), and adds
 //      and deletes a comment.
+//   5–7. Trash (Undo, restore, delete for good), Settings › Backup download,
+//      and "Who can open…" hiding / giving back a project.
 // Fails on any page error. Run with `npm run smoke:server` — it builds the app,
 // copies it into server/web/ (what the server embeds) and builds the server.
 import { spawn, execFileSync } from 'node:child_process';
@@ -96,7 +98,10 @@ try {
     page.on('response', (r) => {
       if (r.status() < 400) return;
       const m = r.request().method();
-      const expected = (r.status() === 409 && m === 'PATCH') || (r.status() === 404 && /\/template$/.test(r.url()));
+      // …and a project hidden from her (step 7): her last review answers 404 and
+      // the app falls back to the project list.
+      const expected = (r.status() === 409 && m === 'PATCH') || (r.status() === 404 && /\/template$/.test(r.url()))
+        || (r.status() === 404 && m === 'GET' && /\/api\/projects\/\d+\/reviews$/.test(r.url()));
       if (!expected) errors.push(`${who}: ${m} ${r.url()} → ${r.status()}`);
     });
     page.on('console', (m) => {
@@ -207,11 +212,75 @@ try {
   const all = await boss.call('GET', `/api/reviews/${review.id}/records`);
   const manual = all.find((r) => r.source === 'manual');
   if (all.length !== 4 || !manual || manual.commentText !== 'PIP to add a pipe support') fail(`after adding: ${JSON.stringify(all.map((r) => [r.id, r.source]))}`);
-  await A.drawer.getByRole('button', { name: 'Delete this comment' }).click();
-  await A.page.getByRole('dialog').getByRole('button', { name: 'Delete comment' }).click();
-  await A.page.getByText('Comment deleted.').waitFor();
-  if ((await count()) !== 3) fail(`after deleting: ${await count()} comments, expected 3`);
-  step('the admin added a comment by hand (saved on the server) and deleted it');
+  step('the admin added a comment by hand (saved on the server)');
+
+  // ---- 5. Trash: delete → Undo; delete → restore from the Trash; delete → delete for good ----
+  const del = async () => {
+    await A.drawer.getByRole('button', { name: 'Delete this comment' }).click();
+    await A.page.getByRole('dialog').getByRole('button', { name: 'Move to Trash' }).click();
+    await A.page.getByText('Comment moved to the Trash.').waitFor();
+  };
+  await del();
+  if ((await count()) !== 3) fail(`after moving to the Trash: ${await count()} comments, expected 3`);
+  await A.page.getByRole('button', { name: 'Undo' }).click();
+  await A.page.getByText('Comment restored.').waitFor();
+  await A.drawer.getByRole('heading', { name: 'Manual' }).waitFor();
+  if ((await count()) !== 4) fail(`after Undo: ${await count()} comments, expected 4`);
+  step('deleting a comment moves it to the Trash; Undo brings it straight back');
+
+  await del();
+  if (await B.page.getByRole('button', { name: 'Trash' }).count()) fail('a reviewer sees the Trash');
+  await A.page.getByRole('button', { name: 'Trash' }).first().click();
+  const trashRow = A.page.getByRole('row').filter({ hasText: 'PIP to add a pipe support' });
+  await trashRow.waitFor();
+  await trashRow.getByRole('button', { name: 'Restore' }).click();
+  await A.page.getByText('Restored 1 comment.').waitFor();
+  await A.page.getByText('The Trash is empty').waitFor();
+  if ((await count()) !== 4) fail(`after restoring from the Trash: ${await count()} comments, expected 4`);
+  step('the Trash (admins only) lists it; Restore puts it back');
+
+  await A.page.getByRole('button', { name: 'Work' }).first().click();
+  await A.page.getByRole('button', { name: /^All comments/ }).click();
+  await A.page.locator('li.wb-row').filter({ has: A.page.locator('.wb-row-vp', { hasText: /^Manual$/ }) }).click();
+  await del();
+  await A.page.getByRole('button', { name: 'Trash' }).first().click();
+  await A.page.getByRole('row').filter({ hasText: 'PIP to add a pipe support' }).getByRole('button', { name: 'Delete for good' }).click();
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Delete for good' }).click();
+  await A.page.getByText('Deleted 1 comment for good.').waitFor();
+  const trash = await boss.call('GET', '/api/trash');
+  if (trash.records.length || (await count()) !== 3) fail(`after deleting for good: trash ${trash.records.length}, comments ${await count()}`);
+  step('Delete for good empties it from the Trash');
+
+  // ---- 6. backup ----
+  await A.page.getByRole('button', { name: 'Settings' }).first().click();
+  await A.page.getByRole('button', { name: 'Backup' }).first().click();
+  const [download] = await Promise.all([A.page.waitForEvent('download'), A.page.getByRole('link', { name: 'Download backup' }).click()]);
+  const zipPath = path.join(tmp, 'backup.zip');
+  await download.saveAs(zipPath);
+  const head = fs.readFileSync(zipPath).subarray(0, 2).toString();
+  if (head !== 'PK' || !/^tabelin-backup-.*\.zip$/.test(download.suggestedFilename())) fail(`backup download: ${download.suggestedFilename()} ${head}`);
+  step(`Settings › Backup downloads ${download.suggestedFilename()} (${Math.round(fs.statSync(zipPath).size / 1024)} KB)`);
+
+  // ---- 7. who can open the project ----
+  await A.page.getByRole('button', { name: /Smoke project/ }).first().click(); // the review chip → switch review
+  await A.page.getByRole('button', { name: 'All projects' }).click();
+  await A.page.getByRole('button', { name: 'More for Smoke project' }).click();
+  await A.page.getByRole('menuitem', { name: 'Who can open…' }).click();
+  await A.page.getByRole('radio', { name: /Only these people/ }).check();
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await A.page.getByText('0 people').waitFor();
+  await B.page.reload();
+  await B.page.getByText(/No projects yet/).waitFor();
+  step('"Who can open…" → only chosen people: the reviewer no longer sees the project');
+  await A.page.getByRole('button', { name: 'More for Smoke project' }).click();
+  await A.page.getByRole('menuitem', { name: 'Who can open…' }).click();
+  await A.page.getByRole('radio', { name: /Only these people/ }).check();
+  await A.page.getByRole('dialog').getByRole('checkbox', { name: /Rina/ }).check();
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await A.page.getByText('1 person').waitFor();
+  await B.page.reload();
+  await B.page.getByRole('button', { name: /^All comments/ }).waitFor();
+  step('ticking her gives her the project back (she lands in the review again)');
 
   if (errors.length) fail(`the page reported errors:\n${errors.join('\n')}`);
   console.log('\nSERVER SMOKE OK');

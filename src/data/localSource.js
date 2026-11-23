@@ -24,11 +24,16 @@
 //   loadSharedSettings() → { project, review } config maps, or null when not shared
 //   saveSharedSetting(scope, key, value)   scope 'project' | 'review'
 //   teamSize()           → colleagues besides the user (0 offline)
+//   trash()              → { reviews, records, days } of what can still be restored (empty offline)
+//   restore(pick) / purge(pick)   pick = { reviews: [ids], records: [ids] }
+//   restoreRecord(id)    → the comment back from the Trash (for an Undo), or null
+//   backupUrl            → where an admin downloads a backup, or null
 //
 // caps: canAdmin (import, add/delete comments, settings, template), canReview
 // (edit comments), hasHistory, shared (others see the same data), autosave,
 // sessionFolder, sampleReset, refresh (other people's changes arrive),
-// sharedSettings, manageUsers.
+// sharedSettings, manageUsers, trash (deletes can be restored: the Trash
+// screen), backup (an admin can download one).
 import { loadSampleData } from '../lib/sample.js';
 import { applyMergeLocal } from '../lib/merge.js';
 import {
@@ -45,6 +50,7 @@ export function createLocalSource() {
     caps: {
       canAdmin: true, canReview: true, hasHistory: false, shared: false, autosave: true,
       sessionFolder: FS_SUPPORTED, sampleReset: true, refresh: false, sharedSettings: false, manageUsers: false,
+      trash: false, backup: false,
     },
     place: null,
     user: null,
@@ -100,5 +106,12 @@ export function createLocalSource() {
     loadSharedSettings: async () => null,
     saveSharedSetting: async () => {},
     teamSize: async () => 0,
+
+    // Offline a delete is final (the session folder is the copy to keep).
+    trash: async () => ({ reviews: [], records: [], days: 0 }),
+    restore: async () => ({ reviews: 0, records: 0 }),
+    purge: async () => ({ reviews: 0, records: 0 }),
+    restoreRecord: async () => null,
+    backupUrl: null,
   };
 }

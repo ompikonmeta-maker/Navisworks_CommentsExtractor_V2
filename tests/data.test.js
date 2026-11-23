@@ -31,8 +31,9 @@ const rec = (over) => ({ ID: 1, commentId: '1', viewpoint: 'V', commentRaw: 'A: 
 
 const MEMBERS = ['kind', 'caps', 'place', 'user', 'scopeKey', 'loadRecords', 'persistSession', 'resetToSample', 'folder',
   'saveRecord', 'saveMany', 'addRecord', 'deleteRecords', 'changes', 'history', 'editStamp', 'isFreshImport', 'importMerge',
-  'loadTemplate', 'saveTemplate', 'clearTemplate', 'hasTemplate', 'loadSharedSettings', 'saveSharedSetting', 'teamSize'];
-const CAPS = ['canAdmin', 'canReview', 'hasHistory', 'shared', 'autosave', 'sessionFolder', 'sampleReset', 'refresh', 'sharedSettings', 'manageUsers'];
+  'loadTemplate', 'saveTemplate', 'clearTemplate', 'hasTemplate', 'loadSharedSettings', 'saveSharedSetting', 'teamSize',
+  'trash', 'restore', 'purge', 'restoreRecord', 'backupUrl'];
+const CAPS = ['canAdmin', 'canReview', 'hasHistory', 'shared', 'autosave', 'sessionFolder', 'sampleReset', 'refresh', 'sharedSettings', 'manageUsers', 'trash', 'backup'];
 
 describe('both sources have the same shape', () => {
   it.each([['local', createLocalSource()], ['server', srv('admin')]])('%s', (_, s) => {
@@ -85,7 +86,10 @@ describe('localSource (offline)', () => {
 describe('serverSource', () => {
   it('takes the roles from the user', () => {
     expect(srv('admin').caps).toMatchObject({ canAdmin: true, canReview: true, manageUsers: true, shared: true, hasHistory: true, refresh: true, autosave: false, sessionFolder: false, sampleReset: false });
-    expect(srv('reviewer').caps).toMatchObject({ canAdmin: false, canReview: true, manageUsers: false });
+    expect(srv('reviewer').caps).toMatchObject({ canAdmin: false, canReview: true, manageUsers: false, trash: false, backup: false });
+    expect(srv('admin').caps).toMatchObject({ trash: true, backup: true });
+    expect(srv('admin').backupUrl).toBe('/api/backup');
+    expect(srv('reviewer').backupUrl).toBeNull();
     expect(srv('viewer').caps).toMatchObject({ canAdmin: false, canReview: false, manageUsers: false });
     const s = srv('reviewer');
     expect(s).toMatchObject({ kind: 'server', place, scopeKey: '9' });
@@ -172,6 +176,32 @@ describe('serverSource', () => {
     expect([...t.bytes]).toEqual([80, 75, 3, 4]);
     fakeServer({});
     expect(await srv('reviewer').loadTemplate()).toBeNull();
+  });
+});
+
+describe('Trash through the data source', () => {
+  it('offline: nothing to restore, no backup', async () => {
+    const s = createLocalSource();
+    expect(s.caps).toMatchObject({ trash: false, backup: false });
+    expect(await s.trash()).toEqual({ reviews: [], records: [], days: 0 });
+    expect(await s.restoreRecord(1)).toBeNull();
+    expect(s.backupUrl).toBeNull();
+  });
+
+  it('server: lists, restores, purges and brings one comment back', async () => {
+    const calls = fakeServer({
+      'GET /api/trash': () => json(200, { reviews: [], records: [{ id: 5 }], days: 30 }),
+      'POST /api/trash/restore': () => json(200, { reviews: 0, records: 1 }),
+      'POST /api/trash/purge': () => json(200, { reviews: 1, records: 0 }),
+      'GET /api/records/5': () => json(200, { id: 5, status: 'Open', version: 4, afterUrl: '/api/files/a.png' }),
+    });
+    const s = srv('admin');
+    expect((await s.trash()).records).toEqual([{ id: 5 }]);
+    await s.purge({ reviews: [2] });
+    expect(calls.at(-1).body).toEqual({ reviews: [2], records: [] });
+    const back = await s.restoreRecord(5);
+    expect(back).toMatchObject({ ID: 5, version: 4, afterImageData: '/api/files/a.png' });
+    expect(calls.find((c) => c.url === '/api/trash/restore').body).toEqual({ reviews: [], records: [5] });
   });
 });
 

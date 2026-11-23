@@ -8,12 +8,14 @@ import { useData } from './data/index.js';
 import Toast from './components/Toast.jsx';
 import Dashboard from './views/Dashboard.jsx';
 import Work from './views/Work.jsx';
+import Trash from './views/Trash.jsx';
 import Settings, { SECTIONS } from './views/Settings.jsx';
 import Help from './views/Help.jsx';
 
 const NAV = [
   { id: 'work', label: 'Work', icon: 'fact_check' },
   { id: 'insights', label: 'Insights', icon: 'insights' },
+  { id: 'trash', label: 'Trash', icon: 'delete', cap: 'trash' }, // admins on the server
   { id: 'settings', label: 'Settings', icon: 'settings' },
   { id: 'help', label: 'Help', icon: 'help' },
 ];
@@ -42,8 +44,12 @@ export default function App({ onExitProject, onSignOut } = {}) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Admins on the server get an extra "Users" settings section.
   const settingsSections = useMemo(
-    () => (caps.manageUsers ? [...SECTIONS, { id: 'users', label: 'Users', icon: 'person' }] : SECTIONS),
-    [caps.manageUsers],
+    () => [
+      ...SECTIONS,
+      ...(caps.manageUsers ? [{ id: 'users', label: 'Users', icon: 'person' }] : []),
+      ...(caps.backup ? [{ id: 'backup', label: 'Backup', icon: 'storage' }] : []),
+    ],
+    [caps.manageUsers, caps.backup],
   );
   const themeBtnRef = useRef(null);
   // The theme mode already reflected in the DOM. The animated toggle applies
@@ -266,7 +272,7 @@ export default function App({ onExitProject, onSignOut } = {}) {
           </div>
 
           <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible">
-            {NAV.map((item, i) => {
+            {NAV.filter((item) => !item.cap || caps[item.cap]).map((item, i) => {
               if (item.id === 'settings') {
                 return (
                   <SettingsNav
@@ -552,6 +558,8 @@ function Screen({ route, detailId, setDetailId, openDetail, goComments, comments
   switch (route) {
     case 'work':
       return <Work detailId={detailId} setDetailId={setDetailId} initialFilter={commentsFilter} goSettings={setSettingsSection} />;
+    case 'trash':
+      return <Trash />;
     case 'insights':
       return <Dashboard openDetail={openDetail} goComments={goComments} goSettings={setSettingsSection} />;
     case 'settings':

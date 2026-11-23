@@ -119,7 +119,7 @@ const T = {
     limitsTitle: 'Good to know',
     limits: [
       ['lock', 'Everyone sees every project', 'Roles apply to the whole server, not per project.'],
-      ['undo', 'Deleting is final', 'Only the last import can be undone. Back up the data folder.'],
+      ['undo', 'Deleted? 30 days in the Trash', 'On the server, admins restore comments and reviews from the Trash, and download a backup in Settings › Backup. Offline, deleting is final.'],
       ['history', 'History on the server only', 'Each comment shows who changed what. The offline file keeps no history.'],
       ['sync', 'Updates every 30 s', 'Others’ changes appear within 30 seconds. If two people save one comment, the second sees the newer values — nothing is overwritten silently.'],
       ['upload_file', 'Navisworks HTML only', 'Viewpoints report (.html / .zip). Photos: JPG or PNG.'],
@@ -216,7 +216,7 @@ const T = {
     limitsTitle: 'Perlu diketahui',
     limits: [
       ['lock', 'Semua project terlihat', 'Peran berlaku untuk seluruh server, bukan per project.'],
-      ['undo', 'Hapus itu permanen', 'Hanya import terakhir yang bisa di-undo. Backup folder data.'],
+      ['undo', 'Terhapus? 30 hari di Trash', 'Di server, admin memulihkan komentar dan review dari Trash, dan mengunduh backup di Settings › Backup. Offline, hapus itu permanen.'],
       ['history', 'Riwayat hanya di server', 'Setiap komentar menunjukkan siapa mengubah apa. File offline tidak menyimpan riwayat.'],
       ['sync', 'Pembaruan tiap 30 detik', 'Perubahan orang lain muncul dalam 30 detik. Kalau dua orang menyimpan satu komentar, yang kedua melihat nilai terbaru — tidak ada yang tertimpa diam-diam.'],
       ['upload_file', 'Hanya HTML Navisworks', 'Laporan Viewpoints (.html / .zip). Foto: JPG atau PNG.'],

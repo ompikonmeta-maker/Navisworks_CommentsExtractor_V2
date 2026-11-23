@@ -27,6 +27,7 @@ export function createServerSource({ project, review, user }) {
     caps: {
       canAdmin, canReview: isReviewerUser(user), hasHistory: true, shared: true, autosave: false,
       sessionFolder: false, sampleReset: false, refresh: true, sharedSettings: true, manageUsers: canAdmin,
+      trash: canAdmin, backup: canAdmin,
     },
     place: { project, review },
     user,
@@ -95,6 +96,16 @@ export function createServerSource({ project, review, user }) {
       const users = await api.listUsers();
       return users.filter((x) => x.id !== user?.id).length;
     },
+
+    // Deleted comments and reviews wait 30 days in the server's Trash (admins).
+    trash: () => api.getTrash(),
+    restore: (pick) => api.restoreTrash({ reviews: pick.reviews || [], records: pick.records || [] }),
+    purge: (pick) => api.purgeTrash({ reviews: pick.reviews || [], records: pick.records || [] }),
+    async restoreRecord(id) {
+      await api.restoreTrash({ reviews: [], records: [id] });
+      return mapServerRecord(await api.getRecord(id));
+    },
+    backupUrl: canAdmin ? '/api/backup' : null,
   };
   return source;
 }

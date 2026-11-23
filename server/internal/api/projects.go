@@ -37,7 +37,8 @@ func decodeName(w http.ResponseWriter, r *http.Request) (string, bool) {
 func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 	where, args := visibleProjectsSQL(auth.FromContext(r.Context()))
 	rows, err := a.DB.Query(`
-		SELECT p.id, p.name, p.created_at, p.restricted, COUNT(v.id)
+		SELECT p.id, p.name, p.created_at, p.restricted, COUNT(v.id),
+		       (SELECT COUNT(*) FROM project_members m WHERE m.project_id = p.id)
 		FROM projects p LEFT JOIN reviews v ON v.project_id = p.id AND v.deleted_at = ''
 		WHERE `+where+`
 		GROUP BY p.id ORDER BY p.id DESC`, args...)
@@ -48,14 +49,14 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	out := []map[string]any{}
 	for rows.Next() {
-		var id, n int64
+		var id, n, members int64
 		var restricted int
 		var name, created string
-		if err := rows.Scan(&id, &name, &created, &restricted, &n); err != nil {
+		if err := rows.Scan(&id, &name, &created, &restricted, &n, &members); err != nil {
 			writeErr(w, 500, "scan project")
 			return
 		}
-		out = append(out, map[string]any{"id": id, "name": name, "createdAt": created, "reviews": n, "restricted": restricted == 1})
+		out = append(out, map[string]any{"id": id, "name": name, "createdAt": created, "reviews": n, "restricted": restricted == 1, "members": members})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

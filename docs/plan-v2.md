@@ -234,3 +234,7 @@ Tick the phase box above and add one line here per finished phase (date, branch,
   come after the mockup is approved: Trash (soft delete, restore, purge, 30-day expiry),
   per-project access (unrestricted by default, guards on every scoped route), backup download
   with a tested restore. Mockups: design canvas, row "Fase 5".
+- 2026-11-23 — Phase 5 UI built (owner approved the mockups; Trash as its own sidebar item):
+  Trash screen, Undo after deleting a comment, Settings › Backup, "Who can open…" with lock
+  chips, new delete wording and Help text. Server smoke drives all of it. **Waiting for the
+  owner to try it** (box stays open until then).

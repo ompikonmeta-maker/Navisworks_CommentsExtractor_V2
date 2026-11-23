@@ -83,9 +83,11 @@ npm run smoke:server                  # build, copy into server/web, two browser
   newer values show, the typed resolution stays and "Save mine" saves it; the other browser
   sees the change within 30 s without reload. Then roles and shared data: the review target
   comes from the server, a reviewer has no Import/Delete, the admin sees history, uploads the
-  template, imports the sample (merge + Undo) and adds/deletes a comment. Expected failed
-  requests (409 PATCH; 404 on `…/template` while the project has none) are allowed; any other
-  failed request or page error fails it.
+  template, imports the sample (merge + Undo) and adds a comment; then the Trash (delete →
+  Undo, restore from the Trash page, delete for good), Settings › Backup download, and "Who can
+  open…" hiding the project from the reviewer and giving it back. Expected failed requests
+  (409 PATCH; 404 on `…/template` while the project has none; 404 on a hidden project's
+  `…/reviews`) are allowed; any other failed request or page error fails it.
 - `scripts/smoke.mjs` opens `dist/index.html` over `file://` (as the offline user does),
   imports the full sample, clicks every Work queue (and Insights › Do next) and checks the list
   holds exactly the count, opens a comment, sets it Closed and checks it survives a reload,
@@ -227,9 +229,10 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   interface — `loadRecords`, `persistSession`, `resetToSample`, `folder`, `saveRecord`,
   `saveMany`, `addRecord`, `deleteRecords`, `changes`, `history`, `editStamp`,
   `isFreshImport`, `importMerge` (returns `undo`), template load/save/clear/has, shared
-  settings load/save, `teamSize` — plus `caps` (`canAdmin`, `canReview`, `hasHistory`,
+  settings load/save, `teamSize`, `trash` / `restore` / `purge` / `restoreRecord`,
+  `backupUrl` — plus `caps` (`canAdmin`, `canReview`, `hasHistory`,
   `shared`, `autosave`, `sessionFolder`, `sampleReset`, `refresh`, `sharedSettings`,
-  `manageUsers`), `place`, `user`, `scopeKey` ('local' or the review id, for per-review
+  `manageUsers`, `trash`, `backup`), `place`, `user`, `scopeKey` ('local' or the review id, for per-review
   localStorage keys). `serverSource.js` wraps `lib/server.js`; roles come from the user
   (`isAdminUser` / `isReviewerUser`). Screens read capabilities, never the mode: e.g.
   `readOnly = !caps.canAdmin`, history only with `caps.hasHistory`. A new feature that
@@ -260,7 +263,7 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   a 300ms still hold, then 250ms to full; no bounce). All honor `prefers-reduced-motion`.
 - `src/App.jsx` — app shell (sidebar nav, session header, theme toggle) and a small
   route switch: **Work** (`views/Work.jsx`, the default), **Insights** (`views/Dashboard.jsx`,
-  the former Overview), Help, and Settings (`views/Settings.jsx`, v1.1 — a **two-pane** page: a category rail
+  the former Overview), **Trash** (admins on the server), Help, and Settings (`views/Settings.jsx`, v1.1 — a **two-pane** page: a category rail
   (Template · Labels · Detection · Appearance, plus Users for admins on the server; "Restore defaults" sits in Appearance) beside one focused panel. **Labels**
   merges Disciplines (colours) + Commenters behind an inner segmented toggle; **Detection** hosts
   `DetectionEditor`. The panel is wrapped in `<Reveal deps={[section]}>` so the staggered card
@@ -391,7 +394,14 @@ Data flows in one direction: **files → parser → in-memory store → views**.
   *Backup:* `GET /api/backup` (admin) → zip of a `VACUUM INTO` copy of `tabelin.db` + `files/`
   + `RESTORE.txt`; restore steps in `server/README.md`, tested by `TestBackupRestores`.
   Columns are added to older databases by `db.addRecordColumns` (generic `addColumns`).
-  The UI for Trash, backup and access is still to be built (mockups in the design canvas).
+  *UI:* **Trash** is its own sidebar item for admins on the server (`NAV` entry with
+  `cap: 'trash'`; `views/Trash.jsx`: Comments / Reviews, Restore, Delete for good, bulk; a
+  comment of the open review comes back via store `putBack`). Deleting a comment in Work says
+  "Move to Trash" and the toast offers **Undo** (`putBack` → `source.restoreRecord`).
+  **Settings › Backup** (`components/BackupCard.jsx`, `source.backupUrl`). **Who can open…** in
+  the project list's ⋯ menu (`ProjectPicker` `AccessDialog`; lock chip "N people" from
+  `listProjects` `restricted`/`members`). Offline nothing changes: `caps.trash/backup` false,
+  delete stays final.
 - **Paste a snapshot (Ctrl+V)** in the drawer goes to the photo slot last hovered/focused
   (After by default; the `.ba-kbd` "Ctrl V" chip marks it) and opens the crop dialog.
 - **Releases**: `.github/workflows/build.yml` runs only by hand (Actions → Build → Run workflow,

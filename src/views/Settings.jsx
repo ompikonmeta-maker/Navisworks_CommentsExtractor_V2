@@ -11,6 +11,7 @@ import UsersEditor from '../components/UsersEditor.jsx';
 import Reveal from '../components/Reveal.jsx';
 import { setRevealDir } from '../lib/motion.js';
 import { useData } from '../data/index.js';
+import BackupCard from '../components/BackupCard.jsx';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System' },
@@ -91,6 +92,8 @@ export default function Settings({ section = 'template', setSection = () => {}, 
       {/* Panel — card reveal re-plays on every section change */}
       <fieldset disabled={locked} className="contents">
       <Reveal className="space-y-6" deps={[section]}>
+        {section === 'backup' && <BackupCard />}
+
         {section === 'users' && (
           <Card className="p-6">
             <UsersEditor me={source.user} />

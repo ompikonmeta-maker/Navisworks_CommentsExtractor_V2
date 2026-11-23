@@ -197,6 +197,15 @@ export function reducer(state, action) {
     }
     case 'ADD_RECORD':
       return { ...state, records: [...state.records, action.record] };
+    case 'PUT_BACK': {
+      // A comment back from the Trash: in ID order, replacing a stale copy.
+      const rec = action.record;
+      const rest = state.records.filter((r) => r.ID !== rec.ID);
+      const i = rest.findIndex((r) => Number(r.ID) > Number(rec.ID));
+      const next = [...rest];
+      next.splice(i < 0 ? next.length : i, 0, rec);
+      return { ...state, records: next };
+    }
     case 'REMOVE_RECORDS': {
       const ids = new Set(action.ids);
       return { ...state, records: state.records.filter((r) => !ids.has(r.ID)) };
@@ -452,6 +461,14 @@ export function StoreProvider({ children }) {
     };
   }, [reviewSource, versionOf]);
 
+  // Undo a delete where the data source keeps a Trash: bring the comment back.
+  const putBack = useCallback(async (id) => {
+    const rec = await data().restoreRecord(id);
+    if (!rec) return null;
+    if (rec.version != null) versions.current.set(rec.ID, rec.version);
+    dispatch({ type: 'PUT_BACK', record: { ...rec, status: resolveStatus(rec.status, statusesRef.current) } });
+    return rec;
+  }, []);
   const applyDetect = useCallback(
     (field, config, allowed, mode) => bulk({ type: 'APPLY_DETECT', field, config, allowed, mode }),
     [bulk]
@@ -471,8 +488,8 @@ export function StoreProvider({ children }) {
   const clearToast = useCallback(() => dispatch({ type: 'CLEAR_TOAST' }), []);
 
   const value = useMemo(
-    () => ({ ...state, setLoading, setError, setData, updateRecord, addRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast }),
-    [state, setLoading, setError, setData, updateRecord, addRecord, removeRecords, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast]
+    () => ({ ...state, setLoading, setError, setData, updateRecord, addRecord, removeRecords, putBack, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast }),
+    [state, setLoading, setError, setData, updateRecord, addRecord, removeRecords, putBack, bulkUpdate, applyDetect, renameAttr, remapStatus, notify, clearToast]
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

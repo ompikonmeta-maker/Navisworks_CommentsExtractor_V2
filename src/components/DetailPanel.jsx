@@ -467,11 +467,15 @@ export default function DetailPanel({ record, onClose, nav, onClosedOut, onDelet
     </Shell>
 
     <Dialog open={askDelete} onClose={() => setAskDelete(false)} labelledBy="del-title" width={420}>
-      <h2 id="del-title" className="text-lg font-semibold">Delete this comment?</h2>
-      <p className="mt-2 text-sm text-on-surface-variant">{rec?.viewpoint} and its photos are removed{data().caps.shared ? ' for everyone' : ''}. This can’t be undone.</p>
+      <h2 id="del-title" className="text-lg font-semibold">{data().caps.trash ? 'Move this comment to the Trash?' : 'Delete this comment?'}</h2>
+      <p className="mt-2 text-sm text-on-surface-variant">
+        {data().caps.trash
+          ? `${rec?.viewpoint} and its photos disappear for everyone. An admin can restore it from the Trash within 30 days.`
+          : `${rec?.viewpoint} and its photos are removed${data().caps.shared ? ' for everyone' : ''}. This can’t be undone.`}
+      </p>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="text" onClick={() => setAskDelete(false)}>Cancel</Button>
-        <Button variant="danger" onClick={() => { setAskDelete(false); onDelete?.(rec.ID); }}>Delete comment</Button>
+        <Button variant="danger" onClick={() => { setAskDelete(false); onDelete?.(rec.ID); }}>{data().caps.trash ? 'Move to Trash' : 'Delete comment'}</Button>
       </div>
     </Dialog>
 

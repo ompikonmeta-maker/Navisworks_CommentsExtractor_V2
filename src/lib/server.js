@@ -66,6 +66,11 @@ export const api = {
   deleteReview: (rid) => req('DELETE', `/api/reviews/${rid}`),
   deleteProject: (pid) => req('DELETE', `/api/projects/${pid}`),
   serverInfo: () => req('GET', '/api/server-info'),
+  getTrash: () => req('GET', '/api/trash'),
+  restoreTrash: (pick) => req('POST', '/api/trash/restore', pick), // { reviews: [ids], records: [ids] }
+  purgeTrash: (pick) => req('POST', '/api/trash/purge', pick),
+  getProjectAccess: (pid) => req('GET', `/api/projects/${pid}/access`),
+  putProjectAccess: (pid, access) => req('PUT', `/api/projects/${pid}/access`, access), // { restricted, members }
   hasTemplate: (pid) => fetch(`/api/projects/${pid}/template`, { method: 'HEAD', credentials: 'same-origin' }).then((r) => r.ok).catch(() => false),
   listUsers: () => req('GET', '/api/users'),
   createUser: (username, displayName, role) => req('POST', '/api/users', { username, displayName, role }),
